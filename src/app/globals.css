@@ -120,3 +120,41 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Scrollbar personalizado
+   Estilo limpo para áreas com scroll (tabelas, timeline)
+   ─────────────────────────────────────────────── */
+.overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.8 0 0) transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background-color: oklch(0.8 0 0);
+  border-radius: 9999px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.65 0 0);
+}
+
+.dark .overflow-y-auto {
+  scrollbar-color: oklch(0.35 0 0) transparent;
+}
+
+.dark .overflow-y-auto::-webkit-scrollbar-thumb {
+  background-color: oklch(0.35 0 0);
+}
+
+.dark .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.45 0 0);
+}

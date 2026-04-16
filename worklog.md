@@ -27,7 +27,6 @@ Stage Summary:
 - Password strength indicator visual
 - Session restore via refresh token
 - Auto token refresh interceptor
-- Dev server running on port 3000
 
 ---
 Task ID: 2
@@ -72,3 +71,74 @@ Stage Summary:
 - Emerald green accent, dark branding panel, responsive design
 - All text in Portuguese
 - framer-motion animations for page transitions
+
+---
+Task ID: 4
+Agent: full-stack-developer (subagent)
+Task: Build backend CRUD APIs for Users, Clients, Processes, Stats, Audit
+
+Work Log:
+- Created src/lib/api-auth.ts — JWT authentication middleware for protected routes
+- Created src/lib/pagination.ts — Shared pagination helpers (parsePagination, buildPaginationMeta, calcSkip)
+- Created src/app/api/v1/users/route.ts — GET list + POST create users
+- Created src/app/api/v1/users/[id]/route.ts — GET one + PATCH update user
+- Created src/app/api/v1/users/[id]/deactivate/route.ts — PATCH deactivate user (ADMIN only)
+- Created src/app/api/v1/clients/route.ts — GET list + POST create clients
+- Created src/app/api/v1/clients/[id]/route.ts — GET one + PATCH update client
+- Created src/app/api/v1/processes/route.ts — GET list + POST create processes
+- Created src/app/api/v1/processes/[id]/route.ts — GET one + PATCH update process
+- Created src/app/api/v1/processes/[id]/close/route.ts — PATCH close process
+- Created src/app/api/v1/stats/dashboard/route.ts — Dashboard statistics with recent activities
+- Created src/app/api/v1/audit/logs/route.ts — Paginated audit logs with filters
+
+Stage Summary:
+- 15 backend files created (2 libs + 13 API routes)
+- All routes filter by firm_id (multi-tenant isolation)
+- PII fields never returned in API responses
+- All mutations audit-logged with PII masking
+- RBAC enforced: ADMIN full access, ADVOGADO read+write, SECRETARIO read-only, CLIENT limited
+- Pagination with search, filter, sort support
+
+---
+Task ID: 7
+Agent: full-stack-developer (subagent)
+Task: Build frontend views + styling polish
+
+Work Log:
+- Created src/lib/api-client.ts — Typed API client with TanStack Query integration
+- Created src/components/dashboard/DashboardHome.tsx — Enhanced dashboard with animated stats, Maputo clock, recent processes
+- Created src/components/dashboard/UsersView.tsx — Full CRUD with search, table, create/edit/deactivate dialogs
+- Created src/components/dashboard/ClientsView.tsx — Client management with type badges, create/edit dialogs
+- Created src/components/dashboard/ProcessesView.tsx — Multi-filter processes view with status tabs, area/priority filters
+- Created src/components/dashboard/AuditView.tsx — Dual view (timeline + table), action/entity filters, color-coded icons
+- Updated src/components/views/DashboardView.tsx — Internal tab routing, collapsible sidebar, breadcrumbs, role-based nav
+- Updated src/app/globals.css — Custom thin scrollbar styling
+
+Stage Summary:
+- 8 files created/updated
+- All CRUD views with TanStack Query for data fetching
+- Collapsible sidebar with animated active indicator
+- Role-based navigation visibility
+- framer-motion tab transitions
+- Mobile responsive with drawer sidebar
+
+---
+Task ID: 10 (Review Round 1)
+Agent: Main Orchestrator + QA
+Task: QA testing, bug fixes, and worklog update
+
+Work Log:
+- ESLint: 0 errors, 1 pre-existing warning
+- Browser QA: tested login → dashboard → clients → processes → users → audit flow
+- All auth flows verified: register, login, logout, session restore
+- All API endpoints verified via curl: users CRUD, clients CRUD, processes CRUD, stats, audit
+- Found and fixed bug: AuditView undefined `limit` variable
+- Found and fixed bug: AuditLogRecord type mismatch (user object vs user_name string)
+- Made Auditoria tab visible to ADVOGADO role (was ADMIN-only)
+- Verified real data flows through: created client + process, confirmed in dashboard stats
+
+Stage Summary:
+- All bugs fixed, application stable
+- 16 API endpoints functional (4 auth + 5 users + 4 clients + 5 processes + 2 stats/audit = 20 total)
+- 6 frontend views functional (Login, Register, Dashboard Home, Processes, Clients, Users, Audit)
+- QA screenshots saved to /home/z/my-project/download/qa-*.png
