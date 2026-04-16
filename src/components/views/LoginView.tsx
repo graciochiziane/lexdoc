@@ -27,7 +27,7 @@ import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 function LexDocLogo({ className, white = false }: { className?: string; white?: boolean }) {
   return (
     <div className={`flex items-center gap-2.5 ${className ?? ''}`}>
-      <div className="relative w-10 h-10">
+      <div className="relative w-10 h-10 shield-pulse-glow">
         {/* Shield shape */}
         <svg viewBox="0 0 40 40" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path
@@ -56,6 +56,39 @@ function LexDocLogo({ className, white = false }: { className?: string; white?: 
           Doc
         </span>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Particle dots animation for left panel
+// ─────────────────────────────────────────
+function ParticleDots() {
+  const particles = Array.from({ length: 20 }, (_, i) => ({
+    id: i,
+    left: `${Math.random() * 100}%`,
+    size: Math.random() * 3 + 1,
+    delay: Math.random() * 8,
+    duration: Math.random() * 6 + 8,
+    opacity: Math.random() * 0.4 + 0.1,
+  }));
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="absolute rounded-full bg-emerald-400"
+          style={{
+            left: p.left,
+            bottom: '-4px',
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            opacity: p.opacity,
+            animation: `lexdoc-particle-float ${p.duration}s ${p.delay}s ease-in-out infinite`,
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -159,6 +192,13 @@ const staggerItem = {
   animate: { opacity: 1, x: 0 },
 };
 
+// Form card entry animation
+const formCardEntry = {
+  initial: { opacity: 0, y: 24, scale: 0.97 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+};
+
 // ─────────────────────────────────────────
 // Time-based greeting
 // ─────────────────────────────────────────
@@ -216,6 +256,9 @@ export function LoginView() {
             backgroundSize: '40px 40px',
           }}
         />
+
+        {/* Particle dots animation */}
+        <ParticleDots />
 
         {/* Floating 3D shapes */}
         <FloatingShapes />
@@ -330,12 +373,15 @@ export function LoginView() {
               </p>
             </div>
 
-            {/* Form card with gradient top border */}
-            <div className="rounded-xl border shadow-lg overflow-hidden">
-              {/* Gradient top border */}
-              <div className="h-[2px] bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400" />
-
-              <div className="p-6 sm:p-8">
+            {/* Form card with glassmorphism + gradient border */}
+            <motion.div
+              {...formCardEntry}
+              className="relative rounded-2xl"
+            >
+              {/* Gradient border wrapper */}
+              <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 opacity-80" />
+              {/* Inner content */}
+              <div className="relative rounded-2xl overflow-hidden backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border border-white/20 dark:border-white/10 shadow-2xl shadow-emerald-500/5 dark:shadow-emerald-500/10">
                 <AnimatePresence mode="wait">
                   {!showForgotPassword ? (
                     <motion.div
@@ -344,12 +390,13 @@ export function LoginView() {
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 16 }}
                       transition={{ duration: 0.2 }}
+                      className="p-6 sm:p-8"
                     >
                       {/* Google login (disabled placeholder) */}
                       <button
                         type="button"
                         disabled
-                        className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-background hover:bg-muted/50 transition-colors text-sm font-medium text-muted-foreground cursor-not-allowed mb-4"
+                        className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-background/50 hover:bg-muted/50 transition-colors text-sm font-medium text-muted-foreground cursor-not-allowed mb-4"
                       >
                         <svg className="size-4" viewBox="0 0 24 24">
                           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
@@ -369,7 +416,7 @@ export function LoginView() {
                           <div className="w-full border-t" />
                         </div>
                         <div className="relative flex justify-center text-xs uppercase">
-                          <span className="bg-background px-3 text-muted-foreground">ou</span>
+                          <span className="bg-white/80 dark:bg-gray-900/80 px-3 text-muted-foreground">ou</span>
                         </div>
                       </div>
 
@@ -383,13 +430,14 @@ export function LoginView() {
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -16 }}
                       transition={{ duration: 0.2 }}
+                      className="p-6 sm:p-8"
                     >
                       <ForgotPasswordForm onBack={() => setShowForgotPassword(false)} />
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
-            </div>
+            </motion.div>
           </div>
         </motion.main>
 

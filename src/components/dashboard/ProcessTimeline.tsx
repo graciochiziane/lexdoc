@@ -61,6 +61,15 @@ function getEntryStyle(entry: TimelineEntry) {
       badgeColor: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-red-200',
     };
 
+  if (entry.type === 'note')
+    return {
+      icon: MessageSquare,
+      color: 'text-emerald-600 dark:text-emerald-400',
+      bg: 'bg-emerald-100 dark:bg-emerald-900/40',
+      border: 'border-l-emerald-500',
+      badgeColor: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200',
+    };
+
   if (entry.type === 'deadline')
     return {
       icon: CalendarDays,
@@ -86,6 +95,7 @@ function getActionLabel(action: string): string {
   if (action.includes('CLOSED')) return 'Encerramento';
   if (action === 'DEADLINE_COMPLETED') return 'Prazo concluído';
   if (action === 'DEADLINE_CREATED') return 'Novo prazo';
+  if (action === 'NOTE_ADDED') return 'Nota';
   return 'Actividade';
 }
 

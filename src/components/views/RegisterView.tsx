@@ -23,7 +23,7 @@ import { RegisterForm } from '@/components/auth/RegisterForm';
 function LexDocLogo({ className, white = false }: { className?: string; white?: boolean }) {
   return (
     <div className={`flex items-center gap-2.5 ${className ?? ''}`}>
-      <div className="relative w-10 h-10">
+      <div className="relative w-10 h-10 shield-pulse-glow">
         <svg viewBox="0 0 40 40" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path
             d="M20 2L4 10v10c0 9.6 6.8 18.6 16 20 9.2-1.4 16-10.4 16-20V10L20 2z"
@@ -106,6 +106,46 @@ const staggerItem = {
   animate: { opacity: 1, x: 0 },
 };
 
+// Form card entry animation
+const formCardEntry = {
+  initial: { opacity: 0, y: 24, scale: 0.97 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+};
+
+// ─────────────────────────────────────────
+// Particle dots animation for left panel
+// ─────────────────────────────────────────
+function ParticleDots() {
+  const particles = Array.from({ length: 20 }, (_, i) => ({
+    id: i,
+    left: `${Math.random() * 100}%`,
+    size: Math.random() * 3 + 1,
+    delay: Math.random() * 8,
+    duration: Math.random() * 6 + 8,
+    opacity: Math.random() * 0.4 + 0.1,
+  }));
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="absolute rounded-full bg-emerald-400"
+          style={{
+            left: p.left,
+            bottom: '-4px',
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            opacity: p.opacity,
+            animation: `lexdoc-particle-float ${p.duration}s ${p.delay}s ease-in-out infinite`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────
 // Floating shapes (shared with login)
 // ─────────────────────────────────────────
@@ -151,6 +191,9 @@ export function RegisterView() {
             backgroundSize: '40px 40px',
           }}
         />
+
+        {/* Particle dots animation */}
+        <ParticleDots />
 
         <FloatingShapes />
 
@@ -260,15 +303,20 @@ export function RegisterView() {
               </p>
             </div>
 
-            {/* Form card with gradient top border */}
-            <div className="rounded-xl border shadow-lg overflow-hidden">
-              {/* Gradient top border */}
-              <div className="h-[2px] bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400" />
-
-              <div className="p-6 sm:p-8">
-                <RegisterForm />
+            {/* Form card with glassmorphism + gradient border */}
+            <motion.div
+              {...formCardEntry}
+              className="relative rounded-2xl"
+            >
+              {/* Gradient border wrapper */}
+              <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 opacity-80" />
+              {/* Inner content */}
+              <div className="relative rounded-2xl overflow-hidden backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border border-white/20 dark:border-white/10 shadow-2xl shadow-emerald-500/5 dark:shadow-emerald-500/10">
+                <div className="p-6 sm:p-8">
+                  <RegisterForm />
+                </div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </motion.main>
 

@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // LEXDOC — API de Timeline do Processo
 // GET /api/v1/processes/[id]/timeline
-// Combina audit_logs + deadlines do processo
+// Combina audit_logs + deadlines + notas do processo
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,7 +13,7 @@ import { db } from '@/lib/db';
 // ─────────────────────────────────────────
 interface TimelineEntry {
   id: string;
-  type: 'audit' | 'deadline';
+  type: 'audit' | 'deadline' | 'note';
   action: string;
   description: string;
   user_name: string;
@@ -119,8 +119,47 @@ export async function GET(
       },
     }));
 
+    // Buscar notas do processo (tabela raw SQL)
+    const notes = await db.$queryRawUnsafe<Array<{
+      id: string;
+      firm_id: string;
+      entity_type: string;
+      entity_id: string;
+      content: string;
+      is_pinned: number;
+      created_by: string;
+      created_at: string;
+      updated_at: string;
+      user_name: string | null;
+    }>>(
+      `SELECT n.*, u.full_name as user_name
+       FROM notes n
+       LEFT JOIN users u ON n.created_by = u.id
+       WHERE n.firm_id = ? AND n.entity_type = 'process' AND n.entity_id = ?
+       ORDER BY n.created_at DESC
+       LIMIT 20`,
+      auth.payload.firm_id,
+      id,
+    );
+
+    // Converter notas em entradas de timeline
+    const noteEntries: TimelineEntry[] = notes.map((note) => ({
+      id: `note-${note.id}`,
+      type: 'note' as const,
+      action: 'NOTE_ADDED',
+      description: `adicionou uma nota: ${note.content.length > 60 ? note.content.slice(0, 60) + '…' : note.content}`,
+      user_name: note.user_name ?? 'Utilizador',
+      user_id: note.created_by,
+      created_at: note.created_at,
+      details: {
+        note_id: note.id,
+        content: note.content,
+        is_pinned: note.is_pinned === 1,
+      },
+    }));
+
     // Combinar e ordenar por data (mais recente primeiro)
-    const combined = [...auditEntries, ...deadlineEntries].sort(
+    const combined = [...auditEntries, ...deadlineEntries, ...noteEntries].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );
 

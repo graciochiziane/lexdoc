@@ -28,6 +28,8 @@ import {
   Settings,
   UserPlus,
   BarChart3,
+  Keyboard,
+  Columns3,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Card, CardContent } from '@/components/ui/card';
@@ -54,8 +56,11 @@ import { ProfileDialog } from '@/components/dashboard/ProfileDialog';
 import { FirmSettingsDialog } from '@/components/dashboard/FirmSettingsDialog';
 import { InvitationsView } from '@/components/dashboard/InvitationsView';
 import { ReportsView } from '@/components/dashboard/ReportsView';
+import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
 import { QuickActionsFAB } from '@/components/dashboard/QuickActionsFAB';
 import { OnboardingGuide } from '@/components/dashboard/OnboardingGuide';
+import { KeyboardShortcutsDialog } from '@/components/dashboard/KeyboardShortcutsDialog';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 // ─────────────────────────────────────────
 // Tipos
@@ -63,6 +68,7 @@ import { OnboardingGuide } from '@/components/dashboard/OnboardingGuide';
 type DashboardTab =
   | 'painel'
   | 'processos'
+  | 'quadro'
   | 'documentos'
   | 'clientes'
   | 'prazos'
@@ -83,6 +89,7 @@ const NAV_ITEMS: Array<{
 }> = [
   { id: 'painel', icon: LayoutDashboard, label: 'Painel' },
   { id: 'processos', icon: Briefcase, label: 'Processos' },
+  { id: 'quadro', icon: Columns3, label: 'Quadro Kanban' },
   { id: 'documentos', icon: FileText, label: 'Documentos' },
   { id: 'clientes', icon: Users, label: 'Clientes' },
   { id: 'prazos', icon: Calendar, label: 'Prazos' },
@@ -99,6 +106,7 @@ const NAV_ITEMS: Array<{
 const TAB_LABELS: Record<DashboardTab, string> = {
   painel: 'Painel de Controlo',
   processos: 'Processos Jurídicos',
+  quadro: 'Quadro Kanban',
   clientes: 'Gestão de Clientes',
   utilizadores: 'Gestão de Utilizadores',
   prazos: 'Gestão de Prazos',
@@ -158,6 +166,7 @@ export function DashboardView() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [firmSettingsOpen, setFirmSettingsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   // ── Fechar sidebar mobile ao mudar de aba ──
   const handleTabChange = useCallback((tab: DashboardTab) => {
@@ -174,6 +183,12 @@ export function DashboardView() {
   const navigateToAuditoria = useCallback(() => {
     handleTabChange('auditoria');
   }, [handleTabChange]);
+
+  // ── Keyboard shortcuts hook ──
+  useKeyboardShortcuts({
+    onOpenShortcutsDialog: () => setShortcutsOpen(true),
+    onTabChange: handleTabChange,
+  });
 
   // ── Handle search result selection ──
   const handleSearchSelect = useCallback((type: string, _id: string) => {
@@ -203,6 +218,8 @@ export function DashboardView() {
         return <DashboardHome />;
       case 'processos':
         return <ProcessesView />;
+      case 'quadro':
+        return <KanbanBoard />;
       case 'clientes':
         return <ClientsView />;
       case 'utilizadores':
@@ -503,6 +520,17 @@ export function DashboardView() {
                 </motion.div>
               )}
 
+              {/* Keyboard shortcuts button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShortcutsOpen(true)}
+                title="Atalhos de teclado (?)"
+                className="active:scale-[0.95]"
+              >
+                <Keyboard className="size-4" />
+              </Button>
+
               {/* User avatar - opens profile dialog */}
               <Button
                 variant="ghost"
@@ -561,6 +589,9 @@ export function DashboardView() {
 
       {/* Quick Actions FAB */}
       <QuickActionsFAB />
+
+      {/* Keyboard Shortcuts Dialog */}
+      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
       {/* Onboarding Guide — shown on first login */}
       <OnboardingGuide />

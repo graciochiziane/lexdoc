@@ -32,7 +32,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
-  TableBody,
   TableCell,
   TableHead,
   TableHeader,
@@ -339,7 +338,7 @@ export function DocumentsView() {
                     <TableHead className="text-right">Acções</TableHead>
                   </TableRow>
                 </TableHeader>
-                  <motion.tbody variants={staggerContainer} initial="hidden" animate="show">
+                <motion.tbody variants={staggerContainer} initial="hidden" animate="show" className="[&_tr:last-child]:border-0">
                     {documents.map((doc, i) => (
                       <motion.tr
                         key={doc.id}

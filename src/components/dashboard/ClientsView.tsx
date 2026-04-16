@@ -34,7 +34,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Table,
-  TableBody,
   TableCell,
   TableHead,
   TableHeader,
@@ -415,8 +414,7 @@ export function ClientsView() {
                     <TableHead className="text-right">Acções</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  <motion.tbody variants={staggerContainer} initial="hidden" animate="show">
+                <motion.tbody variants={staggerContainer} initial="hidden" animate="show" className="[&_tr:last-child]:border-0">
                     {clients.map((client, i) => (
                       <motion.tr
                         key={client.id}
@@ -473,8 +471,7 @@ export function ClientsView() {
                         </TableCell>
                       </motion.tr>
                     ))}
-                  </motion.tbody>
-                </TableBody>
+                </motion.tbody>
               </Table>
             </div>
           </CardContent>

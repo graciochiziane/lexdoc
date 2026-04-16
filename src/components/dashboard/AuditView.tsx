@@ -32,7 +32,6 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
-  TableBody,
   TableCell,
   TableHead,
   TableHeader,
@@ -215,7 +214,7 @@ function TableView({ logs }: { logs: AuditLogRecord[] }) {
             <TableHead className="hidden lg:table-cell">Detalhes</TableHead>
           </TableRow>
         </TableHeader>
-        <motion.tbody variants={staggerContainer} initial="hidden" animate="show">
+        <motion.tbody variants={staggerContainer} initial="hidden" animate="show" className="[&_tr:last-child]:border-0">
             {logs.map((log, i) => (
               <motion.tr
                 key={log.id}

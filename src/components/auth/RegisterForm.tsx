@@ -314,7 +314,7 @@ export function RegisterForm() {
           {/* Botão de registo */}
           <Button
             type="submit"
-            className="w-full"
+            className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white border-0 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200"
             size="lg"
             disabled={isRegistering}
           >

@@ -29,7 +29,6 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
-  TableBody,
   TableCell,
   TableHead,
   TableHeader,
@@ -313,8 +312,7 @@ export function UsersView() {
                     <TableHead className="text-right">Acções</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  <motion.tbody variants={staggerContainer} initial="hidden" animate="show">
+                <motion.tbody variants={staggerContainer} initial="hidden" animate="show" className="[&_tr:last-child]:border-0">
                     {users.map((user, i) => (
                       <motion.tr
                         key={user.id}
@@ -379,8 +377,7 @@ export function UsersView() {
                         </TableCell>
                       </motion.tr>
                     ))}
-                  </motion.tbody>
-                </TableBody>
+                </motion.tbody>
               </Table>
             </div>
           )}

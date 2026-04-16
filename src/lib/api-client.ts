@@ -81,7 +81,7 @@ export const usersApi = {
 // ─────────────────────────────────────────
 // API de Clientes
 // ─────────────────────────────────────────
-interface ClientRecord {
+export interface ClientRecord {
   id: string;
   full_name: string;
   email: string | null;
@@ -125,7 +125,7 @@ export const clientsApi = {
 // ─────────────────────────────────────────
 // API de Processos
 // ─────────────────────────────────────────
-interface ProcessRecord {
+export interface ProcessRecord {
   id: string;
   process_number: string;
   title: string;
@@ -177,6 +177,8 @@ export const processesApi = {
     apiFetch<ProcessRecord>(`/processes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   close: (id: string) =>
     apiFetch<ProcessRecord>(`/processes/${id}/close`, { method: 'PATCH' }),
+  updateStatus: (id: string, status: string) =>
+    apiFetch<ProcessRecord>(`/processes/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   timeline: (id: string) =>
     apiFetch<TimelineEntry[]>(`/processes/${id}/timeline`),
 };
@@ -248,7 +250,7 @@ export interface CalendarDeadlinesData {
   total: number;
 }
 
-interface DeadlineRecord {
+export interface DeadlineRecord {
   id: string;
   process_id: string;
   title: string;
@@ -704,7 +706,7 @@ export const notesApi = {
 // ─────────────────────────────────────────
 export interface TimelineEntry {
   id: string;
-  type: 'audit' | 'deadline';
+  type: 'audit' | 'deadline' | 'note';
   action: string;
   description: string;
   user_name: string;

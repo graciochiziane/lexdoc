@@ -125,38 +125,175 @@
    LEXDOC — Scrollbar personalizado
    Estilo limpo para áreas com scroll (tabelas, timeline)
    ─────────────────────────────────────────────── */
-.overflow-y-auto {
+.overflow-y-auto,
+.overflow-x-auto {
   scrollbar-width: thin;
   scrollbar-color: oklch(0.8 0 0) transparent;
 }
 
-.overflow-y-auto::-webkit-scrollbar {
+.overflow-y-auto::-webkit-scrollbar,
+.overflow-x-auto::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
-.overflow-y-auto::-webkit-scrollbar-track {
+.overflow-y-auto::-webkit-scrollbar-track,
+.overflow-x-auto::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.overflow-y-auto::-webkit-scrollbar-thumb {
+.overflow-y-auto::-webkit-scrollbar-thumb,
+.overflow-x-auto::-webkit-scrollbar-thumb {
   background-color: oklch(0.8 0 0);
   border-radius: 9999px;
 }
 
-.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+.overflow-y-auto::-webkit-scrollbar-thumb:hover,
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
   background-color: oklch(0.65 0 0);
 }
 
-.dark .overflow-y-auto {
-  scrollbar-color: oklch(0.35 0 0) transparent;
+.dark .overflow-y-auto,
+.dark .overflow-x-auto {
+  scrollbar-color: oklch(0.3 0 0) transparent;
 }
 
-.dark .overflow-y-auto::-webkit-scrollbar-thumb {
-  background-color: oklch(0.35 0 0);
+.dark .overflow-y-auto::-webkit-scrollbar-track,
+.dark .overflow-x-auto::-webkit-scrollbar-track {
+  background: oklch(0.2 0 0 / 30%);
 }
 
-.dark .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+.dark .overflow-y-auto::-webkit-scrollbar-thumb,
+.dark .overflow-x-auto::-webkit-scrollbar-thumb {
+  background-color: oklch(0.3 0 0);
+}
+
+.dark .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+.dark .overflow-x-auto::-webkit-scrollbar-thumb:hover {
   background-color: oklch(0.45 0 0);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Selection Color (Emerald Theme)
+   ─────────────────────────────────────────────── */
+::selection {
+  background: oklch(0.696 0.17 162.48 / 25%);
+}
+
+.dark ::selection {
+  background: oklch(0.696 0.17 162.48 / 30%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Focus Ring (Subtle emerald)
+   ─────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid oklch(0.696 0.17 162.48);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Page Transition Utility
+   ─────────────────────────────────────────────── */
+.page-transition {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.page-transition-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Gradient Text Utility
+   ─────────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #10b981, #059669, #0d9488);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.dark .gradient-text {
+  background: linear-gradient(135deg, #34d399, #10b981, #2dd4bf);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Shimmer Loading Effect
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer-loading {
+  background: linear-gradient(
+    90deg,
+    oklch(0.97 0 0) 25%,
+    oklch(0.93 0 0) 50%,
+    oklch(0.97 0 0) 75%
+  );
+  background-size: 200% 100%;
+  animation: lexdoc-shimmer 1.5s ease-in-out infinite;
+}
+
+.dark .shimmer-loading {
+  background: linear-gradient(
+    90deg,
+    oklch(0.25 0 0) 25%,
+    oklch(0.3 0 0) 50%,
+    oklch(0.25 0 0) 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Pulse Dot Animation
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.5); }
+}
+
+.pulse-dot {
+  animation: lexdoc-pulse-dot 2s ease-in-out infinite;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Particle Animation (Login/Register)
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-particle-float {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% {
+    transform: translateY(-100vh) translateX(20px);
+    opacity: 0;
+  }
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Shield Pulse Glow
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-shield-pulse {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.3)); }
+  50% { filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.6)); }
+}
+
+.shield-pulse-glow {
+  animation: lexdoc-shield-pulse 3s ease-in-out infinite;
 }
 
 /* ───────────────────────────────────────────────

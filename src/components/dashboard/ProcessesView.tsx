@@ -40,7 +40,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import {
   Table,
-  TableBody,
   TableCell,
   TableHead,
   TableHeader,
@@ -71,7 +70,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { processesApi, clientsApi, deadlinesApi, exportApi, type ProcessRecord, type ClientRecord, type DeadlineRecord } from '@/lib/api-client';
 import { NotesPanel } from '@/components/dashboard/NotesPanel';
 import { ProcessTimeline } from '@/components/dashboard/ProcessTimeline';
@@ -556,11 +555,11 @@ export function ProcessesView() {
                     <TableHead className="text-right">Acções</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  <motion.tbody
+                <motion.tbody
                     variants={staggerContainer}
                     initial="hidden"
                     animate="show"
+                    className="[&_tr:last-child]:border-0"
                   >
                     {processes.map((process, i) => (
                       <motion.tr
@@ -635,8 +634,7 @@ export function ProcessesView() {
                         </TableCell>
                       </motion.tr>
                     ))}
-                  </motion.tbody>
-                </TableBody>
+                </motion.tbody>
               </Table>
             </div>
           )}
@@ -868,16 +866,16 @@ export function ProcessesView() {
 
               {/* Tabs de navegação */}
               <Tabs value={detailTab} onValueChange={(v) => setDetailTab(v as 'info' | 'notes' | 'timeline')} className="mt-2">
-                <TabsList className="w-full grid grid-cols-3">
-                  <TabsTrigger value="info" className="text-xs">
+                <TabsList className="w-full grid grid-cols-3 h-10">
+                  <TabsTrigger value="info" className="text-xs data-[state=active]:bg-emerald-100 dark:data-[state=active]:bg-emerald-950/40 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm">
                     <FileText className="size-3 mr-1" />
                     Informações
                   </TabsTrigger>
-                  <TabsTrigger value="notes" className="text-xs">
+                  <TabsTrigger value="notes" className="text-xs data-[state=active]:bg-emerald-100 dark:data-[state=active]:bg-emerald-950/40 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm">
                     <MessageSquare className="size-3 mr-1" />
                     Notas
                   </TabsTrigger>
-                  <TabsTrigger value="timeline" className="text-xs">
+                  <TabsTrigger value="timeline" className="text-xs data-[state=active]:bg-emerald-100 dark:data-[state=active]:bg-emerald-950/40 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm">
                     <History className="size-3 mr-1" />
                     Timeline
                   </TabsTrigger>
@@ -885,6 +883,7 @@ export function ProcessesView() {
               </Tabs>
 
               <div className="space-y-5 pt-2">
+              <AnimatePresence mode="wait">
               {detailTab === 'info' && (
               <>
                 {/* Info grid */}
@@ -1029,11 +1028,28 @@ export function ProcessesView() {
               </>
               )}
               {detailTab === 'notes' && (
-                <NotesPanel entityType="process" entityId={detailProcess.id} />
+                <motion.div
+                  key="notes"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <NotesPanel entityType="process" entityId={detailProcess.id} />
+                </motion.div>
               )}
               {detailTab === 'timeline' && (
-                <ProcessTimeline processId={detailProcess.id} />
+                <motion.div
+                  key="timeline"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ProcessTimeline processId={detailProcess.id} />
+                </motion.div>
               )}
+              </AnimatePresence>
               </div>
 
               <DialogFooter className="gap-2 sm:gap-0">

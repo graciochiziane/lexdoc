@@ -160,6 +160,24 @@ function MaputoClock() {
 }
 
 // ─────────────────────────────────────────
+// Shimmer Stat Card (loading state)
+// ─────────────────────────────────────────
+function ShimmerStatCard() {
+  return (
+    <div className="rounded-xl border-l-4 border-border overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-center justify-between pb-2">
+          <div className="shimmer-loading h-4 w-24 rounded" />
+          <div className="shimmer-loading w-8 h-8 rounded-lg" />
+        </div>
+        <div className="shimmer-loading h-8 w-16 rounded mb-2" />
+        <div className="shimmer-loading h-3 w-32 rounded" />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
 // Contador animado
 // ─────────────────────────────────────────
 function AnimatedCounter({ target }: { target: number }) {
@@ -417,21 +435,26 @@ export function DashboardHome() {
   }, [stats]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* ── Floating background decorations ── */}
+      <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-emerald-500/[0.03] dark:bg-emerald-400/[0.04] blur-3xl pointer-events-none" />
+      <div className="absolute top-40 -left-32 w-80 h-80 rounded-full bg-cyan-500/[0.03] dark:bg-cyan-400/[0.03] blur-3xl pointer-events-none" />
+      <div className="absolute bottom-20 right-10 w-64 h-64 rounded-full bg-amber-500/[0.02] dark:bg-amber-400/[0.02] blur-3xl pointer-events-none" />
       {/* Welcome Card */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white">
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-500/20">
           {/* Decorative pattern */}
           <div className="absolute inset-0 opacity-10" style={{
             backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
             backgroundSize: '24px 24px',
           }} />
-          <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full" />
-          <div className="absolute -bottom-8 -right-20 w-24 h-24 bg-white/5 rounded-full" />
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full" />
+          <div className="absolute -bottom-8 -right-20 w-32 h-32 bg-white/5 rounded-full" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/[0.03] rounded-full blur-2xl" />
           <CardContent className="relative z-10 p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
@@ -493,6 +516,10 @@ export function DashboardHome() {
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Painel de Controlo</h2>
         <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="pulse-dot absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+          </span>
           <Clock className="size-3.5" />
           {date} — {time}
         </p>
@@ -500,44 +527,44 @@ export function DashboardHome() {
 
       {/* Cartões de estatísticas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {STAT_CARDS.map((stat, i) => (
-          <motion.div
-            key={stat.key}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.08 }}
-            whileHover={{ scale: 1.02 }}
-          >
-            <Card
-              className={`border-l-4 ${stat.border} hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br ${stat.gradient}`}
+        {statsLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <ShimmerStatCard key={i} />)
+        ) : (
+          STAT_CARDS.map((stat, i) => (
+            <motion.div
+              key={stat.key}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.08 }}
+              whileHover={{ scale: 1.02 }}
             >
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {stat.label}
-                </CardTitle>
-                <div className={`w-8 h-8 rounded-lg ${stat.bg} flex items-center justify-center`}>
-                  <stat.icon className={`size-4 ${stat.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                {statsLoading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
+              <Card
+                className={`border-l-4 ${stat.border} hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br ${stat.gradient}`}
+              >
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {stat.label}
+                  </CardTitle>
+                  <div className={`w-8 h-8 rounded-lg ${stat.bg} flex items-center justify-center`}>
+                    <stat.icon className={`size-4 ${stat.color}`} />
+                  </div>
+                </CardHeader>
+                <CardContent>
                   <p className="text-2xl font-bold">
                     <AnimatedCounter target={stats?.[stat.key] ?? 0} />
                   </p>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stat.key === 'upcoming_deadlines'
-                    ? 'Nos próximos 30 dias'
-                    : stat.key === 'active_processes'
-                      ? 'Processos activos neste momento'
-                      : 'Registos totais'}
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {stat.key === 'upcoming_deadlines'
+                      ? 'Nos próximos 30 dias'
+                      : stat.key === 'active_processes'
+                        ? 'Processos activos neste momento'
+                        : 'Registos totais'}
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))
+        )}
       </div>
 
       {/* ── Gráficos em grelha 2x2 + Feed de Actividade ── */}
@@ -545,7 +572,7 @@ export function DashboardHome() {
         {/* Gráficos — 2 colunas */}
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Gráfico: Processos por Estado */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-emerald-50/20 dark:from-background dark:to-emerald-950/5 border-l-4 border-l-emerald-400">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-emerald-50/20 dark:from-background dark:to-emerald-950/5 border-l-4 border-l-emerald-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Processos por Estado</CardTitle>
             </CardHeader>
@@ -610,7 +637,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Gráfico: Actividade Mensal */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-amber-50/20 dark:from-background dark:to-amber-950/5 border-l-4 border-l-amber-400">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-amber-50/20 dark:from-background dark:to-amber-950/5 border-l-4 border-l-amber-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Actividade Mensal</CardTitle>
             </CardHeader>
@@ -632,7 +659,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Gráfico: Distribuição por Prioridade */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-red-50/20 dark:from-background dark:to-red-950/5 border-l-4 border-l-red-400">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-red-50/20 dark:from-background dark:to-red-950/5 border-l-4 border-l-red-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Distribuição por Prioridade</CardTitle>
             </CardHeader>
@@ -674,7 +701,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Timeline: Próximos Prazos */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-cyan-50/20 dark:from-background dark:to-cyan-950/5 border-l-4 border-l-cyan-400">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-cyan-50/20 dark:from-background dark:to-cyan-950/5 border-l-4 border-l-cyan-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Próximos Prazos</CardTitle>
             </CardHeader>
@@ -810,8 +837,8 @@ export function DashboardHome() {
         </CardContent>
       </Card>
 
-      {/* Banner informativo */}
-      <Alert className="border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30">
+      {/* Banner informativo com gradiente */}
+      <Alert className="border-0 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 shadow-sm">
         <Shield className="size-4 text-emerald-600 dark:text-emerald-400" />
         <AlertDescription className="text-emerald-800 dark:text-emerald-300">
           <p className="font-medium">Phase 1 implementada com sucesso.</p>
