@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // LEXDOC — Cliente API para pedidos autenticados
 // Reutiliza o token de auth.store.ts
+// Inclui interceptor 401 com refresh token automático
 // ═══════════════════════════════════════════════════════════════
 
 import { useAuthStore } from '@/stores/auth.store';
@@ -34,19 +35,78 @@ export interface ApiResponse<T> {
 const API_BASE = '/api/v1';
 
 // ─────────────────────────────────────────
-// Fetch genérico com headers de autenticação
+// Refresh token — queue para evitar race conditions
+// ─────────────────────────────────────────
+let apiRefreshPromise: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  const { refreshToken, clearAuth, setAuth } = useAuthStore.getState();
+  if (!refreshToken) {
+    clearAuth();
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    const data = await response.json();
+
+    if (data.success && data.data) {
+      const { access_token, refresh_token, user } = data.data;
+      setAuth(access_token, refresh_token, user);
+      return true;
+    } else {
+      clearAuth();
+      return false;
+    }
+  } catch {
+    clearAuth();
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────
+// Construir headers de autenticação
+// ─────────────────────────────────────────
+function getAuthHeaders(extra?: HeadersInit): HeadersInit {
+  const { accessToken } = useAuthStore.getState();
+  return {
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    ...extra,
+  };
+}
+
+// ─────────────────────────────────────────
+// Fetch genérico com headers + interceptor 401
 // ─────────────────────────────────────────
 async function apiFetch<T>(
   endpoint: string,
   options?: RequestInit,
 ): Promise<ApiResponse<T>> {
-  const { accessToken } = useAuthStore.getState();
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-  };
-
+  const headers = getAuthHeaders();
   const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+
+  // Se 401 — tentar refresh e repetir pedido
+  if (response.status === 401) {
+    if (!apiRefreshPromise) {
+      apiRefreshPromise = tryRefreshToken().finally(() => {
+        apiRefreshPromise = null;
+      });
+    }
+
+    const refreshed = await apiRefreshPromise;
+    if (refreshed) {
+      const retryHeaders = getAuthHeaders();
+      const retryResponse = await fetch(`${API_BASE}${endpoint}`, { ...options, headers: retryHeaders });
+      return await retryResponse.json() as ApiResponse<T>;
+    }
+  }
+
   const data: ApiResponse<T> = await response.json();
   return data;
 }
@@ -599,7 +659,26 @@ async function apiFetchBlob(endpoint: string): Promise<Blob> {
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, { headers });
+  let response = await fetch(`${API_BASE}${endpoint}`, { headers });
+
+  // Se 401 — tentar refresh e repetir pedido
+  if (response.status === 401) {
+    if (!apiRefreshPromise) {
+      apiRefreshPromise = tryRefreshToken().finally(() => {
+        apiRefreshPromise = null;
+      });
+    }
+
+    const refreshed = await apiRefreshPromise;
+    if (refreshed) {
+      const { accessToken: newToken } = useAuthStore.getState();
+      const retryHeaders: HeadersInit = {
+        ...(newToken ? { Authorization: `Bearer ${newToken}` } : {}),
+      };
+      response = await fetch(`${API_BASE}${endpoint}`, { headers: retryHeaders });
+    }
+  }
+
   if (!response.ok) {
     throw new Error('Erro ao exportar dados.');
   }

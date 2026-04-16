@@ -841,3 +841,26 @@ LexDoc is a comprehensive, production-grade SaaS legal document management platf
 8. **Mobile PWA**: Service worker, offline support, push notifications
 9. **Process Collaboration**: Real-time comments, @mentions, assignment tracking
 10. **Mozambican Legislation Database**: Pre-populated articles from key Mozambican laws
+
+---
+Task ID: 15 (Phase 1→2 Checklist Verification)
+Agent: Main Orchestrator
+Task: Verify Phase 1→2 transition checklist items against actual codebase
+
+Work Log:
+- Reviewed all 41+ API route files for TZ=Africa/Maputo — confirmed present in every route
+- Reviewed login/route.ts — confirmed MAX_LOGIN_ATTEMPTS=5, ACCOUNT_LOCK_DURATION=15min, failed_login_count increment, locked_until check
+- Reviewed audit.ts — confirmed zero UPDATE/DELETE calls on auditLog, PII_FIELDS array with 8 fields, [REDACTED] masking
+- Grep searched entire src/ for `auditLog.update|auditLog.delete` — zero results confirmed
+- Grep searched entire src/app/api for firm_id WHERE clauses — 40+ occurrences across all endpoints
+- Reviewed LoginView.tsx — confirmed md:flex-row responsive split layout, mobile-first with md:hidden branding panel
+- Reviewed auth.service.ts — confirmed 401 interceptor with refresh queue anti-race-condition
+- Reviewed api-client.ts — FOUND GAP: apiFetch() and apiFetchBlob() lacked 401 interceptor
+- FIXED: Added tryRefreshToken() + queue pattern to api-client.ts, both apiFetch and apiFetchBlob now retry on 401
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+
+Stage Summary:
+- Checklist INFRASTRUCTURE: Docker/PG/Redis = N/A (sandbox), TZ=Africa/Maputo = ✅ all routes
+- Checklist SECURITY: Login lockout = ✅ verified, firm_id isolation = ✅ 40+ endpoints, Audit immutability = ✅ application-level
+- Checklist FRONTEND: Responsive login = ✅ verified, Token interceptor = ✅ FIXED (was partial, now complete)
+- 1 bug fixed: apiFetch missing 401 auto-refresh — now all CRUD APIs silently retry on token expiry
