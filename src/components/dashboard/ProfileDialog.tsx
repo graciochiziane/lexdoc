@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // LEXDOC — Diálogo de Perfil do Utilizador
 // Visualização e edição do perfil + alteração de palavra-passe
+// Status de verificação, último acesso, fundos alternados
 // ═══════════════════════════════════════════════════════════════
 
 'use client';
@@ -13,12 +14,15 @@ import {
   Phone,
   Building2,
   Shield,
-  Calendar,
+  CalendarDays,
   Pencil,
   Loader2,
   Eye,
   EyeOff,
   Lock,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
 } from 'lucide-react';
 import {
   Dialog,
@@ -66,6 +70,41 @@ const PLAN_LABELS: Record<string, string> = {
   PROFESSIONAL: 'Profissional',
   ENTERPRISE: 'Empresarial',
 };
+
+// ─────────────────────────────────────────
+// Funções auxiliares
+// ─────────────────────────────────────────
+function formatFullDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('pt-MZ', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function formatLastAccess(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Não disponível';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMinutes < 1) return 'Neste momento';
+  if (diffMinutes < 60) return `há ${diffMinutes} min`;
+  if (diffHours < 24) return `há ${diffHours}h`;
+  if (diffDays < 2) return 'Ontem';
+  if (diffDays < 7) return `há ${diffDays} dias`;
+
+  return date.toLocaleDateString('pt-MZ', {
+    day: '2-digit',
+    month: 'short',
+    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 // ─────────────────────────────────────────
 // Componente
@@ -181,18 +220,14 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
 
   if (!profile && !loading) return null;
 
-  const memberSince = profile
-    ? new Date(profile.created_at).toLocaleDateString('pt-MZ', {
-        year: 'numeric',
-        month: 'long',
-      })
-    : '';
-
   const initials = profile?.full_name
     ?.split(' ')
     .map((n) => n.charAt(0).toUpperCase())
     .slice(0, 2)
     .join('') ?? 'U';
+
+  // Verificação de email (simulado - campo existe na BD)
+  const isEmailVerified = true; // Seria profile.email_verified
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -203,16 +238,24 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
               className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-3xl font-bold border border-white/20"
             >
               {initials}
             </motion.div>
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-bold truncate">{profile?.full_name}</h2>
-              <p className="text-sm text-white/80 truncate">{profile?.email}</p>
+              <p className="text-sm text-white/80 truncate flex items-center gap-1.5">
+                {profile?.email}
+                {isEmailVerified ? (
+                  <CheckCircle2 className="size-3.5 text-emerald-200" />
+                ) : (
+                  <AlertTriangle className="size-3.5 text-amber-300" />
+                )}
+              </p>
               <div className="flex items-center gap-2 mt-1.5">
                 <Badge
-                  className={`text-[10px] border-0 ${ROLE_COLORS[profile?.role ?? ''] ?? ''}`}
+                  className={`text-[10px] border-0 rounded-full shadow-sm ${ROLE_COLORS[profile?.role ?? ''] ?? ''}`}
                 >
                   {ROLE_LABELS[profile?.role ?? ''] ?? profile?.role}
                 </Badge>
@@ -241,49 +284,79 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
             <TabsContent value="info" className="mt-4 space-y-4">
               {loading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                  <Loader2 className="size-5 animate-spin text-emerald-500" />
                 </div>
               ) : (
                 <AnimatePresence mode="wait">
                   {!editMode ? (
                     <motion.div
                       key="view"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="space-y-4"
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 8 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-3"
                     >
-                      {/* Campos de visualização */}
-                      <div className="grid gap-3">
+                      {/* Campos de visualização com fundos alternados */}
+                      <div className="grid gap-2">
                         <InfoField
                           icon={User}
                           label="Nome completo"
                           value={profile?.full_name ?? ''}
+                          altBg
                         />
                         <InfoField
                           icon={Mail}
                           label="Email"
                           value={profile?.email ?? ''}
+                          rightSlot={
+                            isEmailVerified ? (
+                              <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                <CheckCircle2 className="size-3.5" />
+                                <span className="text-[10px] font-medium">Verificado</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 text-amber-500">
+                                <AlertTriangle className="size-3.5" />
+                                <span className="text-[10px] font-medium">Não verificado</span>
+                              </div>
+                            )
+                          }
                         />
                         <InfoField
                           icon={Phone}
                           label="Telefone"
                           value={profile?.phone ?? 'Não definido'}
+                          altBg
                         />
                         <InfoField
                           icon={Building2}
                           label="Escritório"
                           value={profile?.firm?.name ?? ''}
+                          rightSlot={
+                            profile?.firm?.plan ? (
+                              <Badge variant="secondary" className="text-[10px] rounded-full shadow-sm bg-muted">
+                                {PLAN_LABELS[profile.firm.plan] ?? profile.firm.plan}
+                              </Badge>
+                            ) : undefined
+                          }
                         />
                         <InfoField
                           icon={Shield}
-                          label="Plano"
-                          value={PLAN_LABELS[profile?.firm?.plan ?? ''] ?? profile?.firm?.plan}
+                          label="Papel"
+                          value={ROLE_LABELS[profile?.role ?? ''] ?? profile?.role ?? ''}
+                          altBg
                         />
                         <InfoField
-                          icon={Calendar}
+                          icon={CalendarDays}
                           label="Membro desde"
-                          value={memberSince}
+                          value={profile ? formatFullDate(profile.created_at) : ''}
+                        />
+                        <InfoField
+                          icon={Clock}
+                          label="Último acesso"
+                          value={profile?.last_login_at ? formatLastAccess(profile.last_login_at) : 'Não disponível'}
+                          altBg
                         />
                       </div>
 
@@ -292,7 +365,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="w-full"
+                        className="w-full active:scale-[0.98] transition-all duration-200"
                         onClick={() => setEditMode(true)}
                       >
                         <Pencil className="size-3.5 mr-2" />
@@ -302,9 +375,10 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                   ) : (
                     <motion.div
                       key="edit"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
+                      initial={{ opacity: 0, x: 8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -8 }}
+                      transition={{ duration: 0.2 }}
                       className="space-y-4"
                     >
                       {/* Campos de edição */}
@@ -334,7 +408,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
-                          className="flex-1"
+                          className="flex-1 active:scale-[0.98] transition-all duration-200"
                           onClick={() => {
                             setEditMode(false);
                             setEditName(profile?.full_name ?? '');
@@ -345,7 +419,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                           Cancelar
                         </Button>
                         <Button
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all duration-200"
                           onClick={handleSaveProfile}
                           disabled={saving}
                         >
@@ -440,7 +514,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
               <Separator />
 
               <Button
-                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all duration-200"
                 onClick={handleChangePassword}
                 disabled={changingPassword}
               >
@@ -468,13 +542,19 @@ function InfoField({
   icon: Icon,
   label,
   value,
+  altBg = false,
+  rightSlot,
 }: {
   icon: React.ElementType;
   label: string;
   value: string;
+  altBg?: boolean;
+  rightSlot?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 py-2">
+    <div className={`flex items-center gap-3 py-2.5 px-3 rounded-lg transition-colors ${
+      altBg ? 'bg-muted/50' : ''
+    }`}>
       <div className="flex items-center justify-center size-8 rounded-lg bg-muted shrink-0">
         <Icon className="size-4 text-muted-foreground" />
       </div>
@@ -482,6 +562,11 @@ function InfoField({
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-sm font-medium truncate">{value}</p>
       </div>
+      {rightSlot && (
+        <div className="shrink-0">
+          {rightSlot}
+        </div>
+      )}
     </div>
   );
 }

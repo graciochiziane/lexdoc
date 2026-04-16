@@ -23,6 +23,7 @@ import {
   Mail,
   Phone,
   FileText,
+  MessageSquare,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,6 +56,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { clientsApi, exportApi, type ClientRecord } from '@/lib/api-client';
+import { NotesPanel } from '@/components/dashboard/NotesPanel';
 
 // ─────────────────────────────────────────
 // Constantes
@@ -203,6 +205,7 @@ export function ClientsView() {
   const [editOpen, setEditOpen] = useState(false);
   const [editClient, setEditClient] = useState<ClientRecord | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+  const [showNotes, setShowNotes] = useState(false);
 
   // ── Query: listar clientes ──
   const params = new URLSearchParams();
@@ -306,6 +309,7 @@ export function ClientsView() {
       client_type: client.client_type,
       notes: client.notes ?? '',
     });
+    setShowNotes(false);
     setEditOpen(true);
   }, []);
 
@@ -668,6 +672,37 @@ export function ClientsView() {
               Guardar
             </Button>
           </DialogFooter>
+
+          {/* Separador: Notas do Cliente */}
+          {editClient && (
+            <div className="border-t mt-4 pt-4">
+              <button
+                onClick={() => setShowNotes(!showNotes)}
+                className="flex items-center gap-2 text-sm font-semibold text-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors w-full"
+              >
+                <MessageSquare className="size-4 text-emerald-600 dark:text-emerald-400" />
+                Notas do Cliente
+                <span className="text-xs text-muted-foreground font-normal">
+                  {showNotes ? '▲' : '▼'}
+                </span>
+              </button>
+              <AnimatePresence>
+                {showNotes && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-2">
+                      <NotesPanel entityType="client" entityId={editClient.id} />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

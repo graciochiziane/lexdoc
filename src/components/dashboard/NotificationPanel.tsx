@@ -1,11 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
 // LEXDOC — Painel de Notificações / Feed de Actividade
 // Sino com badge de não lidos, dropdown com feed de actividade
+// Agrupamento por data: Hoje, Ontem, Esta semana, Anteriores
 // ═══════════════════════════════════════════════════════════════
 
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell,
@@ -21,8 +22,8 @@ import {
   Calendar,
   CheckCheck,
   ExternalLink,
-  Loader2,
   Clock,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +35,13 @@ import { notificationsApi, type NotificationItem } from '@/lib/api-client';
 // ─────────────────────────────────────────
 interface NotificationPanelProps {
   onViewAll?: () => void;
+}
+
+type DateGroup = 'Hoje' | 'Ontem' | 'Esta semana' | 'Anteriores';
+
+interface GroupedNotifications {
+  group: DateGroup;
+  items: NotificationItem[];
 }
 
 // Configuração de ícones e cores por acção
@@ -114,6 +122,9 @@ const ENTITY_LABELS: Record<string, string> = {
   Firm: 'Escritório',
 };
 
+// Ordem dos grupos de data
+const DATE_GROUP_ORDER: DateGroup[] = ['Hoje', 'Ontem', 'Esta semana', 'Anteriores'];
+
 // ─────────────────────────────────────────
 // Funções auxiliares
 // ─────────────────────────────────────────
@@ -134,6 +145,21 @@ function timeAgo(dateStr: string): string {
   return date.toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short' });
 }
 
+function getDateGroup(dateStr: string): DateGroup {
+  const now = new Date();
+  const date = new Date(dateStr);
+
+  // Reset hours for date comparison
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterdayStart = new Date(todayStart.getTime() - 86400000);
+  const weekStart = new Date(todayStart.getTime() - 6 * 86400000);
+
+  if (date >= todayStart) return 'Hoje';
+  if (date >= yesterdayStart) return 'Ontem';
+  if (date >= weekStart) return 'Esta semana';
+  return 'Anteriores';
+}
+
 function getActionConfig(action: string) {
   return ACTION_CONFIG[action] ?? {
     icon: FileText,
@@ -147,7 +173,6 @@ function getActionConfig(action: string) {
 function getNotificationDescription(n: NotificationItem): string {
   const actionCfg = getActionConfig(n.action);
   const entityLabel = ENTITY_LABELS[n.entity_type] ?? n.entity_type;
-  const entityIcon = ENTITY_ICONS[n.entity_type];
   const metadata = n.metadata as Record<string, string> | null;
 
   let description = `${n.user_name} ${actionCfg.label.toLowerCase()}`;
@@ -162,6 +187,26 @@ function getNotificationDescription(n: NotificationItem): string {
   return description;
 }
 
+// Agrupar notificações por data
+function groupNotificationsByDate(notifications: NotificationItem[]): GroupedNotifications[] {
+  const groups: Record<string, NotificationItem[]> = {};
+
+  for (const notification of notifications) {
+    const dateGroup = getDateGroup(notification.created_at);
+    if (!groups[dateGroup]) {
+      groups[dateGroup] = [];
+    }
+    groups[dateGroup].push(notification);
+  }
+
+  return DATE_GROUP_ORDER
+    .filter((group) => groups[group] && groups[group].length > 0)
+    .map((group) => ({
+      group,
+      items: groups[group],
+    }));
+}
+
 // ─────────────────────────────────────────
 // Componente
 // ─────────────────────────────────────────
@@ -171,6 +216,11 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // ── Agrupar por data ──
+  const groupedNotifications = useMemo(() => {
+    return groupNotificationsByDate(notifications.slice(0, 10));
+  }, [notifications]);
 
   // ── Buscar contagem de não lidos ──
   const fetchUnreadCount = useCallback(async () => {
@@ -188,7 +238,7 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await notificationsApi.list('limit=10');
+      const res = await notificationsApi.list('limit=20');
       if (res.success && res.data) {
         setNotifications(res.data.notifications);
       }
@@ -231,6 +281,8 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
     setUnreadCount(0);
   }, []);
 
+  const allRead = !loading && notifications.length > 0 && unreadCount === 0;
+
   return (
     <div className="relative" ref={panelRef}>
       {/* Sino */}
@@ -269,7 +321,7 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
                 <Bell className="size-4 text-emerald-600 dark:text-emerald-400" />
                 <h3 className="text-sm font-semibold">Notificações</h3>
                 {unreadCount > 0 && (
-                  <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                  <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-full shadow-sm">
                     {unreadCount} nova{unreadCount > 1 ? 's' : ''}
                   </Badge>
                 )}
@@ -278,7 +330,7 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-xs h-7 text-muted-foreground hover:text-foreground"
+                  className="text-xs h-7 text-muted-foreground hover:text-foreground active:scale-[0.98]"
                   onClick={handleMarkAllRead}
                 >
                   <CheckCheck className="size-3 mr-1" />
@@ -288,10 +340,10 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
             </div>
 
             {/* Lista de notificações */}
-            <div className="max-h-80 overflow-y-auto">
+            <div className="max-h-96 overflow-y-auto">
               {loading ? (
                 <div className="p-4 space-y-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
+                  {Array.from({ length: 5 }).map((_, i) => (
                     <div key={i} className="flex items-start gap-3">
                       <Skeleton className="size-8 rounded-lg shrink-0" />
                       <div className="flex-1 space-y-1.5">
@@ -302,44 +354,94 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
                   ))}
                 </div>
               ) : notifications.length === 0 ? (
+                /* Empty state — animated bell */
                 <div className="flex flex-col items-center gap-3 py-12 text-center">
-                  <div className="size-12 rounded-2xl bg-muted flex items-center justify-center">
-                    <Bell className="size-6 text-muted-foreground/40" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Sem notificações</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">
+                  <motion.div
+                    animate={{
+                      y: [0, -6, 0],
+                      rotate: [0, -5, 5, -3, 3, 0],
+                    }}
+                    transition={{
+                      duration: 3,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                    }}
+                    className="size-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-900/40 flex items-center justify-center"
+                  >
+                    <Bell className="size-7 text-emerald-500/70" />
+                  </motion.div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-muted-foreground flex items-center justify-center gap-1.5">
+                      <Sparkles className="size-3.5 text-emerald-500" />
+                      Tudo em dia!
+                    </p>
+                    <p className="text-xs text-muted-foreground/60">
                       As actividades do escritório aparecerão aqui
                     </p>
                   </div>
                 </div>
+              ) : allRead ? (
+                /* All read state */
+                <div className="flex flex-col items-center gap-3 py-8 text-center px-4">
+                  <div className="size-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
+                    <CheckCheck className="size-6 text-emerald-500" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-muted-foreground">Sem notificações não lidas</p>
+                    <p className="text-xs text-muted-foreground/60">
+                      Todas as notificações foram visualizadas
+                    </p>
+                  </div>
+                </div>
               ) : (
-                <div className="divide-y">
-                  {notifications.slice(0, 5).map((notification, idx) => {
-                    const config = getActionConfig(notification.action);
-                    const ActionIcon = config.icon;
-                    const description = getNotificationDescription(notification);
+                /* Grouped notifications */
+                <div>
+                  {groupedNotifications.map((group, groupIdx) => (
+                    <div key={group.group}>
+                      {/* Date group header */}
+                      <div className="flex items-center gap-2 px-4 py-2 bg-muted/30 sticky top-0 z-10">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          {group.group}
+                        </span>
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-[10px] text-muted-foreground/60">
+                          {group.items.length}
+                        </span>
+                      </div>
 
-                    return (
-                      <motion.div
-                        key={notification.id}
-                        initial={{ opacity: 0, x: -4 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className={`flex items-start gap-3 px-4 py-3 hover:bg-accent/50 transition-colors cursor-default ${idx % 2 === 0 ? 'bg-muted/20' : ''}`}
-                      >
-                        <div className={`flex items-center justify-center size-8 rounded-lg ${config.bgColor} shrink-0 mt-0.5`}>
-                          <ActionIcon className={`size-4 ${config.color}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm leading-snug">{description}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                            <Clock className="size-2.5" />
-                            {timeAgo(notification.created_at)}
-                          </p>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
+                      {/* Notification items */}
+                      {group.items.map((notification, idx) => {
+                        const config = getActionConfig(notification.action);
+                        const ActionIcon = config.icon;
+                        const description = getNotificationDescription(notification);
+
+                        return (
+                          <motion.div
+                            key={notification.id}
+                            initial={{ opacity: 0, x: -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{
+                              duration: 0.25,
+                              delay: (groupIdx * 0.05) + (idx * 0.04),
+                              ease: 'easeOut',
+                            }}
+                            className={`flex items-start gap-3 px-4 py-3 hover:bg-accent/50 transition-colors cursor-default ${idx % 2 === 0 ? 'bg-muted/20' : ''}`}
+                          >
+                            <div className={`flex items-center justify-center size-8 rounded-lg ${config.bgColor} shrink-0 mt-0.5`}>
+                              <ActionIcon className={`size-4 ${config.color}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm leading-snug">{description}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                <Clock className="size-2.5" />
+                                {timeAgo(notification.created_at)}
+                              </p>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -350,7 +452,7 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                  className="w-full text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 active:scale-[0.98]"
                   onClick={() => {
                     setIsOpen(false);
                     onViewAll?.();

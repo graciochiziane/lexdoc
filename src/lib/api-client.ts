@@ -177,6 +177,8 @@ export const processesApi = {
     apiFetch<ProcessRecord>(`/processes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   close: (id: string) =>
     apiFetch<ProcessRecord>(`/processes/${id}/close`, { method: 'PATCH' }),
+  timeline: (id: string) =>
+    apiFetch<TimelineEntry[]>(`/processes/${id}/timeline`),
 };
 
 // ─────────────────────────────────────────
@@ -662,3 +664,51 @@ export const activityApi = {
   recent: (limit?: number) =>
     apiFetch<ActivityRecentData>(`/activity/recent${limit ? `?limit=${limit}` : ''}`),
 };
+
+// ─────────────────────────────────────────
+// API de Notas
+// ─────────────────────────────────────────
+export interface NoteItem {
+  id: string;
+  firm_id: string;
+  entity_type: string;
+  entity_id: string;
+  content: string;
+  is_pinned: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  user_name?: string;
+}
+
+export const notesApi = {
+  list: (entityType: string, entityId: string, page?: number, limit?: number) =>
+    apiFetch<NoteItem[]>(
+      `/notes?entity_type=${entityType}&entity_id=${entityId}${page ? `&page=${page}` : ''}${limit ? `&limit=${limit}` : ''}`,
+    ),
+  create: (data: {
+    entity_type: string;
+    entity_id: string;
+    content: string;
+    is_pinned: boolean;
+  }) =>
+    apiFetch<NoteItem>('/notes', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: { content?: string; is_pinned?: boolean }) =>
+    apiFetch<NoteItem>(`/notes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    apiFetch<{ id: string; deleted: boolean }>(`/notes/${id}`, { method: 'DELETE' }),
+};
+
+// ─────────────────────────────────────────
+// API de Timeline do Processo
+// ─────────────────────────────────────────
+export interface TimelineEntry {
+  id: string;
+  type: 'audit' | 'deadline';
+  action: string;
+  description: string;
+  user_name: string;
+  user_id: string | null;
+  created_at: string;
+  details?: Record<string, unknown>;
+}

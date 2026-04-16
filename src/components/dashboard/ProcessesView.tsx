@@ -27,6 +27,8 @@ import {
   Gavel,
   Download,
   AlertTriangle,
+  MessageSquare,
+  History,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -71,6 +73,8 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { processesApi, clientsApi, deadlinesApi, exportApi, type ProcessRecord, type ClientRecord, type DeadlineRecord } from '@/lib/api-client';
+import { NotesPanel } from '@/components/dashboard/NotesPanel';
+import { ProcessTimeline } from '@/components/dashboard/ProcessTimeline';
 import { format, differenceInDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
@@ -294,6 +298,7 @@ export function ProcessesView() {
   // ── Diálogo de detalhes ──
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailProcess, setDetailProcess] = useState<ProcessRecord | null>(null);
+  const [detailTab, setDetailTab] = useState<'info' | 'notes' | 'timeline'>('info');
 
   // ── Diálogo de encerramento ──
   const [closeOpen, setCloseOpen] = useState(false);
@@ -419,6 +424,7 @@ export function ProcessesView() {
 
   const handleDetailOpen = useCallback((process: ProcessRecord) => {
     setDetailProcess(process);
+    setDetailTab('info');
     setDetailOpen(true);
   }, []);
 
@@ -860,7 +866,27 @@ export function ProcessesView() {
                 </div>
               </DialogHeader>
 
+              {/* Tabs de navegação */}
+              <Tabs value={detailTab} onValueChange={(v) => setDetailTab(v as 'info' | 'notes' | 'timeline')} className="mt-2">
+                <TabsList className="w-full grid grid-cols-3">
+                  <TabsTrigger value="info" className="text-xs">
+                    <FileText className="size-3 mr-1" />
+                    Informações
+                  </TabsTrigger>
+                  <TabsTrigger value="notes" className="text-xs">
+                    <MessageSquare className="size-3 mr-1" />
+                    Notas
+                  </TabsTrigger>
+                  <TabsTrigger value="timeline" className="text-xs">
+                    <History className="size-3 mr-1" />
+                    Timeline
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+
               <div className="space-y-5 pt-2">
+              {detailTab === 'info' && (
+              <>
                 {/* Info grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Cliente */}
@@ -1000,6 +1026,14 @@ export function ProcessesView() {
                     </div>
                   )}
                 </div>
+              </>
+              )}
+              {detailTab === 'notes' && (
+                <NotesPanel entityType="process" entityId={detailProcess.id} />
+              )}
+              {detailTab === 'timeline' && (
+                <ProcessTimeline processId={detailProcess.id} />
+              )}
               </div>
 
               <DialogFooter className="gap-2 sm:gap-0">

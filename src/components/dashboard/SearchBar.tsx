@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // LEXDOC — Barra de Pesquisa Global
 // Command palette com Ctrl+K / Cmd+K, resultados agrupados
+// Pesquisas recentes em localStorage
 // ═══════════════════════════════════════════════════════════════
 
 'use client';
@@ -15,6 +16,9 @@ import {
   Calendar,
   Loader2,
   Command,
+  Clock,
+  X,
+  Trash2,
 } from 'lucide-react';
 import {
   CommandDialog,
@@ -33,6 +37,11 @@ import { searchApi, type SearchGroup } from '@/lib/api-client';
 // ─────────────────────────────────────────
 interface SearchBarProps {
   onSelect?: (type: string, id: string) => void;
+}
+
+interface RecentSearch {
+  query: string;
+  timestamp: number;
 }
 
 // Ícones por tipo de resultado
@@ -59,6 +68,60 @@ const TYPE_COLORS: Record<string, string> = {
   deadlines: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
 };
 
+const RECENT_SEARCHES_KEY = 'lexdoc_recent_searches';
+const MAX_RECENT_SEARCHES = 5;
+
+// ─────────────────────────────────────────
+// Funções auxiliares para pesquisas recentes
+// ─────────────────────────────────────────
+function getRecentSearches(): RecentSearch[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentSearches(searches: RecentSearch[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(searches));
+  } catch {
+    // Silencioso
+  }
+}
+
+function addRecentSearch(query: string) {
+  if (!query || query.length < 2) return;
+  const searches = getRecentSearches();
+  const filtered = searches.filter((s) => s.query.toLowerCase() !== query.toLowerCase());
+  filtered.unshift({ query, timestamp: Date.now() });
+  saveRecentSearches(filtered.slice(0, MAX_RECENT_SEARCHES));
+}
+
+function clearRecentSearches() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(RECENT_SEARCHES_KEY);
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diffMs = now - timestamp;
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSeconds < 60) return 'agora';
+  if (diffMinutes < 60) return `há ${diffMinutes} min`;
+  if (diffHours < 24) return `há ${diffHours}h`;
+  if (diffDays === 1) return 'ontem';
+  if (diffDays < 7) return `há ${diffDays} dias`;
+  return new Date(timestamp).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short' });
+}
+
 // ─────────────────────────────────────────
 // Componente
 // ─────────────────────────────────────────
@@ -68,6 +131,7 @@ export function SearchBar({ onSelect }: SearchBarProps) {
   const [results, setResults] = useState<SearchGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Keyboard shortcut Ctrl+K / Cmd+K ──
@@ -82,6 +146,13 @@ export function SearchBar({ onSelect }: SearchBarProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // ── Carregar pesquisas recentes ao abrir ──
+  useEffect(() => {
+    if (open) {
+      setRecentSearches(getRecentSearches());
+    }
+  }, [open]);
+
   // ── Pesquisa com debounce ──
   const performSearch = useCallback(async (searchQuery: string) => {
     if (searchQuery.length < 2) {
@@ -95,6 +166,8 @@ export function SearchBar({ onSelect }: SearchBarProps) {
       const response = await searchApi.global(`q=${encodeURIComponent(searchQuery)}&type=all&limit=5`);
       if (response.success && response.data) {
         setResults(response.data.results);
+        addRecentSearch(searchQuery);
+        setRecentSearches(getRecentSearches());
       } else {
         setResults([]);
       }
@@ -128,7 +201,20 @@ export function SearchBar({ onSelect }: SearchBarProps) {
     [onSelect],
   );
 
+  // ── Re-run pesquisa recente ──
+  const handleRecentSearchClick = useCallback((recentQuery: string) => {
+    setQuery(recentQuery);
+  }, []);
+
+  // ── Limpar pesquisas recentes ──
+  const handleClearRecentSearches = useCallback(() => {
+    clearRecentSearches();
+    setRecentSearches([]);
+  }, []);
+
   const totalResults = results.reduce((sum, g) => sum + g.count, 0);
+
+  const showRecentSearches = !loading && !hasSearched && query.length < 2 && recentSearches.length > 0;
 
   return (
     <>
@@ -160,15 +246,26 @@ export function SearchBar({ onSelect }: SearchBarProps) {
         title="Pesquisa Global"
         description="Pesquisar processos, clientes, documentos e prazos"
       >
-        <CommandInput
-          placeholder="Pesquisar processos, clientes, documentos, prazos..."
-          value={query}
-          onValueChange={setQuery}
-        />
+        <div className="relative">
+          <CommandInput
+            placeholder="Pesquisar em processos, clientes, documentos, prazos..."
+            value={query}
+            onValueChange={setQuery}
+          />
+          {!query && (
+            <motion.span
+              animate={{ opacity: [0.4, 0.7, 0.4] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hidden sm:block"
+            >
+              Pesquisar em...
+            </motion.span>
+          )}
+        </div>
         <CommandList>
           {loading && (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              <Loader2 className="size-5 animate-spin text-emerald-500" />
               <span className="ml-2 text-sm text-muted-foreground">A pesquisar...</span>
             </div>
           )}
@@ -176,7 +273,12 @@ export function SearchBar({ onSelect }: SearchBarProps) {
           {!loading && hasSearched && query.length >= 2 && results.length === 0 && (
             <CommandEmpty>
               <div className="flex flex-col items-center gap-2 py-4">
-                <Search className="size-8 text-muted-foreground/40" />
+                <motion.div
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <Search className="size-8 text-muted-foreground/40" />
+                </motion.div>
                 <p className="text-sm text-muted-foreground">
                   Nenhum resultado encontrado para &quot;{query}&quot;
                 </p>
@@ -224,14 +326,54 @@ export function SearchBar({ onSelect }: SearchBarProps) {
               );
             })}
 
-          {!loading && !hasSearched && query.length < 2 && (
+          {/* Pesquisas recentes */}
+          {showRecentSearches && (
+            <div className="py-2">
+              <div className="flex items-center justify-between px-3 py-1.5">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Pesquisas recentes
+                </span>
+                <button
+                  onClick={handleClearRecentSearches}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-500 transition-colors active:scale-[0.98]"
+                >
+                  <Trash2 className="size-3" />
+                  Limpar
+                </button>
+              </div>
+              <CommandGroup>
+                {recentSearches.map((recent, idx) => (
+                  <CommandItem
+                    key={`${recent.query}-${idx}`}
+                    value={recent.query}
+                    onSelect={() => handleRecentSearchClick(recent.query)}
+                    className="cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 w-full">
+                      <div className="flex items-center justify-center size-8 rounded-lg bg-muted shrink-0">
+                        <Clock className="size-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{recent.query}</p>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {formatRelativeTime(recent.timestamp)}
+                      </span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </div>
+          )}
+
+          {!loading && !hasSearched && query.length < 2 && recentSearches.length === 0 && (
             <div className="flex flex-col items-center gap-3 py-8">
               <motion.div
                 animate={{ y: [0, -4, 0] }}
                 transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                className="size-14 rounded-2xl bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center"
+                className="size-14 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-900/40 flex items-center justify-center"
               >
-                <Search className="size-6 text-muted-foreground/60" />
+                <Search className="size-6 text-emerald-500/60" />
               </motion.div>
               <div className="text-center">
                 <p className="text-sm font-medium text-muted-foreground">
