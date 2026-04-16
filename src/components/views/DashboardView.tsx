@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -22,7 +22,10 @@ import {
   ChevronRight,
   UserCog,
   Clock,
+  Sun,
+  Moon,
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +41,8 @@ import { ProcessesView } from '@/components/dashboard/ProcessesView';
 import { ClientsView } from '@/components/dashboard/ClientsView';
 import { UsersView } from '@/components/dashboard/UsersView';
 import { AuditView } from '@/components/dashboard/AuditView';
+import { DeadlinesView } from '@/components/dashboard/DeadlinesView';
+import { DocumentsView } from '@/components/dashboard/DocumentsView';
 
 // ─────────────────────────────────────────
 // Tipos
@@ -118,7 +123,15 @@ function ComingSoonView({ title }: { title: string }) {
 // ─────────────────────────────────────────
 export function DashboardView() {
   const { user, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
+  // Hydration-safe mounted check without setState in effect
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const [activeTab, setActiveTab] = useState<DashboardTab>('painel');
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -151,9 +164,9 @@ export function DashboardView() {
       case 'auditoria':
         return <AuditView />;
       case 'prazos':
-        return <ComingSoonView title="Gestão de Prazos" />;
+        return <DeadlinesView />;
       case 'documentos':
-        return <ComingSoonView title="Gestão de Documentos" />;
+        return <DocumentsView />;
       default:
         return <DashboardHome />;
     }
@@ -352,6 +365,31 @@ export function DashboardView() {
                   )}
                 </p>
               </div>
+            </div>
+
+            {/* Toggle modo escuro (desktop) */}
+            <div className="hidden sm:flex items-center">
+              {mounted && (
+                <motion.div
+                  key={theme}
+                  initial={{ rotate: -90, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                    title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+                  >
+                    {theme === 'dark' ? (
+                      <Sun className="size-4 text-amber-500" />
+                    ) : (
+                      <Moon className="size-4" />
+                    )}
+                  </Button>
+                </motion.div>
+              )}
             </div>
 
             {/* Mostrar nome do utilizador no header */}

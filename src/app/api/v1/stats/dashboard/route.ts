@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
       upcomingDeadlines,
       overdueDeadlines,
       recentLogs,
+      recentDeadlines,
     ] = await Promise.all([
       // Total de processos
       db.legalProcess.count({
@@ -86,6 +87,25 @@ export async function GET(request: NextRequest) {
           user_id: true,
         },
       }),
+
+      // Últimos 5 prazos pendentes futuros com dados do processo
+      db.deadline.findMany({
+        where: {
+          process: { firm_id: firmId },
+          due_date: { gt: now },
+          status: 'PENDING',
+        },
+        include: {
+          process: {
+            select: {
+              title: true,
+              process_number: true,
+            },
+          },
+        },
+        orderBy: { due_date: 'asc' },
+        take: 5,
+      }),
     ]);
 
     // Buscar nomes dos utilizadores para as actividades recentes
@@ -112,6 +132,17 @@ export async function GET(request: NextRequest) {
       user_name: log.user_id ? (userMap.get(log.user_id) ?? 'Desconhecido') : 'Sistema',
     }));
 
+    // Formatar prazos recentes com dados do processo
+    const formattedRecentDeadlines = recentDeadlines.map((d) => ({
+      id: d.id,
+      title: d.title,
+      due_date: d.due_date,
+      process: {
+        title: d.process.title,
+        process_number: d.process.process_number,
+      },
+    }));
+
     return NextResponse.json({
       success: true,
       data: {
@@ -122,6 +153,7 @@ export async function GET(request: NextRequest) {
         upcoming_deadlines: upcomingDeadlines,
         overdue_deadlines: overdueDeadlines,
         recent_activities: recentActivities,
+        recent_deadlines: formattedRecentDeadlines,
       },
     });
   } catch (error) {

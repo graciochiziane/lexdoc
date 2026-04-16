@@ -158,3 +158,22 @@
 .dark .overflow-y-auto::-webkit-scrollbar-thumb:hover {
   background-color: oklch(0.45 0 0);
 }
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Dark Mode Transitions
+   Transição suave para alternância de tema
+   ─────────────────────────────────────────────── */
+html {
+  transition: color-scheme 0.3s;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Dark Mode Hover States
+   Melhorar interactividade em modo escuro
+   ─────────────────────────────────────────────── */
+.dark .hover\:bg-muted\/50:hover {
+  background-color: oklch(0.269 0 0 / 50%);
+}

@@ -139,6 +139,69 @@ Work Log:
 
 Stage Summary:
 - All bugs fixed, application stable
-- 16 API endpoints functional (4 auth + 5 users + 4 clients + 5 processes + 2 stats/audit = 20 total)
-- 6 frontend views functional (Login, Register, Dashboard Home, Processes, Clients, Users, Audit)
-- QA screenshots saved to /home/z/my-project/download/qa-*.png
+- 20 API endpoints functional (4 auth + 5 users + 4 clients + 5 processes + 2 stats/audit)
+- 7 frontend views functional (Login, Register, Dashboard Home, Processes, Clients, Users, Audit)
+
+---
+Task ID: 4b
+Agent: full-stack-developer (subagent)
+Task: Build deadlines + documents backend CRUD APIs
+
+Work Log:
+- Created src/app/api/v1/deadlines/route.ts — GET list + POST create deadlines
+- Created src/app/api/v1/deadlines/[id]/route.ts — GET + PATCH update deadline
+- Created src/app/api/v1/processes/[id]/deadlines/route.ts — GET deadlines by process
+- Created src/app/api/v1/documents/route.ts — GET list + POST create documents
+- Created src/app/api/v1/documents/[id]/route.ts — GET + PATCH + DELETE (soft archive)
+- Updated src/app/api/v1/stats/dashboard/route.ts — Added recent_deadlines field
+
+Stage Summary:
+- 6 backend files created/updated
+- Deadlines: CRUD with process ownership verification, status management
+- Documents: CRUD with versioning system (parent_id snapshots), soft delete
+- Stats: now includes recent_deadlines with process info
+- All mutations audit-logged, all queries filtered by firm_id
+
+---
+Task ID: 7b
+Agent: full-stack-developer (subagent)
+Task: Build deadlines/documents frontend views + dark mode
+
+Work Log:
+- Updated src/lib/api-client.ts — Added deadlinesApi and documentsApi
+- Created src/components/dashboard/DeadlinesView.tsx — Card-based deadline management
+- Created src/components/dashboard/DocumentsView.tsx — Table-based document management
+- Updated src/components/views/DashboardView.tsx — Replaced ComingSoon placeholders, added dark mode toggle
+- Updated src/app/layout.tsx — Added ThemeProvider from next-themes, sonner Toaster
+- Updated src/app/globals.css — Smooth color-scheme transition for dark mode
+
+Stage Summary:
+- Deadlines: Card layout with color-coded urgency (overdue=red, 3days=amber, upcoming=emerald)
+- Documents: Table with MIME badges, file size formatting, version tracking, confidentiality icon
+- Dark mode: Toggle button in header with animated Moon/Sun icons
+- 0 new lint errors
+
+---
+Task ID: 8 (Review Round 2)
+Agent: Main Orchestrator + QA
+Task: Full QA, new features, dark mode
+
+Work Log:
+- ESLint: 0 errors, 1 pre-existing warning (unchanged)
+- Browser QA: tested login → dashboard → prazos → documentos → dark mode
+- All new API endpoints verified via curl:
+  - POST /api/v1/deadlines (201) with process ownership check
+  - GET /api/v1/deadlines (200) with process info joined
+  - POST /api/v1/documents (201) with versioning
+  - GET /api/v1/documents (200) without file_key exposure
+  - GET /api/v1/stats/dashboard (200) with recent_deadlines
+- Dark mode toggle functional (light to dark)
+- 0 browser errors throughout all views
+- QA screenshots saved to /home/z/my-project/download/qa-r2b-*.png
+
+Stage Summary:
+- Application fully stable, 0 bugs
+- 26 API endpoints total (4 auth + 5 users + 4 clients + 5 processes + 3 deadlines + 4 documents + 1 stats)
+- 9 frontend views: Login, Register, Dashboard Home, Processes, Clients, Users, Audit, Deadlines, Documents
+- Dark mode supported
+- All Coming Soon placeholders replaced with real CRUD views

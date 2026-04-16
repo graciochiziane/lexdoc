@@ -222,3 +222,120 @@ export const auditApi = {
   logs: (params?: string) =>
     apiFetch<AuditLogRecord[]>(`/audit/logs${params ? `?${params}` : ''}`),
 };
+
+// ─────────────────────────────────────────
+// API de Prazos
+// ─────────────────────────────────────────
+interface DeadlineRecord {
+  id: string;
+  process_id: string;
+  title: string;
+  description: string | null;
+  due_date: string;
+  reminder_at: string | null;
+  status: string;
+  source: string;
+  ai_extracted: boolean;
+  created_at: string;
+  updated_at: string;
+  process?: {
+    id: string;
+    process_number: string;
+    title: string;
+  };
+}
+
+export const deadlinesApi = {
+  list: (params?: string) =>
+    apiFetch<DeadlineRecord[]>(`/deadlines${params ? `?${params}` : ''}`),
+  get: (id: string) =>
+    apiFetch<DeadlineRecord>(`/deadlines/${id}`),
+  create: (data: {
+    title: string;
+    due_date: string;
+    description?: string;
+    process_id: string;
+    reminder_at?: string;
+  }) =>
+    apiFetch<DeadlineRecord>('/deadlines', { method: 'POST', body: JSON.stringify(data) }),
+  update: (
+    id: string,
+    data: {
+      title?: string;
+      due_date?: string;
+      description?: string;
+      process_id?: string;
+      reminder_at?: string;
+      status?: string;
+    },
+  ) =>
+    apiFetch<DeadlineRecord>(`/deadlines/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  byProcess: (processId: string, params?: string) =>
+    apiFetch<DeadlineRecord[]>(`/processes/${processId}/deadlines${params ? `?${params}` : ''}`),
+};
+
+// ─────────────────────────────────────────
+// API de Documentos
+// ─────────────────────────────────────────
+interface DocumentRecord {
+  id: string;
+  firm_id: string;
+  process_id: string | null;
+  created_by_id: string;
+  updated_by_id: string | null;
+  title: string;
+  description: string | null;
+  file_key: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  version: number;
+  parent_id: string | null;
+  status: string;
+  is_confidential: boolean;
+  tags: string;
+  ai_summary: string | null;
+  ai_processed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  process?: {
+    id: string;
+    process_number: string;
+    title: string;
+  };
+}
+
+export const documentsApi = {
+  list: (params?: string) =>
+    apiFetch<DocumentRecord[]>(`/documents${params ? `?${params}` : ''}`),
+  get: (id: string) =>
+    apiFetch<DocumentRecord>(`/documents/${id}`),
+  create: (data: {
+    title: string;
+    description?: string;
+    process_id?: string;
+    file_name: string;
+    mime_type: string;
+    file_size: number;
+    tags?: string;
+    is_confidential?: boolean;
+  }) =>
+    apiFetch<DocumentRecord>('/documents', { method: 'POST', body: JSON.stringify(data) }),
+  update: (
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      process_id?: string;
+      file_name?: string;
+      mime_type?: string;
+      file_size?: number;
+      tags?: string;
+      is_confidential?: boolean;
+      status?: string;
+    },
+  ) =>
+    apiFetch<DocumentRecord>(`/documents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    apiFetch<DocumentRecord>(`/documents/${id}`, { method: 'DELETE' }),
+};
