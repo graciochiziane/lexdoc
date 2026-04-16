@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import {
   Shield,
   LogIn,
@@ -88,58 +89,32 @@ const ACTION_ICONS: Record<string, { icon: React.ElementType; color: string }> =
 };
 
 const ACTION_OPTIONS = [
-  'all',
-  'LOGIN_SUCCESS',
-  'LOGIN_FAILED',
-  'LOGOUT',
-  'USER_CREATED',
-  'USER_UPDATED',
-  'USER_DEACTIVATED',
-  'CLIENT_CREATED',
-  'CLIENT_UPDATED',
-  'PROCESS_CREATED',
-  'PROCESS_UPDATED',
-  'PROCESS_CLOSED',
-  'DOCUMENT_CREATED',
-  'DOCUMENT_UPDATED',
+  'all', 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT',
+  'USER_CREATED', 'USER_UPDATED', 'USER_DEACTIVATED',
+  'CLIENT_CREATED', 'CLIENT_UPDATED',
+  'PROCESS_CREATED', 'PROCESS_UPDATED', 'PROCESS_CLOSED',
+  'DOCUMENT_CREATED', 'DOCUMENT_UPDATED',
 ];
 
-const ENTITY_OPTIONS = [
-  'all',
-  'User',
-  'Client',
-  'LegalProcess',
-  'Document',
-];
+const ENTITY_OPTIONS = ['all', 'User', 'Client', 'LegalProcess', 'Document'];
 
 // ─────────────────────────────────────────
 // Formatação de data
 // ─────────────────────────────────────────
 function formatAuditDate(dateStr: string): string {
   try {
-    const date = new Date(dateStr);
-    return date.toLocaleString('pt-MZ', {
-      timeZone: TIMEZONE,
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
+    return new Date(dateStr).toLocaleString('pt-MZ', {
+      timeZone: TIMEZONE, day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
     });
-  } catch {
-    return '—';
-  }
+  } catch { return '—'; }
 }
 
 // ─────────────────────────────────────────
 // Ícone por tipo de acção
 // ─────────────────────────────────────────
 function ActionIcon({ action }: { action: string }) {
-  const config = ACTION_ICONS[action] ?? {
-    icon: Shield,
-    color: 'text-muted-foreground bg-muted',
-  };
+  const config = ACTION_ICONS[action] ?? { icon: Shield, color: 'text-muted-foreground bg-muted' };
   const IconComp = config.icon;
   return (
     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${config.color}`}>
@@ -154,40 +129,24 @@ function ActionIcon({ action }: { action: string }) {
 function TimelineView({ logs }: { logs: AuditLogRecord[] }) {
   return (
     <div className="relative space-y-1 max-h-[calc(100vh-340px)] overflow-y-auto">
-      {/* Linha vertical */}
       <div className="absolute left-[15px] top-2 bottom-2 w-px bg-border" />
-
       {logs.map((log) => (
         <div key={log.id} className="relative flex items-start gap-4 py-3 pl-1">
-          {/* Marcador na linha */}
-          <div className="relative z-10 mt-1">
-            <ActionIcon action={log.action} />
-          </div>
-
-          {/* Conteúdo */}
+          <div className="relative z-10 mt-1"><ActionIcon action={log.action} /></div>
           <div className="flex-1 min-w-0 bg-muted/30 rounded-lg p-3 hover:bg-muted/60 transition-colors">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-sm font-medium">
-                  {ACTION_LABELS[log.action] ?? log.action}
-                </p>
+                <p className="text-sm font-medium">{ACTION_LABELS[log.action] ?? log.action}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {log.user_name ?? 'Sistema'}{' '}
                   {log.entity_type && (
-                    <>
-                      — {ENTITY_LABELS[log.entity_type] ?? log.entity_type}
-                      {log.entity_id && (
-                        <span className="ml-1 font-mono text-[10px] opacity-60">
-                          #{log.entity_id.slice(0, 6)}
-                        </span>
-                      )}
+                    <>— {ENTITY_LABELS[log.entity_type] ?? log.entity_type}
+                      {log.entity_id && <span className="ml-1 font-mono text-[10px] opacity-60">#{log.entity_id.slice(0, 6)}</span>}
                     </>
                   )}
                 </p>
               </div>
-              <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                {formatAuditDate(log.created_at)}
-              </span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{formatAuditDate(log.created_at)}</span>
             </div>
           </div>
         </div>
@@ -201,9 +160,9 @@ function TimelineView({ logs }: { logs: AuditLogRecord[] }) {
 // ─────────────────────────────────────────
 function TableView({ logs }: { logs: AuditLogRecord[] }) {
   return (
-    <div className="max-h-[calc(100vh-340px)] overflow-y-auto">
+    <div className="max-h-[calc(100vh-340px)] overflow-y-auto rounded-lg border">
       <Table>
-        <TableHeader>
+        <TableHeader className="sticky top-0 bg-background backdrop-blur-sm">
           <TableRow>
             <TableHead>Data/Hora</TableHead>
             <TableHead>Utilizador</TableHead>
@@ -213,30 +172,44 @@ function TableView({ logs }: { logs: AuditLogRecord[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {logs.map((log) => (
-            <TableRow key={log.id}>
-              <TableCell className="text-sm font-mono whitespace-nowrap">
-                {formatAuditDate(log.created_at)}
-              </TableCell>
-              <TableCell className="text-sm">
-                {log.user_name ?? 'Sistema'}
-              </TableCell>
+          {logs.map((log, i) => (
+            <TableRow key={log.id} className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors ${i % 2 === 1 ? 'bg-muted/30' : ''}`}>
+              <TableCell className="text-sm font-mono whitespace-nowrap">{formatAuditDate(log.created_at)}</TableCell>
+              <TableCell className="text-sm">{log.user_name ?? 'Sistema'}</TableCell>
               <TableCell className="hidden sm:table-cell">
-                <Badge variant="outline" className="text-xs">
-                  {ACTION_LABELS[log.action] ?? log.action}
-                </Badge>
+                <Badge variant="outline" className="text-[10px] rounded-full shadow-sm">{ACTION_LABELS[log.action] ?? log.action}</Badge>
               </TableCell>
-              <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                {ENTITY_LABELS[log.entity_type] ?? log.entity_type ?? '—'}
-              </TableCell>
-              <TableCell className="hidden lg:table-cell text-xs text-muted-foreground max-w-[200px] truncate">
-                {log.metadata ?? log.new_values ?? '—'}
-              </TableCell>
+              <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{ENTITY_LABELS[log.entity_type] ?? log.entity_type ?? '—'}</TableCell>
+              <TableCell className="hidden lg:table-cell text-xs text-muted-foreground max-w-[200px] truncate">{log.metadata ?? log.new_values ?? '—'}</TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Empty state
+// ─────────────────────────────────────────
+function EmptyAuditState() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="flex flex-col items-center justify-center py-16 text-center"
+    >
+      <motion.div
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+        className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-950/60 dark:to-emerald-900/30 flex items-center justify-center mb-4"
+      >
+        <Shield className="size-10 text-emerald-500" />
+      </motion.div>
+      <p className="text-sm font-medium text-foreground">Nenhum registo de auditoria</p>
+      <p className="text-xs text-muted-foreground mt-1 max-w-xs">A actividade dos utilizadores será registada aqui.</p>
+    </motion.div>
   );
 }
 
@@ -250,7 +223,6 @@ export function AuditView() {
   const [page, setPage] = useState(1);
   const limit = 20;
 
-  // ── Query: logs de auditoria ──
   const params = new URLSearchParams();
   if (actionFilter !== 'all') params.set('action', actionFilter);
   if (entityFilter !== 'all') params.set('entity_type', entityFilter);
@@ -266,16 +238,8 @@ export function AuditView() {
   const logs: AuditLogRecord[] = data?.data ?? [];
   const meta = data?.meta;
 
-  // ── Handlers ──
-  const handleActionFilter = useCallback((value: string) => {
-    setActionFilter(value);
-    setPage(1);
-  }, []);
-
-  const handleEntityFilter = useCallback((value: string) => {
-    setEntityFilter(value);
-    setPage(1);
-  }, []);
+  const handleActionFilter = useCallback((value: string) => { setActionFilter(value); setPage(1); }, []);
+  const handleEntityFilter = useCallback((value: string) => { setEntityFilter(value); setPage(1); }, []);
 
   return (
     <div className="space-y-6">
@@ -283,9 +247,7 @@ export function AuditView() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Trilha de Auditoria</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            {meta?.total ?? 0} registos de actividade
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">{meta?.total ?? 0} registos de actividade</p>
         </div>
       </div>
 
@@ -300,64 +262,35 @@ export function AuditView() {
             <SelectContent>
               <SelectItem value="all">Todas as acções</SelectItem>
               {ACTION_OPTIONS.filter((o) => o !== 'all').map((action) => (
-                <SelectItem key={action} value={action}>
-                  {ACTION_LABELS[action] ?? action}
-                </SelectItem>
+                <SelectItem key={action} value={action}>{ACTION_LABELS[action] ?? action}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-
           <Select value={entityFilter} onValueChange={handleEntityFilter}>
-            <SelectTrigger className="w-[150px] h-9 text-xs">
-              <SelectValue placeholder="Tipo de entidade" />
-            </SelectTrigger>
+            <SelectTrigger className="w-[150px] h-9 text-xs"><SelectValue placeholder="Tipo de entidade" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as entidades</SelectItem>
               {ENTITY_OPTIONS.filter((o) => o !== 'all').map((entity) => (
-                <SelectItem key={entity} value={entity}>
-                  {ENTITY_LABELS[entity] ?? entity}
-                </SelectItem>
+                <SelectItem key={entity} value={entity}>{ENTITY_LABELS[entity] ?? entity}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-
-        <Tabs
-          value={viewMode}
-          onValueChange={(v) => setViewMode(v as 'timeline' | 'table')}
-        >
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'timeline' | 'table')}>
           <TabsList className="h-9">
-            <TabsTrigger value="timeline" className="text-xs">
-              Linha Temporal
-            </TabsTrigger>
-            <TabsTrigger value="table" className="text-xs">
-              Tabela
-            </TabsTrigger>
+            <TabsTrigger value="timeline" className="text-xs">Linha Temporal</TabsTrigger>
+            <TabsTrigger value="table" className="text-xs">Tabela</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
       {/* Conteúdo */}
-      <Card>
+      <Card className="hover:shadow-lg transition-all duration-200">
         <CardContent className="p-4">
           {isLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full" />
-              ))}
-            </div>
+            <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}</div>
           ) : logs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                <Shield className="size-6 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium text-muted-foreground">
-                Nenhum registo de auditoria
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                A actividade dos utilizadores será registada aqui.
-              </p>
-            </div>
+            <EmptyAuditState />
           ) : viewMode === 'timeline' ? (
             <TimelineView logs={logs} />
           ) : (
@@ -369,25 +302,9 @@ export function AuditView() {
       {/* Paginação */}
       {meta && meta.pages > 1 && (
         <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-          >
-            Anterior
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Página {page} de {meta.pages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= meta.pages}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Próxima
-          </Button>
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="active:scale-[0.98]">Anterior</Button>
+          <span className="text-sm text-muted-foreground">Página {page} de {meta.pages}</span>
+          <Button variant="outline" size="sm" disabled={page >= meta.pages} onClick={() => setPage((p) => p + 1)} className="active:scale-[0.98]">Próxima</Button>
         </div>
       )}
     </div>

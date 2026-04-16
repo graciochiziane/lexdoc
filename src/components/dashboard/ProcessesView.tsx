@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // LEXDOC — Gestão de Processos Jurídicos
-// Listagem, criação, filtros e detalhes
+// Listagem, criação, filtros, detalhes e diálogo melhorado
 // ═══════════════════════════════════════════════════════════════
 
 'use client';
@@ -8,6 +8,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Search,
@@ -15,6 +16,15 @@ import {
   Briefcase,
   Loader2,
   Filter,
+  Pencil,
+  Calendar,
+  Clock,
+  FileText,
+  X,
+  User,
+  Building,
+  Scale,
+  Gavel,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,7 +68,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { processesApi, clientsApi, type ProcessRecord, type ClientRecord } from '@/lib/api-client';
+import { processesApi, clientsApi, deadlinesApi, type ProcessRecord, type ClientRecord, type DeadlineRecord } from '@/lib/api-client';
+import { format, differenceInDays } from 'date-fns';
+import { pt } from 'date-fns/locale';
 
 // ─────────────────────────────────────────
 // Constantes e mapeamentos
@@ -88,7 +100,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   LOW: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200',
   MEDIUM: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200',
   HIGH: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 border-orange-200',
-  URGENT: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-red-200',
+  URGENT: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-red-200 animate-pulse',
 };
 
 const AREA_LABELS: Record<string, string> = {
@@ -121,9 +133,37 @@ const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 // ─────────────────────────────────────────
 function ColoredBadge({ value, labels, colors }: { value: string; labels: Record<string, string>; colors: Record<string, string> }) {
   return (
-    <Badge variant="outline" className={colors[value] ?? ''}>
+    <Badge variant="outline" className={`rounded-full text-[10px] shadow-sm ${colors[value] ?? ''}`}>
       {labels[value] ?? value}
     </Badge>
+  );
+}
+
+// ─────────────────────────────────────────
+// Empty state animado
+// ─────────────────────────────────────────
+function EmptyProcessesState() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="flex flex-col items-center justify-center py-16 text-center"
+    >
+      <motion.div
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+        className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-950/60 dark:to-emerald-900/30 flex items-center justify-center mb-4"
+      >
+        <Scale className="size-10 text-emerald-500" />
+      </motion.div>
+      <p className="text-sm font-medium text-foreground">
+        Nenhum processo encontrado
+      </p>
+      <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+        Ajuste os filtros ou crie um novo processo jurídico.
+      </p>
+    </motion.div>
   );
 }
 
@@ -143,7 +183,7 @@ const EMPTY_FORM = {
 };
 
 // ─────────────────────────────────────────
-// Componente
+// Componente principal
 // ─────────────────────────────────────────
 export function ProcessesView() {
   const queryClient = useQueryClient();
@@ -193,6 +233,15 @@ export function ProcessesView() {
   });
   const clientList: ClientRecord[] = clientsData?.data ?? [];
 
+  // ── Query: prazos do processo seleccionado ──
+  const { data: processDeadlinesData, isLoading: deadlinesLoading } = useQuery({
+    queryKey: ['process-deadlines', detailProcess?.id],
+    queryFn: () => deadlinesApi.byProcess(detailProcess!.id),
+    enabled: !!detailProcess,
+    staleTime: 15 * 1000,
+  });
+  const processDeadlines: DeadlineRecord[] = processDeadlinesData?.data ?? [];
+
   // ── Mutation: criar processo ──
   const createMutation = useMutation({
     mutationFn: processesApi.create,
@@ -215,6 +264,7 @@ export function ProcessesView() {
       queryClient.invalidateQueries({ queryKey: ['processes'] });
       setCloseOpen(false);
       setCloseProcess(null);
+      setDetailOpen(false);
     },
     onError: () => {
       toast.error('Erro ao encerrar processo.');
@@ -245,6 +295,11 @@ export function ProcessesView() {
     closeMutation.mutate(closeProcess.id);
   }, [closeProcess, closeMutation]);
 
+  const handleDetailOpen = useCallback((process: ProcessRecord) => {
+    setDetailProcess(process);
+    setDetailOpen(true);
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
@@ -257,7 +312,7 @@ export function ProcessesView() {
         </div>
         <Button
           onClick={() => setCreateOpen(true)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98] transition-all"
         >
           <Plus className="size-4" />
           Novo Processo
@@ -321,30 +376,20 @@ export function ProcessesView() {
       </div>
 
       {/* Tabela */}
-      <Card>
+      <Card className="hover:shadow-lg transition-all duration-200">
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-4 space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
+                <Skeleton key={i} className="h-12 w-full rounded-lg" />
               ))}
             </div>
           ) : processes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                <Briefcase className="size-6 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium text-muted-foreground">
-                Nenhum processo encontrado
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Ajuste os filtros ou crie um novo processo.
-              </p>
-            </div>
+            <EmptyProcessesState />
           ) : (
-            <div className="max-h-[calc(100vh-340px)] overflow-y-auto">
+            <div className="max-h-[calc(100vh-340px)] overflow-y-auto rounded-lg border">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 bg-background backdrop-blur-sm">
                   <TableRow>
                     <TableHead>Nº Processo</TableHead>
                     <TableHead className="hidden md:table-cell">Título</TableHead>
@@ -357,8 +402,12 @@ export function ProcessesView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {processes.map((process) => (
-                    <TableRow key={process.id}>
+                  {processes.map((process, i) => (
+                    <TableRow
+                      key={process.id}
+                      className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors cursor-pointer ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
+                      onClick={() => handleDetailOpen(process)}
+                    >
                       <TableCell className="font-medium">
                         {process.process_number}
                       </TableCell>
@@ -391,28 +440,18 @@ export function ProcessesView() {
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
                         {process.closed_at
-                          ? new Date(process.closed_at).toLocaleDateString('pt-MZ', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              timeZone: 'Africa/Maputo',
-                            })
-                          : new Date(process.opened_at).toLocaleDateString('pt-MZ', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              timeZone: 'Africa/Maputo',
-                            })}
+                          ? format(new Date(process.closed_at), 'dd/MM/yyyy', { locale: pt })
+                          : format(new Date(process.opened_at), 'dd/MM/yyyy', { locale: pt })}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="size-8"
-                            onClick={() => {
-                              setDetailProcess(process);
-                              setDetailOpen(true);
+                            className="size-8 active:scale-[0.95]"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDetailOpen(process);
                             }}
                           >
                             <Eye className="size-3.5" />
@@ -421,8 +460,9 @@ export function ProcessesView() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40"
-                              onClick={() => {
+                              className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-[0.95]"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setCloseProcess(process);
                                 setCloseOpen(true);
                               }}
@@ -449,6 +489,7 @@ export function ProcessesView() {
             size="sm"
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
+            className="active:scale-[0.98]"
           >
             Anterior
           </Button>
@@ -460,6 +501,7 @@ export function ProcessesView() {
             size="sm"
             disabled={page >= meta.pages}
             onClick={() => setPage((p) => p + 1)}
+            className="active:scale-[0.98]"
           >
             Próxima
           </Button>
@@ -611,13 +653,13 @@ export function ProcessesView() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} className="active:scale-[0.98]">
               Cancelar
             </Button>
             <Button
               onClick={handleCreate}
               disabled={createMutation.isPending}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98]"
             >
               {createMutation.isPending && <Loader2 className="size-4 animate-spin" />}
               Criar Processo
@@ -626,97 +668,193 @@ export function ProcessesView() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Diálogo: Detalhes do Processo ── */}
+      {/* ── Diálogo: Detalhes do Processo (melhorado) ── */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {detailProcess?.process_number}
-            </DialogTitle>
-            <DialogDescription>{detailProcess?.title}</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           {detailProcess && (
-            <div className="space-y-4 py-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Área</p>
-                  <ColoredBadge
-                    value={detailProcess.area}
-                    labels={AREA_LABELS}
-                    colors={AREA_COLORS}
-                  />
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-950/60 dark:to-emerald-900/30 flex items-center justify-center shrink-0">
+                    <Briefcase className="size-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <DialogTitle className="text-lg">{detailProcess.process_number}</DialogTitle>
+                    <DialogDescription className="truncate">{detailProcess.title}</DialogDescription>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Prioridade</p>
-                  <ColoredBadge
-                    value={detailProcess.priority}
-                    labels={PRIORITY_LABELS}
-                    colors={PRIORITY_COLORS}
-                  />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Estado</p>
-                  <ColoredBadge
-                    value={detailProcess.status}
-                    labels={STATUS_LABELS}
-                    colors={STATUS_COLORS}
-                  />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Aberto em</p>
-                  <p className="text-sm font-medium">
-                    {new Date(detailProcess.opened_at).toLocaleDateString('pt-MZ', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      timeZone: 'Africa/Maputo',
-                    })}
-                  </p>
-                </div>
-              </div>
+              </DialogHeader>
 
-              <Separator />
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Cliente</p>
-                <p className="text-sm font-medium">
-                  {detailProcess.client?.full_name ?? '—'}
-                </p>
-              </div>
-
-              {detailProcess.description && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Descrição</p>
-                  <p className="text-sm whitespace-pre-wrap">{detailProcess.description}</p>
+              <div className="space-y-5 py-2">
+                {/* Badges */}
+                <div className="flex flex-wrap gap-2">
+                  <ColoredBadge value={detailProcess.status} labels={STATUS_LABELS} colors={STATUS_COLORS} />
+                  <ColoredBadge value={detailProcess.priority} labels={PRIORITY_LABELS} colors={PRIORITY_COLORS} />
+                  <ColoredBadge value={detailProcess.area} labels={AREA_LABELS} colors={AREA_COLORS} />
                 </div>
-              )}
 
-              {(detailProcess.court || detailProcess.judge || detailProcess.opposing_party) && (
-                <>
-                  <Separator />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {detailProcess.court && (
-                      <div>
-                        <p className="text-xs text-muted-foreground">Tribunal</p>
-                        <p className="text-sm">{detailProcess.court}</p>
-                      </div>
-                    )}
-                    {detailProcess.judge && (
-                      <div>
-                        <p className="text-xs text-muted-foreground">Juiz</p>
-                        <p className="text-sm">{detailProcess.judge}</p>
-                      </div>
-                    )}
-                    {detailProcess.opposing_party && (
-                      <div className="sm:col-span-2">
-                        <p className="text-xs text-muted-foreground">Parte Contrária</p>
-                        <p className="text-sm">{detailProcess.opposing_party}</p>
-                      </div>
+                <Separator />
+
+                {/* Info grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Cliente */}
+                  <div className="rounded-lg border p-3 bg-muted/30">
+                    <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                      <User className="size-3" /> Cliente
+                    </p>
+                    <p className="text-sm font-medium">
+                      {detailProcess.client?.full_name ?? '—'}
+                    </p>
+                    {detailProcess.client?.email && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{detailProcess.client.email}</p>
                     )}
                   </div>
-                </>
-              )}
-            </div>
+
+                  {/* Tribunal */}
+                  <div className="rounded-lg border p-3 bg-muted/30">
+                    <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                      <Building className="size-3" /> Tribunal
+                    </p>
+                    <p className="text-sm font-medium">
+                      {detailProcess.court ?? 'Não definido'}
+                    </p>
+                    {detailProcess.judge && (
+                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                        <Gavel className="size-3" /> {detailProcess.judge}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Parte contrária */}
+                  {(detailProcess.opposing_party) && (
+                    <div className="rounded-lg border p-3 bg-muted/30 sm:col-span-2">
+                      <p className="text-xs text-muted-foreground mb-1">Parte Contrária</p>
+                      <p className="text-sm font-medium">{detailProcess.opposing_party}</p>
+                    </div>
+                  )}
+
+                  {/* Datas */}
+                  <div className="rounded-lg border p-3 bg-muted/30">
+                    <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                      <Calendar className="size-3" /> Aberto em
+                    </p>
+                    <p className="text-sm font-medium">
+                      {format(new Date(detailProcess.opened_at), "dd 'de' MMMM, yyyy", { locale: pt })}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-3 bg-muted/30">
+                    <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                      <Clock className="size-3" /> Actualizado em
+                    </p>
+                    <p className="text-sm font-medium">
+                      {format(new Date(detailProcess.updated_at), "dd 'de' MMMM, yyyy", { locale: pt })}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Descrição */}
+                {detailProcess.description && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Descrição</p>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed bg-muted/30 rounded-lg p-3 border">
+                        {detailProcess.description}
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* Prazos do processo */}
+                <Separator />
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold flex items-center gap-1.5">
+                      <Calendar className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      Prazos do Processo
+                    </p>
+                    <Badge variant="outline" className="text-[10px]">
+                      {processDeadlines.length} prazo{processDeadlines.length !== 1 ? 's' : ''}
+                    </Badge>
+                  </div>
+                  {deadlinesLoading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 2 }).map((_, i) => (
+                        <Skeleton key={i} className="h-12 w-full rounded-lg" />
+                      ))}
+                    </div>
+                  ) : processDeadlines.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">
+                      Sem prazos registados para este processo.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {processDeadlines.map((dl) => {
+                        const diff = differenceInDays(new Date(dl.due_date), new Date());
+                        const dlColor = dl.status === 'COMPLETED'
+                          ? 'border-l-emerald-500'
+                          : diff < 0
+                            ? 'border-l-red-500'
+                            : diff <= 3
+                              ? 'border-l-amber-500'
+                              : 'border-l-emerald-500';
+                        const dlBg = dl.status === 'COMPLETED'
+                          ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
+                          : diff < 0
+                            ? 'bg-red-50/50 dark:bg-red-950/20'
+                            : diff <= 3
+                              ? 'bg-amber-50/50 dark:bg-amber-950/20'
+                              : 'bg-muted/30';
+                        return (
+                          <div key={dl.id} className={`flex items-center gap-3 p-2.5 rounded-lg border-l-4 ${dlColor} ${dlBg}`}>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{dl.title}</p>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                <Calendar className="size-3" />
+                                {format(new Date(dl.due_date), 'dd/MM/yyyy', { locale: pt })}
+                              </p>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] rounded-full shadow-sm ${
+                                dl.status === 'COMPLETED'
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200'
+                                  : diff < 0
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-red-200'
+                                    : diff <= 3
+                                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200'
+                                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200'
+                              }`}
+                            >
+                              {dl.status === 'COMPLETED' ? 'Concluído' : diff < 0 ? 'Expirado' : diff <= 3 ? `${diff}d` : `${diff}d`}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                {detailProcess.status === 'ACTIVE' && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      setCloseProcess(detailProcess);
+                      setDetailOpen(false);
+                      setCloseOpen(true);
+                    }}
+                    className="active:scale-[0.98]"
+                  >
+                    Encerrar Processo
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setDetailOpen(false)} className="active:scale-[0.98]">
+                  Fechar
+                </Button>
+              </DialogFooter>
+            </>
           )}
         </DialogContent>
       </Dialog>
@@ -739,7 +877,7 @@ export function ProcessesView() {
             <AlertDialogAction
               onClick={handleClose}
               disabled={closeMutation.isPending}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white active:scale-[0.98]"
             >
               {closeMutation.isPending && <Loader2 className="size-4 animate-spin" />}
               Encerrar

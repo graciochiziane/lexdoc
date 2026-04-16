@@ -226,6 +226,26 @@ export const auditApi = {
 // ─────────────────────────────────────────
 // API de Prazos
 // ─────────────────────────────────────────
+
+interface CalendarDeadlineItem {
+  id: string;
+  title: string;
+  due_date: string;
+  status: string;
+  process_id: string;
+  process_title: string;
+  process_number: string;
+}
+
+export interface CalendarDeadlinesData {
+  year: number;
+  month: number;
+  start_date: string;
+  end_date: string;
+  deadlines_by_date: Record<string, CalendarDeadlineItem[]>;
+  total: number;
+}
+
 interface DeadlineRecord {
   id: string;
   process_id: string;
@@ -272,6 +292,8 @@ export const deadlinesApi = {
     apiFetch<DeadlineRecord>(`/deadlines/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   byProcess: (processId: string, params?: string) =>
     apiFetch<DeadlineRecord[]>(`/processes/${processId}/deadlines${params ? `?${params}` : ''}`),
+  calendar: (params: string) =>
+    apiFetch<CalendarDeadlinesData>(`/deadlines/calendar?${params}`),
 };
 
 // ─────────────────────────────────────────
@@ -338,4 +360,91 @@ export const documentsApi = {
     apiFetch<DocumentRecord>(`/documents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   remove: (id: string) =>
     apiFetch<DocumentRecord>(`/documents/${id}`, { method: 'DELETE' }),
+};
+
+// ─────────────────────────────────────────
+// API de Pesquisa Global
+// ─────────────────────────────────────────
+export interface SearchResultItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  type: string;
+  created_at: string;
+}
+
+export interface SearchGroup {
+  type: string;
+  label: string;
+  count: number;
+  items: SearchResultItem[];
+}
+
+export interface SearchResponse {
+  query: string;
+  type: string;
+  results: SearchGroup[];
+  total: number;
+  meta: ApiMeta;
+}
+
+export const searchApi = {
+  global: (params: string) =>
+    apiFetch<SearchResponse>(`/search?${params}`),
+};
+
+// ─────────────────────────────────────────
+// API de Notificações
+// ─────────────────────────────────────────
+export interface NotificationItem {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  user_name: string;
+  user_id: string | null;
+  created_at: string;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface NotificationsData {
+  notifications: NotificationItem[];
+  meta: ApiMeta;
+}
+
+export const notificationsApi = {
+  list: (params?: string) =>
+    apiFetch<NotificationsData>(`/notifications${params ? `?${params}` : ''}`),
+  unreadCount: () =>
+    apiFetch<{ count: number }>('/notifications?unread-count'),
+};
+
+// ─────────────────────────────────────────
+// API de Perfil do Utilizador
+// ─────────────────────────────────────────
+export interface ProfileData {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  phone: string | null;
+  is_active: boolean;
+  email_verified: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
+  member_since: string;
+  firm: {
+    id: string;
+    name: string;
+    plan: string;
+  };
+}
+
+export const profileApi = {
+  get: () => apiFetch<ProfileData>('/profile'),
+  update: (data: { full_name?: string; phone?: string }) =>
+    apiFetch<ProfileData>('/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+  changePassword: (data: { current_password: string; new_password: string; confirm_password: string }) =>
+    apiFetch<{ message: string }>('/profile/password', { method: 'PATCH', body: JSON.stringify(data) }),
 };
