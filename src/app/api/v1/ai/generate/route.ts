@@ -1,7 +1,9 @@
 // ═══════════════════════════════════════════════════════════════
-// LEXDOC — AI Document Generation API
+// LEXDOC — AI Document Generation API (LexAssistent v1.0)
 // POST /api/v1/ai/generate — Gerar documentos com IA
-// Tipos: contract, petition, legal_opinion, summary, custom_document
+// Tipos: contract, petition, legal_opinion, summary, custom_document,
+//        peticao-inicial, contestacao, contrato-trabalho, procuracao,
+//        notificacao, requerimento, recurso
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,137 +12,35 @@ import { authenticateRequest } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
 import { db } from '@/lib/db';
+import { buildLexAssistGenerationPrompt } from '@/lib/lexassist-prompt';
 
 process.env.TZ = 'Africa/Maputo';
 
 // ─────────────────────────────────────────
 // Tipos de geração permitidos
 // ─────────────────────────────────────────
-const ALLOWED_TYPES = ['contract', 'petition', 'legal_opinion', 'summary', 'custom_document'] as const;
+const ALLOWED_TYPES = [
+  'contract', 'petition', 'legal_opinion', 'summary', 'custom_document',
+  'peticao-inicial', 'contestacao', 'contrato-trabalho', 'procuracao',
+  'notificacao', 'requerimento', 'recurso',
+] as const;
 
 type GenerationType = (typeof ALLOWED_TYPES)[number];
 
 // ─────────────────────────────────────────
-// Prompts especializados por tipo de documento
-// ─────────────────────────────────────────
-function getGenerationSystemPrompt(type: GenerationType): string {
-  const basePrompt = `És o LexAssistent, um assistente jurídico virtual especializado no direito moçambicano.
-Geras documentos jurídicos profissionais em português de Moçambique (pt-MZ).
-Segues as formalidades legais moçambicanas e a linguagem jurídica adequada.
-Citas a legislação moçambicana relevante quando aplicável.
-Formatas os documentos de forma clara, com estrutura profissional.
-ADVERTÊNCIA: Os documentos gerados são informativos e devem ser revistos por um profissional qualificado.`;
-
-  switch (type) {
-    case 'contract':
-      return `${basePrompt}
-
-TIPO DE DOCUMENTO: CONTRATO / ACORDO
-
-ESTRUTURA OBRIGATÓRIA:
-1. TÍTULO — Denominação clara do contrato
-2. PREÂMBULO — Identificação das partes (contratante e contratado)
-3. CLÁUSULAS:
-   - Cláusula 1ª — Objecto do contrato
-   - Cláusula 2ª — Obrigações das partes
-   - Cláusula 3ª — Prazo e vigência
-   - Cláusula 4ª — Remuneração/Preço (se aplicável)
-   - Cláusula 5ª — Foro e resolução de litígios
-   - Cláusula 6ª — Disposições finais
-4. LOCAL E DATA
-5. ASSINATURAS
-
-REGRAS:
-- Incluir campos [NOME], [BI/NUIT], [ENDEREÇO] para personalização
-- Referir a Lei Geral do Trabalho (Lei nº 23/2007) quando aplicável
-- Incluir cláusula de foro competente (tribunal da Comarca de Maputo ou outra)
-- Indicar a legislação aplicável ao tipo específico de contrato`;
-
-    case 'petition':
-      return `${basePrompt}
-
-TIPO DE DOCUMENTO: PETIÇÃO / INITIAL PLEADING
-
-ESTRUTURA OBRIGATÓRIA (Código de Processo Civil moçambicano):
-1. CABEÇALHO — Tribunal competente
-2. QUALIFICAÇÃO — Identificação do peticionário e do demandado
-3. ARTIGOS DE FACTOS — Exposição dos factos (numerados)
-4. ARTIGOS DE DIREITO — Fundamentação jurídica com citação de lei
-5. PEDIDOS — Conclusões e pedidos ao tribunal
-6. VALOR DA CAUSA
-7. DATA E ASSINATURA
-
-REGRAS:
-- Seguir as regras do CPC moçambicano (Lei nº 1/2013 de 10 de Janeiro)
-- Citar artigos de lei específicos
-- Incluir [NOME DO TRIBUNAL], [NOME DO JUIZ], [NOME DO PELICOPISTA] para personalização
-- Identificar a forma de processo (comum ou especial)
-- Incluir o valor da causa quando aplicável`;
-
-    case 'legal_opinion':
-      return `${basePrompt}
-
-TIPO DE DOCUMENTO: PARECER JURÍDICO
-
-ESTRUTURA OBRIGATÓRIA:
-1. CABEÇALHO — "PARECER JURÍDICO"
-2. ASSUNTO — Identificação clara do tema
-3. I. QUESTÃO APRESENTADA — Descrição da questão
-4. II. ENQUADRAMENTO LEGAL — Legislação e jurisprudência relevantes
-5. III. ANÁLISE — Análise detalhada com argumentação
-6. IV. CONCLUSÃO — Conclusão e recomendações
-7. DATA E ASSINATURA — [NOME DO ADVOGADO], [Nº DA OAM]
-
-REGRAS:
-- Analisar a questão sob múltiplas perspectivas jurídicas
-- Citar artigos de lei, diplomas legais e jurisprudência
-- Apresentar riscos e alternativas
-- Formatar com subtítulos claros
-- Incluir recomendações práticas`;
-
-    case 'summary':
-      return `${basePrompt}
-
-TIPO DE DOCUMENTO: RESUMO JURÍDICO
-
-ESTRUTURA:
-1. TÍTULO — Resumo: [Tema]
-2. PONTOS PRINCIPAIS — Em bullet points
-3. ENQUADRAMENTO LEGAL — Legislação relevante
-4. PRAZOS E DATAS RELEVANTES — Se aplicável
-5. OBSERVAÇÕES — Notas adicionais
-
-REGRAS:
-- Resumir de forma objectiva e clara
-- Destacar os pontos mais relevantes
-- Identificar prazos e obrigações
-- Manter linguagem acessível mas técnica
-- Mencionar riscos e atenção`;
-
-    case 'custom_document':
-      return `${basePrompt}
-
-TIPO DE DOCUMENTO: DOCUMENTO JURÍDICO PERSONALIZADO
-
-REGRAS:
-- Seguir a estrutura solicitada pelo utilizador
-- Usar linguagem jurídica formal moçambicana
-- Citar legislação relevante
-- Formatar de forma profissional e clara
-- Incluir campos para personalização quando aplicável`;
-
-    default:
-      return basePrompt;
-  }
-}
-
-// ─────────────────────────────────────────
 // Labels em português para os tipos
 // ─────────────────────────────────────────
-const TYPE_LABELS: Record<GenerationType, string> = {
+const TYPE_LABELS: Record<string, string> = {
   contract: 'Contrato',
   petition: 'Petição',
+  'peticao-inicial': 'Petição Inicial',
+  contestacao: 'Contestação',
+  'contrato-trabalho': 'Contrato de Trabalho',
+  procuracao: 'Procuração Forense',
   legal_opinion: 'Parecer Jurídico',
+  notificacao: 'Notificação',
+  requerimento: 'Requerimento',
+  recurso: 'Recurso',
   summary: 'Resumo Jurídico',
   custom_document: 'Documento Personalizado',
 };
@@ -194,7 +94,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => null);
     const { type, title, context, process_id, template_id } = body ?? {};
 
-    if (!type || !ALLOWED_TYPES.includes(type)) {
+    if (!type || !ALLOWED_TYPES.includes(type as GenerationType)) {
       return NextResponse.json(
         {
           success: false,
@@ -300,8 +200,8 @@ MODELO DE PROCESSO A SEGUIR:
       }
     }
 
-    // ── Construir prompt de sistema especializado ──
-    const systemPrompt = getGenerationSystemPrompt(generationType);
+    // ── Construir prompt de sistema (LexAssistent v1.0) ──
+    const systemPrompt = buildLexAssistGenerationPrompt(generationType);
 
     // ── Construir mensagem do utilizador ──
     let userPrompt = `Gera um documento do tipo "${TYPE_LABELS[generationType]}" com o seguinte título: ${title.trim()}\n\n`;

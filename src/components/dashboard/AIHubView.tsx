@@ -63,6 +63,7 @@ import {
 } from '@/components/ui/sheet';
 import { aiApi, processesApi } from '@/lib/api-client';
 import type { ConversationSummary, ConversationMessage, ExtractedDeadline, GenerationRecord } from '@/lib/api-client';
+import { MarkdownContent } from '@/components/shared/MarkdownRenderer';
 
 // ─────────────────────────────────────────
 // Types
@@ -85,25 +86,43 @@ const QUICK_PROMPTS = [
 
 const DOC_TYPES = [
   { value: 'contrato', label: 'Contrato' },
-  { value: 'peticao_inicial', label: 'Petição Inicial' },
-  { value: 'parecer_juridico', label: 'Parecer Jurídico' },
-  { value: 'resumo', label: 'Resumo' },
+  { value: 'peticao-inicial', label: 'Petição Inicial' },
+  { value: 'contestacao', label: 'Contestação' },
+  { value: 'contrato-trabalho', label: 'Contrato de Trabalho' },
+  { value: 'procuracao', label: 'Procuração Forense' },
+  { value: 'parecer-juridico', label: 'Parecer Jurídico' },
+  { value: 'notificacao', label: 'Notificação' },
+  { value: 'requerimento', label: 'Requerimento' },
+  { value: 'recurso', label: 'Recurso' },
+  { value: 'resumo', label: 'Resumo Jurídico' },
   { value: 'personalizado', label: 'Personalizado' },
 ];
 
 const TYPE_BADGE_COLORS: Record<string, string> = {
   contrato: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
-  peticao_inicial: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-  parecer_juridico: 'bg-violet-500/15 text-violet-400 border-violet-500/25',
-  resumo: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+  'peticao-inicial': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+  contestacao: 'bg-red-500/15 text-red-400 border-red-500/25',
+  'contrato-trabalho': 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
+  procuracao: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/25',
+  'parecer-juridico': 'bg-violet-500/15 text-violet-400 border-violet-500/25',
+  notificacao: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+  requerimento: 'bg-teal-500/15 text-teal-400 border-teal-500/25',
+  recurso: 'bg-rose-500/15 text-rose-400 border-rose-500/25',
+  resumo: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
   personalizado: 'bg-gray-500/15 text-gray-400 border-gray-500/25',
 };
 
 const TYPE_LABELS: Record<string, string> = {
   contrato: 'Contrato',
-  peticao_inicial: 'Petição Inicial',
-  parecer_juridico: 'Parecer Jurídico',
-  resumo: 'Resumo',
+  'peticao-inicial': 'Petição Inicial',
+  contestacao: 'Contestação',
+  'contrato-trabalho': 'Contrato de Trabalho',
+  procuracao: 'Procuração Forense',
+  'parecer-juridico': 'Parecer Jurídico',
+  notificacao: 'Notificação',
+  requerimento: 'Requerimento',
+  recurso: 'Recurso',
+  resumo: 'Resumo Jurídico',
   personalizado: 'Personalizado',
 };
 
@@ -540,12 +559,16 @@ function AssistantChatTab() {
                 </Avatar>
               )}
               <div className="max-w-[80%] space-y-2">
-                <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed break-words overflow-hidden ${
                   msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                    ? 'bg-primary text-primary-foreground rounded-tr-sm whitespace-pre-wrap'
                     : 'bg-muted/60 text-foreground rounded-tl-sm'
                 }`}>
-                  {msg.content}
+                  {msg.role === 'user' ? (
+                    msg.content
+                  ) : (
+                    <MarkdownContent>{msg.content}</MarkdownContent>
+                  )}
                 </div>
                 {/* Sources */}
                 {msg.sources && msg.sources.length > 0 && (
@@ -868,9 +891,9 @@ function GenerateDocumentTab() {
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[400px]">
-                  <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm leading-relaxed">
+                  <MarkdownContent className="text-sm leading-relaxed">
                     {generatedResult.result}
-                  </div>
+                  </MarkdownContent>
                 </ScrollArea>
               </CardContent>
             </Card>

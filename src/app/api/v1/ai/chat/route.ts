@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// LEXDOC — AI Chat API (LexAssistent) com RAG + Memória
+// LEXDOC — AI Chat API (LexAssistent v1.0) com RAG + Memória
 // POST /api/v1/ai/chat — Enviar mensagem e receber resposta do assistente jurídico
 // GET  /api/v1/ai/chat — Listar conversas do utilizador
 // ═══════════════════════════════════════════════════════════════
@@ -10,55 +10,11 @@ import { authenticateRequest } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
 import { db } from '@/lib/db';
-import { searchKnowledgeArticles, type KnowledgeSearchResult } from '@/lib/rag-search';
+import { searchKnowledgeArticles } from '@/lib/rag-search';
+import { buildLexAssistPromptWithRAG } from '@/lib/lexassist-prompt';
 import { parsePagination, buildPaginationMeta, calcSkip } from '@/lib/pagination';
 
 process.env.TZ = 'Africa/Maputo';
-
-// ─────────────────────────────────────────
-// Prompt do sistema — LexAssistente
-// ─────────────────────────────────────────
-const SYSTEM_PROMPT = `És o LexAssistent, um assistente jurídico virtual especializado no direito moçambicano.
-
-ÁREAS: Direito Civil, Penal, Trabalho, Comercial, Administrativo, Constitucional
-
-REGRAS:
-1. Responde SEMPRE em português de Moçambique (pt-MZ).
-2. Baseia-te na legislação moçambicana vigente.
-3. Cita artigos de lei e diplomas legais quando relevante.
-4. Para cálculos de prazos, segue as regras do CPC moçambicano.
-5. Quando sugerires minutas, usa linguagem jurídica formal adequada.
-6. ADVERTÊNCIA: Respostas informativas, NÃO substituem aconselhamento profissional.
-7. Se a pergunta estiver fora do escopo, redirecciona educadamente.
-8. Formata com listas e parágrafos curtos.
-9. Identifica-se como "LexAssistent, o seu assistente jurídico virtual".`;
-
-// ─────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────
-
-/** Construir prompt de sistema com contexto RAG */
-function buildSystemPromptWithRAG(knowledgeArticles: KnowledgeSearchResult[]): string {
-  if (knowledgeArticles.length === 0) return SYSTEM_PROMPT;
-
-  const contextSection = knowledgeArticles
-    .map((article, index) => {
-      const sourceLine = article.source ? `\nFonte: ${article.source}` : '';
-      return `[Artigo ${index + 1}] ${article.title}\n${article.content.substring(0, 500)}${sourceLine}`;
-    })
-    .join('\n\n---\n\n');
-
-  return `${SYSTEM_PROMPT}
-
-CONTEXTO DA BASE DE CONHECIMENTO DA FIRMA:
-Utiliza as informações abaixo como referência adicional. Se forem relevantes para a pergunta do utilizador, incorpora-as na tua resposta. Se não forem relevantes, ignora-as.
-
-${contextSection}
-
-INSTRUÇÕES ADICIONAIS:
-- Quando utilizares informações da base de conhecimento, indica a fonte.
-- Se a base de conhecimento contiver informações contraditórias, prioriza a legislação vigente.`;
-}
 
 /** Serializar array de IDs para JSON string */
 function safeJsonStringify(data: unknown): string | null {
@@ -207,8 +163,15 @@ export async function POST(request: NextRequest) {
     // ── RAG: Pesquisar base de conhecimento ──
     const knowledgeArticles = await searchKnowledgeArticles(firmId, message, 3);
 
-    // ── Construir prompt de sistema com contexto RAG ──
-    const systemPrompt = buildSystemPromptWithRAG(knowledgeArticles);
+    // ── Construir prompt de sistema com contexto RAG (LexAssistent v1.0) ──
+    const systemPrompt = buildLexAssistPromptWithRAG(
+      knowledgeArticles.map((a) => ({
+        title: a.title,
+        content: a.content,
+        source: a.source,
+        category: a.category,
+      })),
+    );
 
     // ── Montar array de mensagens para LLM ──
     const llmMessages = [

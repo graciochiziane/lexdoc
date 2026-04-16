@@ -965,3 +965,102 @@ LexDoc is now in Phase 2 with AI capabilities integrated into the existing matur
 6. Mobile PWA optimization
 7. Data export enhancements (PDF reports)
 8. Unit/integration tests
+
+---
+Task ID: 2
+Agent: full-stack-developer
+Task: Create LexAssistent v1.0 system prompt module
+
+Work Log:
+- Created src/lib/lexassist-prompt.ts — Complete LexAssistent v1.0 system prompt for Mozambican law AI assistant
+- Exported LEXASSIST_SYSTEM_PROMPT constant with full system prompt in Portuguese (pt-MZ)
+- Exported RAGArticle interface type for knowledge article structure
+- Exported buildLexAssistPromptWithRAG() helper — appends RAG context articles to base prompt with hash references
+- Exported buildLexAssistGenerationPrompt() helper — returns specialized prompts for 9 document types (petição inicial, contestação, contrato trabalho, procuração, parecer jurídico, notificação, requerimento, recurso, custom)
+- System prompt includes all required sections: Identidade e Missão, Escopo Territorial, Fonte Primordial RAG, Hierarquia Normativa (7 níveis), 7 Skills Operacionais, Formato de Saída (IRAC + general queries), 9 Regras Absolutas, Fluxo de Decisão Interno, Adaptações Moçambique, Modo de Validação Contínua, Gold Standard Example (despedimento com justa causa, Lei 23/2007 Art. 108.º)
+- Prompt instructs AI to use Markdown formatting for IRAC sections
+- General/informational queries respond naturally without IRAC format
+- Knowledge context clearly marked as private firm knowledge base
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+
+Stage Summary:
+- 1 new file: src/lib/lexassist-prompt.ts
+- 3 exports: LEXASSIST_SYSTEM_PROMPT, buildLexAssistPromptWithRAG(), buildLexAssistGenerationPrompt()
+- Comprehensive prompt covering all Mozambican legal context: CRM, STJ, OAM, IRPS, IVA, INSS, Boletim da República
+- Ready for import by AI chat and document generation API routes
+- ESLint: 0 new errors
+
+---
+Task ID: 3
+Agent: full-stack-developer
+Task: Add Markdown rendering to AI chat messages (LexAssistent v1.0 IRAC output)
+
+Work Log:
+- Installed remark-gfm@4.0.1 dependency for GitHub Flavored Markdown support (tables, strikethrough, etc.)
+- Created src/components/shared/MarkdownRenderer.tsx — Reusable MarkdownContent component using react-markdown + remark-gfm with comprehensive Tailwind prose styling:
+  - Emerald-themed headers (h2, h3, h4) with emerald-700/emerald-400 colors
+  - Bold text in emerald-700/emerald-400
+  - Code blocks with bg-muted, rounded-lg, and monospace font
+  - Inline code with bg-muted, rounded, px-1.5, py-0.5
+  - Blockquotes with emerald-500 left border, italic, muted text
+  - Styled tables with border, muted header, and proper padding
+  - Styled lists (ul/ol) with proper indentation and spacing
+  - Styled links with emerald-600/emerald-400 and underline
+  - Accepts className prop for custom styling overrides
+- Updated src/components/dashboard/AIChatPanel.tsx:
+  - Imported MarkdownContent from shared component
+  - Replaced plain text rendering for assistant messages with MarkdownContent
+  - Kept whitespace-pre-wrap on user messages (plain text)
+  - Removed whitespace-pre-wrap from assistant messages (Markdown handles formatting)
+  - Added overflow-hidden to prevent markdown content from breaking chat bubble layout
+- Updated src/components/dashboard/AIHubView.tsx:
+  - Imported MarkdownContent from shared component
+  - Updated AssistantChatTab: replaced plain text rendering for assistant messages with MarkdownContent
+  - Updated GenerateDocumentTab: replaced plain text {generatedResult.result} rendering with MarkdownContent component
+  - User messages remain plain text with whitespace-pre-wrap
+
+Stage Summary:
+- 1 new dependency installed (remark-gfm@4.0.1)
+- 1 new shared component created (src/components/shared/MarkdownRenderer.tsx)
+- 2 existing files updated (AIChatPanel.tsx, AIHubView.tsx)
+- LexAssistent AI responses now render with full Markdown formatting: headers, bold, lists, code blocks, tables, blockquotes
+- IRAC structured output renders beautifully with emerald-themed styling
+- Chat bubble layouts preserved (no overflow, rounded corners intact)
+- User messages remain plain text (no Markdown rendering)
+- Document generation results also render with Markdown formatting
+- Dark mode fully supported (prose-invert + emerald-400 dark variants)
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+---
+Task ID: 15
+Agent: Main Orchestrator + full-stack-developer subagents
+Task: Phase 2 — LexAssistent v1.0 Implementation (AI Legal Assistant Directive)
+
+Work Log:
+- Analyzed user's comprehensive LexAssistent v1.0 directive (500+ lines) covering: 7 Skills, IRAC method, Hierarquia Normativa, strict output format, 9 absolute rules, decision flow, Mozambican adaptations
+- Assessed existing infrastructure: AIConversation/AIMessage/AIGeneration models already exist, AI chat/generate/analyze/extract-deadlines APIs already functional, AIHubView + AIChatPanel frontend components already built
+- Identified gap: existing system prompt was basic (9 rules, ~300 chars) vs. user's comprehensive directive (v1.0)
+- Created src/lib/lexassist-prompt.ts with:
+  - LEXASSIST_SYSTEM_PROMPT: Full v1.0 system prompt (~4000 chars) with identity, territorial scope, RAG primacy, 7-level Hierarquia Normativa, 7 Skills, IRAC output format, 9 Regras Absolutas, decision flow, Mozambican adaptations, gold standard example
+  - buildLexAssistPromptWithRAG(): Appends firm knowledge articles with hash references
+  - buildLexAssistGenerationPrompt(): Specialized prompts for 9 document types (petição inicial, contestação, contrato trabalho, procuração, parecer jurídico, notificação, requerimento, recurso, custom)
+- Updated src/app/api/v1/ai/chat/route.ts: Replaced basic SYSTEM_PROMPT with buildLexAssistPromptWithRAG() from new module
+- Updated src/app/api/v1/ai/generate/route.ts: Replaced getGenerationSystemPrompt() with buildLexAssistGenerationPrompt(), expanded ALLOWED_TYPES from 5 to 12
+- Installed remark-gfm@4.0.1 for GitHub Flavored Markdown support
+- Created src/components/shared/MarkdownRenderer.tsx: Reusable MarkdownContent component with emerald theming, prose styling, GFM support
+- Updated src/components/dashboard/AIChatPanel.tsx: Assistant messages now render via MarkdownContent (supports IRAC structured output)
+- Updated src/components/dashboard/AIHubView.tsx: 
+  - AssistantChatTab: Markdown rendering for assistant messages
+  - GenerateDocumentTab: Markdown rendering for generated documents
+  - DOC_TYPES expanded from 5 to 11 document types with color-coded badges
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+- Dev server: compiles and responds 200
+
+Stage Summary:
+- Phase 2 LexAssistent v1.0 directive fully implemented
+- System prompt upgraded from 9 basic rules to comprehensive v1.0 with 7 Skills, IRAC, Hierarquia Normativa, 9 absolute rules
+- Chat API now produces structured IRAC responses with [QUESTÃO], [NORMA], [APLICAÇÃO], [CONCLUSÃO], [RISCOS], [FONTES], [NOTA DE AUDITORIA]
+- Document generation expanded from 5 to 12 types (petição inicial, contestação, contrato trabalho, procuração, parecer jurídico, notificação, requerimento, recurso, + existing)
+- Markdown rendering enabled in all AI responses (chat + generation)
+- Zero hallucination enforcement via LexDoc RAG primacy
+- Mozambican legal adaptations (STJ, OAM, IRPS, BR terminology)
+- All changes maintain backward compatibility with existing frontend

@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { aiApi } from '@/lib/api-client';
+import { MarkdownContent } from '@/components/shared/MarkdownRenderer';
 
 // ─────────────────────────────────────────
 // Tipos
@@ -383,13 +384,17 @@ export function AIChatPanel() {
 
                       {/* Content */}
                       <div
-                        className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                        className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed break-words overflow-hidden ${
                           msg.role === 'user'
-                            ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                            ? 'bg-primary text-primary-foreground rounded-tr-sm whitespace-pre-wrap'
                             : 'bg-muted/60 text-foreground rounded-tl-sm'
                         }`}
                       >
-                        {msg.content}
+                        {msg.role === 'user' ? (
+                          msg.content
+                        ) : (
+                          <MarkdownContent>{msg.content}</MarkdownContent>
+                        )}
                       </div>
                     </motion.div>
                   ))}
