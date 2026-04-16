@@ -31,6 +31,7 @@ model Firm {
   processes   LegalProcess[]
   audit_logs  AuditLog[]
   invitations Invitation[]
+  notes       Note[]
 
   @@map("firms")
 }
@@ -66,6 +67,7 @@ model User {
   documents_created Document[]     @relation("DocumentCreator")
   documents_updated Document[]     @relation("DocumentUpdater")
   process_assignments ProcessAssignment[]
+  notes             Note[]      @relation("NoteCreator")
 
   @@index([firm_id])
   @@index([email])
@@ -253,6 +255,32 @@ model Deadline {
   @@index([process_id])
   @@index([due_date])
   @@map("deadlines")
+}
+
+// ─────────────────────────────────────────
+// NOTAS / TAREFAS
+// ─────────────────────────────────────────
+model Note {
+  id            String    @id @default(cuid())
+  firm_id       String
+  entity_type   String    // "process" | "client" | "deadline" | "general"
+  entity_id     String?
+  content       String
+  is_pinned     Boolean   @default(false)
+  is_completed  Boolean   @default(false)
+  priority      String    @default("low")    // "low" | "medium" | "high" | "urgent"
+  due_date      DateTime?
+  created_by_id String
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  created_by    User      @relation("NoteCreator", fields: [created_by_id], references: [id])
+  firm          Firm      @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+
+  @@index([firm_id])
+  @@index([entity_type, entity_id])
+  @@index([created_by_id])
+  @@map("notes")
 }
 
 // ─────────────────────────────────────────

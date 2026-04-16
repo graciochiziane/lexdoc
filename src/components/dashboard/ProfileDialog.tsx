@@ -231,7 +231,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-lg max-w-[95vw] p-0 overflow-hidden">
         {/* Cabeçalho visual */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-500 px-6 pt-6 pb-8 text-white">
           <div className="flex items-center gap-4">

@@ -345,7 +345,7 @@ export function DeadlinesView() {
 
       {/* ── Diálogos ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-w-[95vw] max-h-[90vh] overflow-y-auto">
           <div className="bg-gradient-to-r from-red-500 to-red-400 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
             <DialogTitle className="flex items-center gap-2 text-white">
               <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
@@ -376,7 +376,7 @@ export function DeadlinesView() {
       </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-w-[95vw] max-h-[90vh] overflow-y-auto">
           <div className="bg-gradient-to-r from-amber-600 to-amber-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
             <DialogTitle className="flex items-center gap-2 text-white">
               <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">

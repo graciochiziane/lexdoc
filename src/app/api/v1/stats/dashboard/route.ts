@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
       overdueDeadlines,
       recentLogs,
       recentDeadlines,
+      recentProcesses,
     ] = await Promise.all([
       // Total de processos
       db.legalProcess.count({
@@ -106,6 +107,18 @@ export async function GET(request: NextRequest) {
         orderBy: { due_date: 'asc' },
         take: 5,
       }),
+
+      // Últimos 5 processos com dados do cliente
+      db.legalProcess.findMany({
+        where: { firm_id: firmId },
+        orderBy: { created_at: 'desc' },
+        take: 5,
+        include: {
+          client: {
+            select: { full_name: true },
+          },
+        },
+      }),
     ]);
 
     // Buscar nomes dos utilizadores para as actividades recentes
@@ -154,6 +167,16 @@ export async function GET(request: NextRequest) {
         overdue_deadlines: overdueDeadlines,
         recent_activities: recentActivities,
         recent_deadlines: formattedRecentDeadlines,
+        upcoming_deadlines_list: formattedRecentDeadlines,
+        recent_processes: recentProcesses.map((p) => ({
+          id: p.id,
+          process_number: p.process_number,
+          title: p.title,
+          status: p.status,
+          priority: p.priority,
+          created_at: p.created_at,
+          client: p.client ? { full_name: p.client.full_name } : null,
+        })),
       },
     });
   } catch (error) {

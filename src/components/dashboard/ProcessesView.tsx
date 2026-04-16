@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -29,6 +29,9 @@ import {
   AlertTriangle,
   MessageSquare,
   History,
+  Copy,
+  Check,
+  Archive,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -298,6 +301,7 @@ export function ProcessesView() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailProcess, setDetailProcess] = useState<ProcessRecord | null>(null);
   const [detailTab, setDetailTab] = useState<'info' | 'notes' | 'timeline'>('info');
+  const [copied, setCopied] = useState(false);
 
   // ── Diálogo de encerramento ──
   const [closeOpen, setCloseOpen] = useState(false);
@@ -425,7 +429,16 @@ export function ProcessesView() {
     setDetailProcess(process);
     setDetailTab('info');
     setDetailOpen(true);
+    setCopied(false);
   }, []);
+
+  const handleCopyNumber = useCallback(() => {
+    if (!detailProcess) return;
+    navigator.clipboard.writeText(detailProcess.process_number).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [detailProcess]);
 
   return (
     <div className="space-y-6">
@@ -541,11 +554,11 @@ export function ProcessesView() {
           ) : processes.length === 0 ? (
             <EmptyProcessesState />
           ) : (
-            <div className="max-h-[calc(100vh-340px)] overflow-y-auto rounded-lg border">
+            <div className="max-h-[calc(100vh-340px)] overflow-x-auto overflow-y-auto rounded-lg border">
               <Table>
                 <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                   <TableRow>
-                    <TableHead>Nº Processo</TableHead>
+                    <TableHead className="sticky left-0 bg-background/95 backdrop-blur-sm z-10 min-w-[140px]">Nº Processo</TableHead>
                     <TableHead className="hidden md:table-cell">Título</TableHead>
                     <TableHead className="hidden lg:table-cell">Cliente</TableHead>
                     <TableHead className="hidden sm:table-cell">Área</TableHead>
@@ -568,7 +581,7 @@ export function ProcessesView() {
                         className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-all duration-150 hover:shadow-sm cursor-pointer border-l-4 ${PRIORITY_BORDER_COLORS[process.priority] ?? ''} ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
                         onClick={() => handleDetailOpen(process)}
                       >
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium sticky left-0 bg-background/95 backdrop-blur-sm z-[5] min-w-[140px]">
                           {process.process_number}
                         </TableCell>
                         <TableCell className="hidden md:table-cell max-w-[200px] truncate">
@@ -670,7 +683,7 @@ export function ProcessesView() {
 
       {/* ── Diálogo: Novo Processo ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-w-[95vw] max-h-[90vh] overflow-y-auto">
           <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
             <DialogTitle className="flex items-center gap-2 text-white">
               <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
@@ -841,7 +854,7 @@ export function ProcessesView() {
 
       {/* ── Diálogo: Detalhes do Processo ── */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-w-[95vw] max-h-[90vh] overflow-y-auto">
           {detailProcess && (
             <>
               <DialogHeader>
@@ -855,6 +868,15 @@ export function ProcessesView() {
                       <DialogTitle className="text-lg text-white">{detailProcess.process_number}</DialogTitle>
                       <DialogDescription className="text-white/80 truncate">{detailProcess.title}</DialogDescription>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCopyNumber}
+                      className="text-white/80 hover:text-white hover:bg-white/20 border border-white/20 rounded-lg shrink-0 active:scale-[0.95] transition-all"
+                    >
+                      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                      <span className="text-xs ml-1">{copied ? 'Copiado!' : 'Copiar'}</span>
+                    </Button>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-3">
                     <Badge className="text-[10px] border-0 bg-white/20 text-white">{STATUS_LABELS[detailProcess.status]}</Badge>
@@ -864,18 +886,72 @@ export function ProcessesView() {
                 </div>
               </DialogHeader>
 
-              {/* Tabs de navegação */}
-              <Tabs value={detailTab} onValueChange={(v) => setDetailTab(v as 'info' | 'notes' | 'timeline')} className="mt-2">
-                <TabsList className="w-full grid grid-cols-3 h-10">
-                  <TabsTrigger value="info" className="text-xs data-[state=active]:bg-emerald-100 dark:data-[state=active]:bg-emerald-950/40 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm">
+              {/* Status Timeline Stepper */}
+              <div className="flex items-center justify-between mt-4 mb-2 px-1">
+                {[
+                  { key: 'CREATED', label: 'Criado' },
+                  { key: 'ACTIVE', label: 'Em Curso' },
+                  { key: 'SUSPENDED', label: 'Suspenso/Recurso' },
+                  { key: 'CLOSED', label: 'Encerrado' },
+                ].map((step, idx) => {
+                  const statusOrder = ['CREATED', 'ACTIVE', 'SUSPENDED', 'CLOSED'];
+                  const currentIdx = statusOrder.indexOf(detailProcess.status);
+                  const stepIdx = statusOrder.indexOf(step.key);
+                  const isCompleted = stepIdx < currentIdx;
+                  const isCurrent = detailProcess.status === step.key;
+                  const isPending = stepIdx > currentIdx;
+                  return (
+                    <div key={step.key} className="flex items-center">
+                      <div className={`flex flex-col items-center gap-1.5 ${isCurrent ? 'scale-110' : ''} transition-all duration-200`}>
+                        <div className={`relative flex items-center justify-center size-7 rounded-full border-2 transition-all duration-200 ${
+                          isCurrent
+                            ? 'border-emerald-500 bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                            : isCompleted
+                              ? 'border-emerald-400 bg-emerald-500'
+                              : 'border-muted-foreground/25 bg-background'
+                        }`}>
+                          {isCompleted ? (
+                            <Check className="size-3.5 text-white" strokeWidth={3} />
+                          ) : isCurrent ? (
+                            <div className="size-2.5 rounded-full bg-white" />
+                          ) : (
+                            <div className="size-2 rounded-full bg-muted-foreground/30" />
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-medium whitespace-nowrap transition-colors duration-200 ${
+                          isCurrent
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : isCompleted
+                              ? 'text-muted-foreground'
+                              : 'text-muted-foreground/40'
+                        }`}>
+                          {step.label}
+                        </span>
+                      </div>
+                      {idx < 3 && (
+                        <div className={`w-6 sm:w-10 lg:w-16 h-0.5 mx-1 mt-[-12px] rounded-full transition-colors duration-200 ${
+                          isCompleted || (isCurrent && idx === 0)
+                            ? 'bg-gradient-to-r from-emerald-400 to-emerald-400'
+                            : 'bg-border'
+                        }`} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Tabs de navegação with emerald underline */}
+              <Tabs value={detailTab} onValueChange={(v) => setDetailTab(v as 'info' | 'notes' | 'timeline')} className="mt-1">
+                <TabsList className="w-full grid grid-cols-3 h-10 relative">
+                  <TabsTrigger value="info" className="text-xs data-[state=active]:bg-emerald-100 dark:data-[state=active]:bg-emerald-950/40 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-emerald-500">
                     <FileText className="size-3 mr-1" />
                     Informações
                   </TabsTrigger>
-                  <TabsTrigger value="notes" className="text-xs data-[state=active]:bg-emerald-100 dark:data-[state=active]:bg-emerald-950/40 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm">
+                  <TabsTrigger value="notes" className="text-xs data-[state=active]:bg-emerald-100 dark:data-[state=active]:bg-emerald-950/40 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-emerald-500">
                     <MessageSquare className="size-3 mr-1" />
                     Notas
                   </TabsTrigger>
-                  <TabsTrigger value="timeline" className="text-xs data-[state=active]:bg-emerald-100 dark:data-[state=active]:bg-emerald-950/40 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm">
+                  <TabsTrigger value="timeline" className="text-xs data-[state=active]:bg-emerald-100 dark:data-[state=active]:bg-emerald-950/40 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-emerald-500">
                     <History className="size-3 mr-1" />
                     Timeline
                   </TabsTrigger>
@@ -1052,23 +1128,44 @@ export function ProcessesView() {
               </AnimatePresence>
               </div>
 
-              <DialogFooter className="gap-2 sm:gap-0">
-                {detailProcess.status === 'ACTIVE' && (
+              <DialogFooter className="gap-2 sm:gap-0 flex-row sm:flex-row justify-between border-t pt-4 mt-2">
+                <div className="flex items-center gap-2">
                   <Button
-                    variant="destructive"
-                    onClick={() => {
-                      setCloseProcess(detailProcess);
-                      setDetailOpen(false);
-                      setCloseOpen(true);
-                    }}
-                    className="active:scale-[0.98]"
+                    variant="outline"
+                    size="sm"
+                    className="active:scale-[0.98] transition-all hover:border-emerald-300 dark:hover:border-emerald-700"
+                    onClick={() => setDetailOpen(false)}
                   >
-                    Encerrar Processo
+                    Fechar
                   </Button>
-                )}
-                <Button variant="outline" onClick={() => setDetailOpen(false)} className="active:scale-[0.98]">
-                  Fechar
-                </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  {detailProcess.status === 'ACTIVE' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-amber-600 border-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950/30 active:scale-[0.98] transition-all"
+                      onClick={() => {
+                        setCloseProcess(detailProcess);
+                        setDetailOpen(false);
+                        setCloseOpen(true);
+                      }}
+                    >
+                      Encerrar
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all"
+                    onClick={() => {
+                      setDetailOpen(false);
+                      toast.info('Funcionalidade de edição em breve.');
+                    }}
+                  >
+                    <Pencil className="size-3.5 mr-1" />
+                    Editar
+                  </Button>
+                </div>
               </DialogFooter>
             </>
           )}

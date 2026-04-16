@@ -21,6 +21,7 @@ import {
   Sparkles,
   ListTodo,
   Zap,
+  Scale,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth.store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,6 +56,7 @@ import {
 } from 'recharts';
 import { statsApi, processesApi, type DashboardStats, type ProcessRecord, profileApi } from '@/lib/api-client';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
+import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { differenceInDays } from 'date-fns';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -120,6 +122,28 @@ const priorityChartConfig: ChartConfig = {
   high: { label: 'Alta', color: 'hsl(25, 95%, 53%)' },
   medium: { label: 'Média', color: 'hsl(38, 92%, 50%)' },
   low: { label: 'Baixa', color: 'hsl(215, 14%, 34%)' },
+};
+
+const areaChartConfig: ChartConfig = {
+  civil: { label: 'Civil', color: 'hsl(142, 76%, 36%)' },
+  penal: { label: 'Penal', color: 'hsl(0, 72%, 51%)' },
+  comercial: { label: 'Comercial', color: 'hsl(38, 92%, 50%)' },
+  trabalho: { label: 'Trabalho', color: 'hsl(187, 92%, 43%)' },
+  familia: { label: 'Família', color: 'hsl(330, 65%, 55%)' },
+  fiscal: { label: 'Fiscal', color: 'hsl(25, 95%, 53%)' },
+  administrativo: { label: 'Administrativo', color: 'hsl(215, 14%, 34%)' },
+  constitucional: { label: 'Constitucional', color: 'hsl(270, 60%, 55%)' },
+};
+
+const AREA_LABELS: Record<string, string> = {
+  CIVIL: 'Civil',
+  PENAL: 'Penal',
+  COMERCIAL: 'Comercial',
+  TRABALHO: 'Trabalho',
+  FAMILIA: 'Família',
+  FISCAL: 'Fiscal',
+  ADMINISTRATIVO: 'Administrativo',
+  CONSTITUCIONAL: 'Constitucional',
 };
 
 // ─────────────────────────────────────────
@@ -369,6 +393,23 @@ export function DashboardHome() {
     ].filter((d) => d.value > 0);
   }, [allProcesses]);
 
+  // ── Chart data: Area distribution ──
+  const areaChartData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of allProcesses) {
+      if (p.area) {
+        counts[p.area.toLowerCase()] = (counts[p.area.toLowerCase()] ?? 0) + 1;
+      }
+    }
+    const entries = Object.entries(counts).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    return entries.map(([key, value]) => ({
+      name: key,
+      value,
+      label: AREA_LABELS[key.toUpperCase()] ?? key,
+      fill: areaChartConfig[key as keyof typeof areaChartConfig]?.color ?? 'hsl(215, 14%, 34%)',
+    }));
+  }, [allProcesses]);
+
   // ── Chart data: Monthly activity (last 6 months) ──
   const activityData = useMemo(() => {
     const months: Array<{ label: string; processes: number; documents: number }> = [];
@@ -433,6 +474,11 @@ export function DashboardHome() {
       `Tem ${activeProcesses} processo${activeProcesses !== 1 ? 's' : ''} activo${activeProcesses !== 1 ? 's' : ''} e ${upcomingDeadlines} prazo${upcomingDeadlines !== 1 ? 's' : ''} próximo${upcomingDeadlines !== 1 ? 's' : ''}.`
     );
   }, [stats]);
+
+  // Show full-page skeleton while initial data loads
+  if (statsLoading && !stats) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="space-y-6 relative">
@@ -587,26 +633,35 @@ export function DashboardHome() {
                 />
               ) : (
                 <div className="flex items-center gap-4">
-                  <ChartContainer config={statusChartConfig} className="w-[140px] h-[140px] shrink-0">
-                    <PieChart>
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Pie
-                        data={statusData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={35}
-                        outerRadius={65}
-                        strokeWidth={2}
-                        stroke="var(--background)"
-                      >
-                        {statusData.map((entry) => (
-                          <Cell key={entry.name} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ChartContainer>
+                  <div className="w-[140px] h-[140px] shrink-0 relative">
+                    <ChartContainer config={statusChartConfig} className="w-full h-full">
+                      <PieChart>
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Pie
+                          data={statusData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={35}
+                          outerRadius={65}
+                          strokeWidth={2}
+                          stroke="var(--background)"
+                        >
+                          {statusData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ChartContainer>
+                    {/* Center label showing total */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-xl font-bold text-foreground">
+                        <AnimatedCounter target={statusData.reduce((s, d) => s + d.value, 0)} />
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">total</span>
+                    </div>
+                  </div>
                   <div className="flex-1 space-y-2">
                     {statusData.map((entry) => (
                       <div key={entry.name} className="flex items-center justify-between">
@@ -681,6 +736,51 @@ export function DashboardHome() {
                       <div key={entry.name} className="space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">{entry.name}</span>
+                          <span className="text-sm font-semibold">{entry.value}</span>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 0.6, ease: 'easeOut' }}
+                            className="h-full rounded-full"
+                            style={{ backgroundColor: entry.fill }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Gráfico: Distribuição por Área */}
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-purple-50/20 dark:from-background dark:to-purple-950/5 border-l-4 border-l-purple-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                <Scale className="size-4 text-purple-500" />
+                Distribuição por Área
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {processesLoading ? (
+                <ChartSkeleton />
+              ) : areaChartData.length === 0 ? (
+                <EmptyState
+                  icon={Scale}
+                  title="Sem dados por área"
+                  description="Crie processos para ver a distribuição por área jurídica."
+                />
+              ) : (
+                <div className="space-y-2.5 pt-1 max-h-[180px] overflow-y-auto">
+                  {areaChartData.map((entry) => {
+                    const maxVal = Math.max(...areaChartData.map((d) => d.value), 1);
+                    const pct = (entry.value / maxVal) * 100;
+                    return (
+                      <div key={entry.name} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">{entry.label}</span>
                           <span className="text-sm font-semibold">{entry.value}</span>
                         </div>
                         <div className="h-2.5 rounded-full bg-muted overflow-hidden">

@@ -30,6 +30,8 @@ import {
   BarChart3,
   Keyboard,
   Columns3,
+  CheckSquare,
+  Bell,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Card, CardContent } from '@/components/ui/card';
@@ -51,7 +53,7 @@ import { DeadlinesView } from '@/components/dashboard/DeadlinesView';
 import { DocumentsView } from '@/components/dashboard/DocumentsView';
 import { CalendarView } from '@/components/dashboard/CalendarView';
 import { SearchBar } from '@/components/dashboard/SearchBar';
-import { NotificationPanel } from '@/components/dashboard/NotificationPanel';
+import { NotificationBell } from '@/components/dashboard/NotificationBell';
 import { ProfileDialog } from '@/components/dashboard/ProfileDialog';
 import { FirmSettingsDialog } from '@/components/dashboard/FirmSettingsDialog';
 import { InvitationsView } from '@/components/dashboard/InvitationsView';
@@ -60,6 +62,8 @@ import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
 import { QuickActionsFAB } from '@/components/dashboard/QuickActionsFAB';
 import { OnboardingGuide } from '@/components/dashboard/OnboardingGuide';
 import { KeyboardShortcutsDialog } from '@/components/dashboard/KeyboardShortcutsDialog';
+import { TaskManager } from '@/components/dashboard/TaskManager';
+import { NotificationsCenter } from '@/components/dashboard/NotificationsCenter';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 // ─────────────────────────────────────────
@@ -67,6 +71,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 // ─────────────────────────────────────────
 type DashboardTab =
   | 'painel'
+  | 'tarefas'
   | 'processos'
   | 'quadro'
   | 'documentos'
@@ -76,7 +81,8 @@ type DashboardTab =
   | 'utilizadores'
   | 'auditoria'
   | 'convites'
-  | 'relatorios';
+  | 'relatorios'
+  | 'notificacoes';
 
 // ─────────────────────────────────────────
 // Itens de navegação
@@ -88,6 +94,7 @@ const NAV_ITEMS: Array<{
   roles?: string[];
 }> = [
   { id: 'painel', icon: LayoutDashboard, label: 'Painel' },
+  { id: 'tarefas', icon: CheckSquare, label: 'Tarefas' },
   { id: 'processos', icon: Briefcase, label: 'Processos' },
   { id: 'quadro', icon: Columns3, label: 'Quadro Kanban' },
   { id: 'documentos', icon: FileText, label: 'Documentos' },
@@ -105,6 +112,7 @@ const NAV_ITEMS: Array<{
 // ─────────────────────────────────────────
 const TAB_LABELS: Record<DashboardTab, string> = {
   painel: 'Painel de Controlo',
+  tarefas: 'Minhas Tarefas',
   processos: 'Processos Jurídicos',
   quadro: 'Quadro Kanban',
   clientes: 'Gestão de Clientes',
@@ -115,6 +123,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   auditoria: 'Trilha de Auditoria',
   convites: 'Gestão de Convites',
   relatorios: 'Relatórios e Análises',
+  notificacoes: 'Centro de Notificações',
 };
 
 // ─────────────────────────────────────────
@@ -125,6 +134,13 @@ const ROLE_LABELS: Record<string, string> = {
   ADVOGADO: 'Advogado',
   SECRETARIO: 'Secretário(a)',
   CLIENT: 'Cliente',
+};
+
+const ROLE_BADGE_COLORS: Record<string, string> = {
+  ADMIN: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+  ADVOGADO: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
+  SECRETARIO: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+  CLIENT: 'bg-gray-500/15 text-gray-400 border-gray-500/25',
 };
 
 // ─────────────────────────────────────────
@@ -184,6 +200,11 @@ export function DashboardView() {
     handleTabChange('auditoria');
   }, [handleTabChange]);
 
+  // ── Navigate to notificacoes tab ──
+  const navigateToNotificacoes = useCallback(() => {
+    handleTabChange('notificacoes');
+  }, [handleTabChange]);
+
   // ── Keyboard shortcuts hook ──
   useKeyboardShortcuts({
     onOpenShortcutsDialog: () => setShortcutsOpen(true),
@@ -216,6 +237,8 @@ export function DashboardView() {
     switch (activeTab) {
       case 'painel':
         return <DashboardHome />;
+      case 'tarefas':
+        return <TaskManager />;
       case 'processos':
         return <ProcessesView />;
       case 'quadro':
@@ -236,6 +259,8 @@ export function DashboardView() {
         return <InvitationsView />;
       case 'relatorios':
         return <ReportsView />;
+      case 'notificacoes':
+        return <NotificationsCenter />;
       default:
         return <DashboardHome />;
     }
@@ -343,7 +368,7 @@ export function DashboardView() {
                   ${sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
                   ${
                     isActive
-                      ? 'bg-emerald-500/15 text-emerald-400'
+                      ? 'bg-gradient-to-r from-emerald-500/15 to-transparent text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.12)]'
                       : 'text-gray-400 hover:bg-white/5 hover:text-white'
                   }
                 `}
@@ -352,9 +377,13 @@ export function DashboardView() {
                 {isActive && (
                   <motion.div
                     layoutId="sidebar-active-indicator"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]"
                     transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
                   />
+                )}
+                {/* Notification dot on Auditoria */}
+                {item.id === 'auditoria' && (
+                  <span className={`absolute ${sidebarCollapsed ? 'top-1 right-1' : 'top-1.5 right-1.5'} w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]`} />
                 )}
                 <item.icon className="size-4 shrink-0" />
                 {!sidebarCollapsed && <span>{item.label}</span>}
@@ -425,8 +454,8 @@ export function DashboardView() {
                     {user.full_name}
                   </p>
                   <Badge
-                    variant="secondary"
-                    className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/20 mt-0.5"
+                    variant="outline"
+                    className={`text-[10px] mt-0.5 ${ROLE_BADGE_COLORS[user.role] ?? ROLE_BADGE_COLORS.CLIENT}`}
                   >
                     {userRole}
                   </Badge>
@@ -493,8 +522,8 @@ export function DashboardView() {
                 <SearchBar onSelect={handleSearchSelect} />
               </div>
 
-              {/* Notification bell */}
-              <NotificationPanel onViewAll={navigateToAuditoria} />
+              {/* Notification bell — navigates to full notifications center */}
+              <NotificationBell onClick={navigateToNotificacoes} />
 
               {/* Toggle modo escuro */}
               {mounted && (
@@ -567,15 +596,27 @@ export function DashboardView() {
         </main>
 
         {/* Rodapé */}
-        <footer className="border-t bg-gradient-to-t from-muted/50 to-transparent px-4 sm:px-6 py-3 mt-auto">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-muted-foreground">
+        <footer className="relative border-t bg-gradient-to-t from-muted/50 to-transparent px-4 sm:px-6 py-3 mt-auto">
+          {/* Emerald gradient line at top of footer */}
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/60 to-transparent" />
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-1.5 text-xs text-muted-foreground">
             <p>
               © 2026 <span className="font-semibold text-foreground/80">LexDoc</span> — Moçambique. Todos os direitos reservados.
             </p>
             <div className="flex items-center gap-3">
-              <span>v1.0.0</span>
-              <span className="text-muted-foreground/40">•</span>
-              <span>Plataforma SaaS de Gestão Documental Jurídica</span>
+              <span className="text-[10px]">
+                Construído com <span className="text-red-500" aria-label="amor">❤️</span> em Moçambique
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold">
+                v1.0.0
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="pulse-dot absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                Online
+              </span>
             </div>
           </div>
         </footer>

@@ -118,7 +118,7 @@ export function KeyboardShortcutsDialog({
 }: KeyboardShortcutsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md sm:max-w-md p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-[95vw] sm:max-w-md p-0 gap-0 overflow-hidden">
         {/* Cabeçalho com gradiente esmeralda */}
         <div className="bg-gradient-to-br from-emerald-600 to-emerald-500 px-6 py-5">
           <DialogHeader>

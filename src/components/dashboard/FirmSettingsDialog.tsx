@@ -217,7 +217,7 @@ export function FirmSettingsDialog({ open, onOpenChange }: FirmSettingsDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-2xl max-w-[95vw] p-0 overflow-hidden max-h-[85vh] flex flex-col">
         {/* Cabeçalho visual */}
         <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 pt-6 pb-8 text-white shrink-0">
           <div className="flex items-center gap-4">

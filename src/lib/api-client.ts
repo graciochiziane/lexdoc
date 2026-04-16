@@ -674,28 +674,40 @@ export interface NoteItem {
   id: string;
   firm_id: string;
   entity_type: string;
-  entity_id: string;
+  entity_id: string | null;
   content: string;
-  is_pinned: number;
-  created_by: string;
+  is_pinned: boolean;
+  is_completed: boolean;
+  priority: string;
+  due_date: string | null;
+  created_by_id: string;
   created_at: string;
   updated_at: string;
   user_name?: string;
 }
 
 export const notesApi = {
-  list: (entityType: string, entityId: string, page?: number, limit?: number) =>
+  list: (entityType: string, entityId?: string | null, page?: number, limit?: number) =>
     apiFetch<NoteItem[]>(
-      `/notes?entity_type=${entityType}&entity_id=${entityId}${page ? `&page=${page}` : ''}${limit ? `&limit=${limit}` : ''}`,
+      `/notes?entity_type=${entityType}${entityId ? `&entity_id=${entityId}` : ''}${page ? `&page=${page}` : ''}${limit ? `&limit=${limit}` : ''}`,
     ),
   create: (data: {
     entity_type: string;
-    entity_id: string;
+    entity_id?: string | null;
     content: string;
-    is_pinned: boolean;
+    is_pinned?: boolean;
+    is_completed?: boolean;
+    priority?: string;
+    due_date?: string | null;
   }) =>
     apiFetch<NoteItem>('/notes', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: { content?: string; is_pinned?: boolean }) =>
+  update: (id: string, data: {
+    content?: string;
+    is_pinned?: boolean;
+    is_completed?: boolean;
+    priority?: string;
+    due_date?: string | null;
+  }) =>
     apiFetch<NoteItem>(`/notes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   remove: (id: string) =>
     apiFetch<{ id: string; deleted: boolean }>(`/notes/${id}`, { method: 'DELETE' }),

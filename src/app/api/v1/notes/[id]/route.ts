@@ -1,15 +1,15 @@
 // ═══════════════════════════════════════════════════════════════
-// LEXDOC — API de Notas: PATCH (actualizar) e DELETE (eliminar)
+// LEXDOC — API de Notas/Tarefas: PATCH (actualizar) e DELETE (eliminar)
 // Rotas: PATCH /api/v1/notes/[id], DELETE /api/v1/notes/[id]
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
-import { getNoteById, updateNote, deleteNote } from '@/lib/notes-db';
+import { getNoteById, updateNote, deleteNote, VALID_PRIORITIES } from '@/lib/notes-db';
 import { logAudit } from '@/lib/audit';
 
 // ─────────────────────────────────────────
-// PATCH: Actualizar nota
+// PATCH: Actualizar nota/tarefa
 // ─────────────────────────────────────────
 export async function PATCH(
   request: NextRequest,
@@ -31,7 +31,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { content, is_pinned } = body;
+    const { content, is_pinned, is_completed, priority, due_date } = body;
 
     if (content !== undefined) {
       if (typeof content !== 'string' || content.trim().length < 1) {
@@ -48,9 +48,26 @@ export async function PATCH(
       }
     }
 
-    const updateData: { content?: string; is_pinned?: boolean } = {};
+    if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: `Prioridade inválida. Use: ${VALID_PRIORITIES.join(', ')}` } },
+        { status: 400 },
+      );
+    }
+
+    const updateData: {
+      content?: string;
+      is_pinned?: boolean;
+      is_completed?: boolean;
+      priority?: string;
+      due_date?: string | null;
+    } = {};
+
     if (content !== undefined) updateData.content = content.trim();
     if (is_pinned !== undefined) updateData.is_pinned = !!is_pinned;
+    if (is_completed !== undefined) updateData.is_completed = !!is_completed;
+    if (priority !== undefined) updateData.priority = priority;
+    if (due_date !== undefined) updateData.due_date = due_date;
 
     const updated = await updateNote(id, auth.payload.firm_id, updateData);
 
@@ -61,7 +78,7 @@ export async function PATCH(
       action: 'NOTE_UPDATED',
       entity_type: existing.entity_type.toUpperCase(),
       entity_id: existing.entity_id,
-      old_values: { note_id: id, content: existing.content, is_pinned: !!existing.is_pinned },
+      old_values: { note_id: id, content: existing.content, is_pinned: existing.is_pinned, is_completed: existing.is_completed, priority: existing.priority },
       new_values: updateData,
       ip_address: request.headers.get('x-forwarded-for') ?? undefined,
       user_agent: request.headers.get('user-agent') ?? undefined,
@@ -77,7 +94,7 @@ export async function PATCH(
 }
 
 // ─────────────────────────────────────────
-// DELETE: Eliminar nota
+// DELETE: Eliminar nota/tarefa
 // ─────────────────────────────────────────
 export async function DELETE(
   request: NextRequest,

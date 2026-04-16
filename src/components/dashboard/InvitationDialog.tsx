@@ -158,7 +158,7 @@ export function InvitationDialog({ open, onOpenChange }: InvitationDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-md max-w-[95vw] p-0 overflow-hidden">
         <AnimatePresence mode="wait">
           {createdInvitation ? (
             /* ───── Estado de sucesso ───── */

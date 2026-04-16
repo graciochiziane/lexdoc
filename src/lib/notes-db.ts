@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-// LEXDOC — Notas: Sistema autónomo com tabela SQLite via raw SQL
-// Utiliza a mesma connection Prisma (mesma base de dados SQLite)
+// LEXDOC — Notas/Tarefas: CRUD via Prisma ORM
+// Suporta entity_type: "process" | "client" | "deadline" | "general"
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from '@/lib/db';
@@ -11,11 +11,14 @@ import { db } from '@/lib/db';
 export interface NoteRecord {
   id: string;
   firm_id: string;
-  entity_type: 'process' | 'client' | 'deadline';
-  entity_id: string;
+  entity_type: string;
+  entity_id: string | null;
   content: string;
-  is_pinned: number; // 0 | 1
-  created_by: string;
+  is_pinned: boolean;
+  is_completed: boolean;
+  priority: string;
+  due_date: string | null;
+  created_by_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -25,30 +28,10 @@ export interface NoteWithUser extends NoteRecord {
 }
 
 // ─────────────────────────────────────────
-// Criação automática da tabela
+// Tipos válidos
 // ─────────────────────────────────────────
-const CREATE_TABLE = `
-CREATE TABLE IF NOT EXISTS notes (
-  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(8)))),
-  firm_id TEXT NOT NULL,
-  entity_type TEXT NOT NULL CHECK(entity_type IN ('process', 'client', 'deadline')),
-  entity_id TEXT NOT NULL,
-  content TEXT NOT NULL DEFAULT '',
-  is_pinned INTEGER NOT NULL DEFAULT 0,
-  created_by TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_notes_firm_entity ON notes(firm_id, entity_type, entity_id);
-`;
-
-let initialized = false;
-
-async function ensureTable() {
-  if (initialized) return;
-  await db.$executeRawUnsafe(CREATE_TABLE);
-  initialized = true;
-}
+export const VALID_ENTITY_TYPES = ['process', 'client', 'deadline', 'general'];
+export const VALID_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 
 // ─────────────────────────────────────────
 // CRUD Operations
@@ -57,102 +40,183 @@ async function ensureTable() {
 export async function createNote(data: {
   firm_id: string;
   entity_type: string;
-  entity_id: string;
+  entity_id?: string | null;
   content: string;
   is_pinned: boolean;
+  is_completed?: boolean;
+  priority?: string;
+  due_date?: string | null;
   created_by: string;
-}): Promise<NoteRecord> {
-  await ensureTable();
-  const result = await db.$queryRawUnsafe<NoteRecord[]>(
-    `INSERT INTO notes (firm_id, entity_type, entity_id, content, is_pinned, created_by)
-     VALUES (?, ?, ?, ?, ?, ?)
-     RETURNING *`,
-    data.firm_id,
-    data.entity_type,
-    data.entity_id,
-    data.content,
-    data.is_pinned ? 1 : 0,
-    data.created_by,
-  );
-  return result[0];
+}): Promise<NoteWithUser> {
+  const note = await db.note.create({
+    data: {
+      firm_id: data.firm_id,
+      entity_type: data.entity_type,
+      entity_id: data.entity_id ?? null,
+      content: data.content,
+      is_pinned: data.is_pinned,
+      is_completed: data.is_completed ?? false,
+      priority: data.priority ?? 'low',
+      due_date: data.due_date ? new Date(data.due_date) : null,
+      created_by_id: data.created_by,
+    },
+    include: {
+      created_by: { select: { full_name: true } },
+    },
+  });
+
+  return {
+    id: note.id,
+    firm_id: note.firm_id,
+    entity_type: note.entity_type,
+    entity_id: note.entity_id,
+    content: note.content,
+    is_pinned: note.is_pinned,
+    is_completed: note.is_completed,
+    priority: note.priority,
+    due_date: note.due_date?.toISOString() ?? null,
+    created_by_id: note.created_by_id,
+    created_at: note.created_at.toISOString(),
+    updated_at: note.updated_at.toISOString(),
+    user_name: note.created_by.full_name,
+  };
 }
 
 export async function listNotes(params: {
   firm_id: string;
   entity_type: string;
-  entity_id: string;
+  entity_id?: string | null;
+  created_by_id?: string;
   page?: number;
   limit?: number;
 }): Promise<{ notes: NoteWithUser[]; total: number }> {
-  await ensureTable();
   const page = params.page ?? 1;
   const limit = params.limit ?? 50;
   const skip = (page - 1) * limit;
 
-  const rows = await db.$queryRawUnsafe<(NoteWithUser & { total_count: number })[]>(
-    `SELECT n.*, u.full_name as user_name, COUNT(*) OVER() as total_count
-     FROM notes n
-     LEFT JOIN users u ON n.created_by = u.id
-     WHERE n.firm_id = ? AND n.entity_type = ? AND n.entity_id = ?
-     ORDER BY n.is_pinned DESC, n.updated_at DESC
-     LIMIT ? OFFSET ?`,
-    params.firm_id,
-    params.entity_type,
-    params.entity_id,
-    limit,
-    skip,
-  );
+  const where: Record<string, unknown> = {
+    firm_id: params.firm_id,
+    entity_type: params.entity_type,
+  };
 
-  const total = rows.length > 0 ? rows[0].total_count : 0;
-  const notes = rows.map(({ total_count: _tc, ...note }) => note);
+  // For general type, optionally filter by created_by_id (personal tasks)
+  if (params.entity_type === 'general' && params.created_by_id) {
+    where.created_by_id = params.created_by_id;
+  } else if (params.entity_id) {
+    where.entity_id = params.entity_id;
+  }
 
-  return { notes, total };
+  const [notes, total] = await Promise.all([
+    db.note.findMany({
+      where,
+      include: {
+        created_by: { select: { full_name: true } },
+      },
+      orderBy: [
+        { is_pinned: 'desc' },
+        { is_completed: 'asc' },
+        { priority: 'desc' },
+        { updated_at: 'desc' },
+      ],
+      skip,
+      take: limit,
+    }),
+    db.note.count({ where }),
+  ]);
+
+  return {
+    notes: notes.map((note) => ({
+      id: note.id,
+      firm_id: note.firm_id,
+      entity_type: note.entity_type,
+      entity_id: note.entity_id,
+      content: note.content,
+      is_pinned: note.is_pinned,
+      is_completed: note.is_completed,
+      priority: note.priority,
+      due_date: note.due_date?.toISOString() ?? null,
+      created_by_id: note.created_by_id,
+      created_at: note.created_at.toISOString(),
+      updated_at: note.updated_at.toISOString(),
+      user_name: note.created_by.full_name,
+    })),
+    total,
+  };
 }
 
 export async function getNoteById(id: string, firm_id: string): Promise<NoteRecord | null> {
-  await ensureTable();
-  const result = await db.$queryRawUnsafe<NoteRecord[]>(
-    `SELECT * FROM notes WHERE id = ? AND firm_id = ?`,
-    id,
-    firm_id,
-  );
-  return result[0] ?? null;
+  const note = await db.note.findFirst({
+    where: { id, firm_id },
+  });
+  if (!note) return null;
+
+  return {
+    id: note.id,
+    firm_id: note.firm_id,
+    entity_type: note.entity_type,
+    entity_id: note.entity_id,
+    content: note.content,
+    is_pinned: note.is_pinned,
+    is_completed: note.is_completed,
+    priority: note.priority,
+    due_date: note.due_date?.toISOString() ?? null,
+    created_by_id: note.created_by_id,
+    created_at: note.created_at.toISOString(),
+    updated_at: note.updated_at.toISOString(),
+  };
 }
 
 export async function updateNote(
   id: string,
   firm_id: string,
-  data: { content?: string; is_pinned?: boolean },
-): Promise<NoteRecord | null> {
-  await ensureTable();
-  const sets: string[] = ["updated_at = datetime('now')"];
-  const values: unknown[] = [];
+  data: {
+    content?: string;
+    is_pinned?: boolean;
+    is_completed?: boolean;
+    priority?: string;
+    due_date?: string | null;
+  },
+): Promise<NoteWithUser | null> {
+  const updateData: Record<string, unknown> = { updated_at: new Date() };
 
-  if (data.content !== undefined) {
-    sets.push('content = ?');
-    values.push(data.content);
+  if (data.content !== undefined) updateData.content = data.content;
+  if (data.is_pinned !== undefined) updateData.is_pinned = data.is_pinned;
+  if (data.is_completed !== undefined) updateData.is_completed = data.is_completed;
+  if (data.priority !== undefined) updateData.priority = data.priority;
+  if (data.due_date !== undefined) {
+    updateData.due_date = data.due_date ? new Date(data.due_date) : null;
   }
-  if (data.is_pinned !== undefined) {
-    sets.push('is_pinned = ?');
-    values.push(data.is_pinned ? 1 : 0);
-  }
 
-  if (sets.length === 1) return getNoteById(id, firm_id);
+  const note = await db.note.update({
+    where: { id },
+    data: updateData,
+    include: {
+      created_by: { select: { full_name: true } },
+    },
+  });
 
-  values.push(id, firm_id);
-  await db.$executeRawUnsafe(
-    `UPDATE notes SET ${sets.join(', ')} WHERE id = ? AND firm_id = ?`,
-    ...values,
-  );
-  return getNoteById(id, firm_id);
+  return {
+    id: note.id,
+    firm_id: note.firm_id,
+    entity_type: note.entity_type,
+    entity_id: note.entity_id,
+    content: note.content,
+    is_pinned: note.is_pinned,
+    is_completed: note.is_completed,
+    priority: note.priority,
+    due_date: note.due_date?.toISOString() ?? null,
+    created_by_id: note.created_by_id,
+    created_at: note.created_at.toISOString(),
+    updated_at: note.updated_at.toISOString(),
+    user_name: note.created_by.full_name,
+  };
 }
 
 export async function deleteNote(id: string, firm_id: string): Promise<boolean> {
-  await ensureTable();
-  const result = await db.$executeRawUnsafe(
-    `DELETE FROM notes WHERE id = ? AND firm_id = ?`,
-    id,
-    firm_id,
-  );
-  return (result as unknown as { count: number }).count > 0;
+  try {
+    await db.note.deleteMany({ where: { id, firm_id } });
+    return true;
+  } catch {
+    return false;
+  }
 }
