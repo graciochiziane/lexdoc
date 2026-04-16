@@ -18,7 +18,11 @@ import {
   Clock,
   AlertTriangle,
   ChevronRight,
+  Sparkles,
+  ListTodo,
+  Zap,
 } from 'lucide-react';
+import { useAuthStore } from '@/stores/auth.store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,7 +53,7 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from 'recharts';
-import { statsApi, processesApi, type DashboardStats, type ProcessRecord } from '@/lib/api-client';
+import { statsApi, processesApi, type DashboardStats, type ProcessRecord, profileApi } from '@/lib/api-client';
 import { differenceInDays } from 'date-fns';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -383,8 +387,107 @@ export function DashboardHome() {
     });
   }, [stats]);
 
+  // ── Welcome card data ──
+  const user = useAuthStore((s) => s.user);
+  const [greeting, setGreeting] = useState('Bom dia');
+  const [welcomeMessage, setWelcomeMessage] = useState('');
+
+  const { data: profileData } = useQuery({
+    queryKey: ['profile', 'welcome'],
+    queryFn: () => profileApi.get(),
+    staleTime: 60 * 1000,
+  });
+  const firmName = profileData?.data?.firm?.name ?? user ? '' : '';
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 12) setGreeting('Bom dia');
+    else if (hour >= 12 && hour < 18) setGreeting('Boa tarde');
+    else setGreeting('Boa noite');
+  }, []);
+
+  useEffect(() => {
+    if (!stats) return;
+    const activeProcesses = stats.active_processes ?? 0;
+    const upcomingDeadlines = stats.upcoming_deadlines ?? 0;
+    setWelcomeMessage(
+      `Tem ${activeProcesses} processo${activeProcesses !== 1 ? 's' : ''} activo${activeProcesses !== 1 ? 's' : ''} e ${upcomingDeadlines} prazo${upcomingDeadlines !== 1 ? 's' : ''} próximo${upcomingDeadlines !== 1 ? 's' : ''}.`
+    );
+  }, [stats]);
+
   return (
     <div className="space-y-6">
+      {/* Welcome Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white">
+          {/* Decorative pattern */}
+          <div className="absolute inset-0 opacity-10" style={{
+            backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+            backgroundSize: '24px 24px',
+          }} />
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full" />
+          <div className="absolute -bottom-8 -right-20 w-24 h-24 bg-white/5 rounded-full" />
+          <CardContent className="relative z-10 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-emerald-100 text-sm flex items-center gap-1.5">
+                  <Sparkles className="size-3.5" />
+                  {greeting}
+                </p>
+                <h2 className="text-xl sm:text-2xl font-bold">
+                  {user?.full_name ?? 'Utilizador'}!
+                </h2>
+                <p className="text-emerald-50/90 text-sm mt-1">
+                  {profileData?.data?.firm?.name && (
+                    <>{profileData.data.firm.name} —{' '}</>
+                  )}
+                  {welcomeMessage || 'Bem-vindo ao LexDoc.'}
+                </p>
+              </div>
+              <div className="hidden sm:flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-3 py-1.5">
+                <Zap className="size-4 text-amber-200" />
+                <span className="text-xs font-medium">Painel</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Quick Stats Row */}
+      {!statsLoading && stats && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className="flex flex-wrap gap-3"
+        >
+          <div className="flex items-center gap-2 bg-background border rounded-full px-4 py-2 shadow-sm">
+            <ListTodo className="size-4 text-emerald-500" />
+            <span className="text-sm text-muted-foreground">Hoje:</span>
+            <span className="text-sm font-semibold">{stats.upcoming_deadlines} tarefas</span>
+          </div>
+          <div className="flex items-center gap-2 bg-background border rounded-full px-4 py-2 shadow-sm">
+            <Calendar className="size-4 text-amber-500" />
+            <span className="text-sm text-muted-foreground">Esta semana:</span>
+            <span className="text-sm font-semibold">{stats.upcoming_deadlines} prazos</span>
+          </div>
+          <div className="flex items-center gap-2 bg-background border rounded-full px-4 py-2 shadow-sm">
+            <Briefcase className="size-4 text-cyan-500" />
+            <span className="text-sm text-muted-foreground">Activos:</span>
+            <span className="text-sm font-semibold">{stats.active_processes} processos</span>
+          </div>
+          <div className="flex items-center gap-2 bg-background border rounded-full px-4 py-2 shadow-sm">
+            <FileText className="size-4 text-purple-500" />
+            <span className="text-sm text-muted-foreground">Documentos:</span>
+            <span className="text-sm font-semibold">{stats.total_documents}</span>
+          </div>
+        </motion.div>
+      )}
+
       {/* Cabeçalho com hora */}
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Painel de Controlo</h2>

@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -136,6 +136,13 @@ export function DocumentsView() {
   const limit = 10;
 
   const [createOpen, setCreateOpen] = useState(false);
+
+  // ── Listen for FAB create event ──
+  useEffect(() => {
+    const handler = () => setCreateOpen(true);
+    window.addEventListener('lexdoc:open-create', handler);
+    return () => window.removeEventListener('lexdoc:open-create', handler);
+  }, []);
   const [createForm, setCreateForm] = useState(EMPTY_FORM);
   const [editOpen, setEditOpen] = useState(false);
   const [editDocument, setEditDocument] = useState<DocumentRecord | null>(null);

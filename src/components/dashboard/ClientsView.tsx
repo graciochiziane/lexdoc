@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -17,6 +17,7 @@ import {
   Loader2,
   Building2,
   User,
+  Download,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { clientsApi, type ClientRecord } from '@/lib/api-client';
+import { clientsApi, exportApi, type ClientRecord } from '@/lib/api-client';
 
 // ─────────────────────────────────────────
 // Constantes
@@ -115,6 +116,13 @@ export function ClientsView() {
 
   // ── Diálogo de criação ──
   const [createOpen, setCreateOpen] = useState(false);
+
+  // ── Listen for FAB create event ──
+  useEffect(() => {
+    const handler = () => setCreateOpen(true);
+    window.addEventListener('lexdoc:open-create', handler);
+    return () => window.removeEventListener('lexdoc:open-create', handler);
+  }, []);
   const [createForm, setCreateForm] = useState(EMPTY_FORM);
 
   // ── Diálogo de edição ──
@@ -178,6 +186,28 @@ export function ClientsView() {
     },
   });
 
+  // ── Export CSV ──
+  const [exporting, setExporting] = useState(false);
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const blob = await exportApi.clients();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `clientes_lexdoc_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Exportação concluída!');
+    } catch {
+      toast.error('Erro ao exportar dados.');
+    } finally {
+      setExporting(false);
+    }
+  }, []);
+
   // ── Handlers ──
   const handleSearch = useCallback((value: string) => {
     setSearch(value);
@@ -223,13 +253,25 @@ export function ClientsView() {
             {meta?.total ?? 0} clientes registados
           </p>
         </div>
-        <Button
-          onClick={() => setCreateOpen(true)}
-          className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98] transition-all"
-        >
-          <Plus className="size-4" />
-          Novo Cliente
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={exporting}
+            className="active:scale-[0.98] transition-all"
+          >
+            {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+            <span className="hidden sm:inline ml-2">Exportar CSV</span>
+          </Button>
+          <Button
+            onClick={() => setCreateOpen(true)}
+            className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98] transition-all"
+          >
+            <Plus className="size-4" />
+            Novo Cliente
+          </Button>
+        </div>
       </div>
 
       {/* Pesquisa */}

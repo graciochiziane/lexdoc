@@ -448,3 +448,162 @@ export const profileApi = {
   changePassword: (data: { current_password: string; new_password: string; confirm_password: string }) =>
     apiFetch<{ message: string }>('/profile/password', { method: 'PATCH', body: JSON.stringify(data) }),
 };
+
+// ─────────────────────────────────────────
+// API de Relatórios
+// ─────────────────────────────────────────
+export interface ReportOverviewData {
+  firm: {
+    name: string;
+    plan: string;
+    member_count: number;
+    created_at: string;
+    age_days: number;
+  };
+  processes: {
+    total: number;
+    active: number;
+    suspended: number;
+    closed: number;
+    by_area: Record<string, number>;
+    by_priority: Record<string, number>;
+    avg_per_month: number;
+    this_month: number;
+    last_month: number;
+  };
+  clients: {
+    total: number;
+    by_type: Record<string, number>;
+    new_this_month: number;
+  };
+  documents: {
+    total: number;
+    by_status: Record<string, number>;
+    total_size_bytes: number;
+    confidential_count: number;
+  };
+  deadlines: {
+    total: number;
+    overdue: number;
+    completed: number;
+    upcoming_7d: number;
+    upcoming_30d: number;
+  };
+  activity: {
+    total_audit_entries: number;
+    most_active_users: Array<{ name: string; actions_count: number }>;
+    recent_actions_by_type: Record<string, number>;
+  };
+}
+
+export const reportsApi = {
+  overview: () => apiFetch<ReportOverviewData>('/reports/overview'),
+};
+
+// ─────────────────────────────────────────
+// API de Configurações do Escritório
+// ─────────────────────────────────────────
+export interface FirmSettings {
+  id: string;
+  name: string;
+  slug: string;
+  nif: string | null;
+  oam_number: string | null;
+  is_active: boolean;
+  plan: string;
+  created_at: string;
+  member_count: number;
+}
+
+interface FirmMember {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export const firmApi = {
+  settings: {
+    get: () => apiFetch<FirmSettings>('/firm/settings'),
+    update: (data: { name?: string; nif?: string; oam_number?: string }) =>
+      apiFetch<FirmSettings>('/firm/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  members: (params?: string) =>
+    apiFetch<FirmMember[]>(`/firm/members${params ? `?${params}` : ''}`),
+};
+
+// ─────────────────────────────────────────
+// API de Convites
+// ─────────────────────────────────────────
+export interface InvitationRecord {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  status: string;
+}
+
+export interface CreateInvitationData {
+  email: string;
+  role: string;
+  full_name?: string;
+}
+
+export interface InvitationResult {
+  id: string;
+  email: string;
+  role: string;
+  token: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface ValidateInvitationData {
+  firm_name: string;
+  email: string;
+  role: string;
+  expires_at: string;
+}
+
+export const invitationsApi = {
+  create: (data: CreateInvitationData) =>
+    apiFetch<InvitationResult>('/invitations', { method: 'POST', body: JSON.stringify(data) }),
+  list: (params?: string) =>
+    apiFetch<InvitationRecord[]>(`/invitations${params ? `?${params}` : ''}`),
+  validate: (token: string) =>
+    apiFetch<ValidateInvitationData>(`/invitations/${token}`),
+  accept: (token: string, data: { full_name: string; password: string; password_confirmation: string }) =>
+    apiFetch<{ access_token: string; refresh_token: string; user: { id: string; email: string; role: string; firm_id: string; full_name: string } }>(
+      `/invitations/${token}/accept`,
+      { method: 'POST', body: JSON.stringify(data) },
+    ),
+  revoke: (token: string) =>
+    apiFetch<{ message: string }>(`/invitations/${token}`, { method: 'DELETE' }),
+};
+
+// ─────────────────────────────────────────
+// API de Exportação CSV
+// ─────────────────────────────────────────
+async function apiFetchBlob(endpoint: string): Promise<Blob> {
+  const { accessToken } = useAuthStore.getState();
+  const headers: HeadersInit = {
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  };
+
+  const response = await fetch(`${API_BASE}${endpoint}`, { headers });
+  if (!response.ok) {
+    throw new Error('Erro ao exportar dados.');
+  }
+  return response.blob();
+}
+
+export const exportApi = {
+  clients: () => apiFetchBlob('/export/clients?format=csv'),
+  processes: () => apiFetchBlob('/export/processes?format=csv'),
+  audit: () => apiFetchBlob('/export/audit?format=csv'),
+};

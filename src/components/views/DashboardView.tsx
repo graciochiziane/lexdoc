@@ -25,6 +25,9 @@ import {
   Clock,
   Sun,
   Moon,
+  Settings,
+  UserPlus,
+  BarChart3,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Card, CardContent } from '@/components/ui/card';
@@ -48,6 +51,10 @@ import { CalendarView } from '@/components/dashboard/CalendarView';
 import { SearchBar } from '@/components/dashboard/SearchBar';
 import { NotificationPanel } from '@/components/dashboard/NotificationPanel';
 import { ProfileDialog } from '@/components/dashboard/ProfileDialog';
+import { FirmSettingsDialog } from '@/components/dashboard/FirmSettingsDialog';
+import { InvitationsView } from '@/components/dashboard/InvitationsView';
+import { ReportsView } from '@/components/dashboard/ReportsView';
+import { QuickActionsFAB } from '@/components/dashboard/QuickActionsFAB';
 
 // ─────────────────────────────────────────
 // Tipos
@@ -55,12 +62,14 @@ import { ProfileDialog } from '@/components/dashboard/ProfileDialog';
 type DashboardTab =
   | 'painel'
   | 'processos'
+  | 'documentos'
   | 'clientes'
-  | 'utilizadores'
   | 'prazos'
   | 'calendario'
-  | 'documentos'
-  | 'auditoria';
+  | 'utilizadores'
+  | 'auditoria'
+  | 'convites'
+  | 'relatorios';
 
 // ─────────────────────────────────────────
 // Itens de navegação
@@ -78,6 +87,8 @@ const NAV_ITEMS: Array<{
   { id: 'prazos', icon: Calendar, label: 'Prazos' },
   { id: 'calendario', icon: CalendarDays, label: 'Calendário' },
   { id: 'utilizadores', icon: UserCog, label: 'Utilizadores', roles: ['ADMIN', 'ADVOGADO'] },
+  { id: 'convites', icon: UserPlus, label: 'Convites', roles: ['ADMIN'] },
+  { id: 'relatorios', icon: BarChart3, label: 'Relatórios', roles: ['ADMIN', 'ADVOGADO'] },
   { id: 'auditoria', icon: Shield, label: 'Auditoria', roles: ['ADMIN', 'ADVOGADO'] },
 ];
 
@@ -93,6 +104,8 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   calendario: 'Calendário de Prazos',
   documentos: 'Gestão de Documentos',
   auditoria: 'Trilha de Auditoria',
+  convites: 'Gestão de Convites',
+  relatorios: 'Relatórios e Análises',
 };
 
 // ─────────────────────────────────────────
@@ -143,6 +156,7 @@ export function DashboardView() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [firmSettingsOpen, setFirmSettingsOpen] = useState(false);
 
   // ── Fechar sidebar mobile ao mudar de aba ──
   const handleTabChange = useCallback((tab: DashboardTab) => {
@@ -200,6 +214,10 @@ export function DashboardView() {
         return <CalendarView onNavigateToPrazos={navigateToPrazos} />;
       case 'documentos':
         return <DocumentsView />;
+      case 'convites':
+        return <InvitationsView />;
+      case 'relatorios':
+        return <ReportsView />;
       default:
         return <DashboardHome />;
     }
@@ -243,8 +261,12 @@ export function DashboardView() {
 
         {/* Logo */}
         <div className="relative flex items-center justify-between p-4 border-b border-white/10">
-          {!sidebarCollapsed && (
-            <div className="flex items-center gap-2">
+          {!sidebarCollapsed ? (
+            <button
+              onClick={() => setFirmSettingsOpen(true)}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+              title="Configurações do Escritório"
+            >
               <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
                 <span className="text-emerald-400 font-bold text-sm">LD</span>
               </div>
@@ -252,12 +274,15 @@ export function DashboardView() {
                 <span className="text-white">lex</span>
                 <span className="text-emerald-400">Doc</span>
               </span>
-            </div>
-          )}
-          {sidebarCollapsed && (
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center mx-auto">
+            </button>
+          ) : (
+            <button
+              onClick={() => setFirmSettingsOpen(true)}
+              className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center mx-auto hover:opacity-80 transition-opacity cursor-pointer"
+              title="Configurações do Escritório"
+            >
               <span className="text-emerald-400 font-bold text-sm">LD</span>
-            </div>
+            </button>
           )}
           <Button
             variant="ghost"
@@ -322,6 +347,25 @@ export function DashboardView() {
             );
           })}
         </nav>
+
+        {/* Configurações (ADMIN only, at bottom before user info) */}
+        {user.role === 'ADMIN' && (
+          <div className={`relative ${sidebarCollapsed ? 'px-2' : 'px-3'} pb-2`}>
+            <button
+              onClick={() => setFirmSettingsOpen(true)}
+              title={sidebarCollapsed ? 'Configurações' : undefined}
+              className={`
+                w-full flex items-center gap-3 rounded-lg text-sm font-medium
+                transition-all duration-150
+                ${sidebarCollapsed ? 'justify-center px-2 py-2' : 'px-3 py-2'}
+                text-gray-400 hover:bg-white/5 hover:text-white
+              `}
+            >
+              <Settings className="size-4 shrink-0" />
+              {!sidebarCollapsed && <span>Configurações</span>}
+            </button>
+          </div>
+        )}
 
         {/* Informações do utilizador */}
         <div className={`relative ${sidebarCollapsed ? 'px-2' : 'px-4'} pb-4`}>
@@ -510,6 +554,12 @@ export function DashboardView() {
 
       {/* Profile Dialog */}
       <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
+
+      {/* Firm Settings Dialog */}
+      <FirmSettingsDialog open={firmSettingsOpen} onOpenChange={setFirmSettingsOpen} />
+
+      {/* Quick Actions FAB */}
+      <QuickActionsFAB />
     </div>
   );
 }

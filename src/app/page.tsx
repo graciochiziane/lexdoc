@@ -5,7 +5,8 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { useNavStore } from '@/stores/nav.store';
@@ -14,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { LoginView } from '@/components/views/LoginView';
 import { RegisterView } from '@/components/views/RegisterView';
 import { DashboardView } from '@/components/views/DashboardView';
+import { AcceptInvitationView } from '@/components/dashboard/AcceptInvitationView';
 
 // ─────────────────────────────────────────
 // QueryClient estático para evitar recriação
@@ -34,10 +36,47 @@ function AppRouter() {
   const currentView = useNavStore((s) => s.currentView);
   const { isAuthenticated, isLoading, restoreSession } = useAuth();
 
+  // Convite token: read directly from search params (no setState in effect)
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get('invite');
+
+  // Dismissed token state (for after accept/cancel)
+  const [dismissedToken, setDismissedToken] = useState(false);
+
   // Restaurar sessão ao montar
   useEffect(() => {
     restoreSession();
   }, [restoreSession]);
+
+  // Handle invitation success → go to dashboard
+  const handleInviteSuccess = useCallback(() => {
+    setDismissedToken(true);
+    // Clear URL params
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
+  // Handle invitation cancel
+  const handleInviteCancel = useCallback(() => {
+    setDismissedToken(true);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
+  // Show accept invitation view if token present and not dismissed
+  const activeToken = inviteToken && !dismissedToken ? inviteToken : null;
+
+  if (activeToken && !isAuthenticated) {
+    return (
+      <AcceptInvitationView
+        token={activeToken}
+        onSuccess={handleInviteSuccess}
+        onCancel={handleInviteCancel}
+      />
+    );
+  }
 
   // Estado de carregamento inicial
   if (isLoading) {

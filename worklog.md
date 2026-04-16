@@ -340,3 +340,64 @@ LexDoc is a fully functional SaaS legal document management platform for Mozambi
 6. Real-time Updates: WebSocket/SSE for live notifications
 7. Mobile PWA: Service worker, offline support, push notifications
 8. Data Export: CSV/PDF export for processes, clients, audit logs
+
+---
+Task ID: 4-b
+Agent: full-stack-developer
+Task: Build Reports Dashboard, Quick Actions FAB, Enhanced Landing/Login Page, Login/Register Styling Polish
+
+Work Log:
+- Created src/app/api/v1/reports/overview/route.ts — GET /api/v1/reports/overview with comprehensive report data: firm info, process analytics (by area/priority/month), client analytics (by type), document analytics (by status/storage/confidential), deadline analytics (overdue/upcoming/completed), activity (top users, action types). All filtered by firm_id, ADMIN/ADVOGADO only.
+- Updated src/lib/api-client.ts — Added ReportOverviewData interface with full TypeScript types for all report sections, added reportsApi.overview() method
+- Created src/components/dashboard/ReportsView.tsx — Full reports dashboard with: Executive Summary Card (firm name, plan badge, member count, age), Process Analytics (area horizontal bars, priority horizontal bars, monthly comparison with % change indicator), Client Analytics (type pie chart, new clients count), Document Analytics (status donut, storage/privacy cards), Deadline Analytics (color-coded stat boxes + progress bars), Activity Section (top 5 active users with gradient bars, action type donut), Print/Export button with window.print(), responsive 2-column grid, print-friendly CSS
+- Created src/components/dashboard/QuickActionsFAB.tsx — Floating action button at bottom-right with emerald gradient, speed dial with 4 quick actions (Novo Processo/Cliente/Prazo/Documento), stagger animations, close on click-outside/Escape, mobile responsive
+- Updated src/components/dashboard/DashboardHome.tsx — Added Welcome Card (emerald gradient, time-based greeting Bom dia/Boa tarde/Boa noite, personalized with user name + firm name + motivational message with stats), Added Quick Stats Row (4 pill-shaped stats: Hoje tarefas, Esta semana prazos, Processos activos, Documentos)
+- Rewrote src/components/views/LoginView.tsx — Major visual upgrade: emerald shield+scale SVG logo replacing text logo, animated gradient background shift, CSS-only floating geometric shapes (diamond, circles, rings), grid pattern overlay, trust badges (AES-256, LGPD, 99.9% Uptime), social proof ("Mais de 500 advogados confiam no LexDoc"), gradient top border on form card, "Entrar com Google" disabled placeholder with "Em breve" badge, "ou" divider, time-based greeting
+- Rewrote src/components/views/RegisterView.tsx — Same visual enhancements as LoginView: shield logo, floating shapes, animated gradient, trust badges, social proof, gradient top border on form card
+- Updated src/components/views/DashboardView.tsx — Added 'relatorios' tab type with BarChart3 icon (ADMIN/ADVOGADO only), imported ReportsView and QuickActionsFAB, added relatórios to NAV_ITEMS, TAB_LABELS, renderContent, integrated FAB with custom event dispatch (lexdoc:open-create)
+- Updated ProcessesView, ClientsView, DeadlinesView, DocumentsView — Added useEffect listeners for 'lexdoc:open-create' custom event to open create dialogs when triggered by FAB
+- Installed date-fns-tz dependency (pre-existing build dependency)
+
+Stage Summary:
+- 33 API endpoints total (added 1 reports endpoint)
+- 12 frontend views (added ReportsView)
+- Reports Dashboard: 7 analytic sections with recharts (donut, pie, horizontal bars), print-friendly, responsive
+- Quick Actions FAB: Speed dial with 4 actions, navigates to tab + opens create dialog via custom events
+- Enhanced Login/Register: Shield logo, animated backgrounds, floating shapes, trust badges, social proof, Google login placeholder
+- Dashboard Home: Welcome card with time-based greeting + Quick Stats Row with 4 stat pills
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+
+---
+Task ID: 4-a
+Agent: full-stack-developer
+Task: Build Firm Settings, Invitations, CSV Export
+
+Work Log:
+- Created src/app/api/v1/firm/settings/route.ts — GET firm settings (name, slug, nif, oam_number, plan, is_active, member_count), PATCH update settings (ADMIN only, audit-logged)
+- Created src/app/api/v1/firm/members/route.ts — GET list firm members with search, pagination, firm_id filtering
+- Created src/app/api/v1/invitations/route.ts — POST create invitation (ADMIN only, generates UUID token, 7-day expiry, checks duplicate email/user), GET list invitations (ADMIN only, computed status PENDING/ACCEPTED/EXPIRED)
+- Created src/app/api/v1/invitations/[token]/route.ts — GET validate invitation token (public, checks expiry/already accepted), DELETE revoke invitation (ADMIN only, supports both token and ID lookup)
+- Created src/app/api/v1/invitations/[token]/accept/route.ts — POST accept invitation (public, creates user with invited role, generates JWT tokens, marks invitation as accepted, audit-logged)
+- Created src/app/api/v1/export/clients/route.ts — GET export clients CSV (ADMIN/ADVOGADO only, proper CSV escaping, Content-Disposition header, audit-logged)
+- Created src/app/api/v1/export/processes/route.ts — GET export processes CSV (same pattern)
+- Created src/app/api/v1/export/audit/route.ts — GET export audit logs CSV (same pattern)
+- Updated src/lib/api-client.ts — Added firmApi (settings get/update, members list), invitationsApi (create, list, validate, accept, revoke), exportApi (clients, processes, audit blob downloads)
+- Created src/components/dashboard/FirmSettingsDialog.tsx — Emerald gradient header, firm info fields (name, NIF, OAM, plan badge, member count), edit mode for ADMIN (name/NIF/OAM), member list with role badges, shadcn Dialog
+- Created src/components/dashboard/InvitationDialog.tsx — Create invitation form (email, role select, optional full_name), email validation, success state showing invitation details + copyable invite link
+- Created src/components/dashboard/InvitationsView.tsx — Invitations list with table (email, role badge, dates, status badge), search/pagination, revoke action, empty state with animated icon, InvitationDialog integration
+- Created src/components/dashboard/AcceptInvitationView.tsx — Token validation with loading/error states, registration form pre-filled with email, password + confirmation with strength indicator, auto-login on success, back button
+- Updated src/components/views/DashboardView.tsx — Added 'convites' tab type, UserPlus icon, NAV_ITEMS entry (ADMIN only), TAB_LABELS entry, renderContent case, Settings icon in sidebar (ADMIN only) opening FirmSettingsDialog, FirmSettingsDialog import and state
+- Updated src/app/page.tsx — Added useSearchParams for invite token detection, AcceptInvitationView rendering for unauthenticated users with valid token, handleInviteSuccess/handleInviteCancel callbacks clearing URL params
+- Updated src/components/dashboard/ClientsView.tsx — Added Export CSV button with blob download
+- Updated src/components/dashboard/ProcessesView.tsx — Added Export CSV button with blob download
+- Updated src/components/dashboard/AuditView.tsx — Added Export CSV button with blob download
+
+Stage Summary:
+- 40 API endpoints total (added 2 firm + 5 invitations + 3 export)
+- 4 new frontend components (FirmSettingsDialog, InvitationDialog, InvitationsView, AcceptInvitationView)
+- Firm Settings: View/edit dialog with emerald gradient header, member list, ADMIN-only edit mode
+- Invitation System: Full workflow — create invitation (ADMIN), receive link, accept with registration, auto-login
+- CSV Export: Blob download with Authorization headers for clients, processes, audit logs
+- 'Convites' tab visible to ADMIN only in sidebar navigation
+- Firm settings accessible from sidebar logo (all users) and Settings nav item (ADMIN)
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)

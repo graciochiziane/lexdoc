@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// LEXDOC — Vista de Registo
+// LEXDOC — Vista de Registo (Enhanced)
 // Layout dividido: painel de marca (40%) + formulário (60%)
 // Mobile: apenas formulário em ecrã completo
 // ═══════════════════════════════════════════════════════════════
@@ -7,46 +7,64 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Shield, FolderOpen, Sparkles } from 'lucide-react';
+import {
+  Shield,
+  FolderOpen,
+  Sparkles,
+  Lock,
+  Clock,
+  CheckCircle,
+} from 'lucide-react';
 import { RegisterForm } from '@/components/auth/RegisterForm';
 
 // ─────────────────────────────────────────
-// Logo SVG inline
+// Logo Component
 // ─────────────────────────────────────────
-function LexDocLogo({ className }: { className?: string }) {
+function LexDocLogo({ className, white = false }: { className?: string; white?: boolean }) {
   return (
-    <svg
-      viewBox="0 0 200 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-    >
-      <text
-        x="0"
-        y="36"
-        fontFamily="var(--font-geist-sans), sans-serif"
-        fontWeight="700"
-        fontSize="36"
-        fill="white"
-      >
-        lex
-      </text>
-      <text
-        x="60"
-        y="36"
-        fontFamily="var(--font-geist-sans), sans-serif"
-        fontWeight="700"
-        fontSize="36"
-        fill="#10b981"
-      >
-        Doc
-      </text>
-    </svg>
+    <div className={`flex items-center gap-2.5 ${className ?? ''}`}>
+      <div className="relative w-10 h-10">
+        <svg viewBox="0 0 40 40" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M20 2L4 10v10c0 9.6 6.8 18.6 16 20 9.2-1.4 16-10.4 16-20V10L20 2z"
+            fill="url(#shield-gradient-reg)"
+            opacity="0.9"
+          />
+          <line x1="15" y1="18" x2="25" y2="18" stroke={white ? '#fff' : '#0f0f1e'} strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="20" y1="12" x2="20" y2="25" stroke={white ? '#fff' : '#0f0f1e'} strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M14 22 L16 18 L14 14" stroke={white ? '#fff' : '#0f0f1e'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <path d="M26 22 L24 18 L26 14" stroke={white ? '#fff' : '#0f0f1e'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <defs>
+            <linearGradient id="shield-gradient-reg" x1="4" y1="2" x2="36" y2="32">
+              <stop offset="0%" stopColor="#10b981" />
+              <stop offset="100%" stopColor="#059669" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div className="flex items-baseline">
+        <span className={`text-xl font-bold tracking-tight ${white ? 'text-white' : 'text-foreground'}`}>
+          lex
+        </span>
+        <span className="text-xl font-bold tracking-tight text-emerald-500">
+          Doc
+        </span>
+      </div>
+    </div>
   );
 }
 
 // ─────────────────────────────────────────
-// Lista de funcionalidades (mesma do login)
+// Trust Badges
+// ─────────────────────────────────────────
+const TRUST_BADGES = [
+  { icon: Lock, label: 'Criptografia AES-256' },
+  { icon: Shield, label: 'Conformidade LGPD' },
+  { icon: Clock, label: '99.9% Uptime' },
+];
+
+// ─────────────────────────────────────────
+// Features list
 // ─────────────────────────────────────────
 const FEATURES = [
   {
@@ -67,7 +85,7 @@ const FEATURES = [
 ];
 
 // ─────────────────────────────────────────
-// Variações de animação
+// Animation variants
 // ─────────────────────────────────────────
 const fadeIn = {
   initial: { opacity: 0, y: 20 },
@@ -89,30 +107,59 @@ const staggerItem = {
 };
 
 // ─────────────────────────────────────────
-// Componente
+// Floating shapes (shared with login)
+// ─────────────────────────────────────────
+function FloatingShapes() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div
+        className="absolute top-[15%] right-[15%] w-16 h-16 border border-emerald-500/20 rotate-45"
+        style={{ animation: 'lexdoc-float-1 8s ease-in-out infinite' }}
+      />
+      <div
+        className="absolute top-[40%] left-[10%] w-8 h-8 rounded-full bg-emerald-500/10"
+        style={{ animation: 'lexdoc-float-2 6s ease-in-out infinite' }}
+      />
+      <div
+        className="absolute bottom-[25%] right-[10%] w-24 h-24 rounded-full border border-emerald-400/15"
+        style={{ animation: 'lexdoc-float-3 10s ease-in-out infinite' }}
+      />
+      <div
+        className="absolute top-[60%] right-[40%] w-3 h-3 rounded-full bg-emerald-500/30"
+        style={{ animation: 'lexdoc-float-2 5s ease-in-out infinite reverse' }}
+      />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Component
 // ─────────────────────────────────────────
 export function RegisterView() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-      {/* Painel esquerdo — marca (oculto em mobile) */}
+      {/* ── Left Panel — Branding ── */}
       <div className="hidden md:flex md:w-[40%] relative overflow-hidden bg-gradient-to-br from-[#0f0f1e] via-[#1a1a2e] to-[#16213e] flex-col justify-between p-8 lg:p-12">
-        {/* Padrão decorativo de fundo */}
-        <div className="absolute inset-0 opacity-5">
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                'radial-gradient(circle at 25% 25%, rgba(16, 185, 129, 0.3) 0%, transparent 50%), radial-gradient(circle at 75% 75%, rgba(16, 185, 129, 0.2) 0%, transparent 50%)',
-            }}
-          />
-        </div>
+        {/* Animated gradient overlay */}
+        <div className="absolute inset-0 opacity-30 animate-lexdoc-gradient-shift" />
 
-        {/* Conteúdo superior */}
-        <motion.div {...fadeIn} className="relative z-10 space-y-2">
-          <LexDocLogo className="h-10 w-auto" />
+        {/* Grid pattern overlay */}
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+            backgroundSize: '40px 40px',
+          }}
+        />
+
+        <FloatingShapes />
+
+        {/* Top — Logo */}
+        <motion.div {...fadeIn} className="relative z-10">
+          <LexDocLogo white />
         </motion.div>
 
-        {/* Conteúdo central */}
+        {/* Center content */}
         <motion.div
           {...staggerContainer}
           animate="animate"
@@ -147,30 +194,65 @@ export function RegisterView() {
               </motion.div>
             ))}
           </div>
+
+          {/* Social proof */}
+          <div className="flex items-center gap-3 pt-2">
+            <div className="flex -space-x-2">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="w-8 h-8 rounded-full bg-emerald-500/20 border-2 border-[#0f0f1e] flex items-center justify-center"
+                >
+                  <span className="text-[10px] text-emerald-400 font-semibold">
+                    {String.fromCharCode(65 + i)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <CheckCircle key={i} className="size-3 text-emerald-400 fill-emerald-400" />
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                <span className="text-white font-semibold">Mais de 500 advogados</span>{' '}
+                confiam no LexDoc
+              </p>
+            </div>
+          </div>
         </motion.div>
 
-        {/* Rodapé do painel */}
-        <motion.div {...fadeIn} className="relative z-10">
-          <p className="text-xs text-gray-500">
+        {/* Bottom — Trust badges */}
+        <motion.div {...fadeIn} className="relative z-10 space-y-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            {TRUST_BADGES.map((badge) => (
+              <div key={badge.label} className="flex items-center gap-1.5 text-gray-500">
+                <badge.icon className="size-3.5" />
+                <span className="text-[11px]">{badge.label}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-600">
             © 2026 LexDoc — Moçambique. Todos os direitos reservados.
           </p>
         </motion.div>
       </div>
 
-      {/* Painel direito — formulário */}
+      {/* ── Right Panel — Form ── */}
       <div className="flex-1 flex flex-col bg-background">
-        {/* Cabeçalho mobile */}
+        {/* Mobile header */}
         <div className="md:hidden flex items-center justify-center pt-8 pb-4">
-          <LexDocLogo className="h-8 w-auto" />
+          <LexDocLogo />
         </div>
 
-        {/* Conteúdo central */}
+        {/* Main content */}
         <motion.main
           {...fadeIn}
           className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-12"
         >
           <div className="w-full max-w-md space-y-8">
-            {/* Título */}
+            {/* Title */}
             <div className="space-y-2">
               <h2 className="text-2xl font-bold tracking-tight">Criar conta</h2>
               <p className="text-sm text-muted-foreground">
@@ -178,18 +260,58 @@ export function RegisterView() {
               </p>
             </div>
 
-            {/* Formulário */}
-            <RegisterForm />
+            {/* Form card with gradient top border */}
+            <div className="rounded-xl border shadow-lg overflow-hidden">
+              {/* Gradient top border */}
+              <div className="h-[2px] bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400" />
+
+              <div className="p-6 sm:p-8">
+                <RegisterForm />
+              </div>
+            </div>
           </div>
         </motion.main>
 
-        {/* Rodapé mobile */}
+        {/* Mobile footer */}
         <footer className="md:hidden py-6 text-center">
+          <div className="flex items-center justify-center gap-4 mb-2">
+            {TRUST_BADGES.map((badge) => (
+              <div key={badge.label} className="flex items-center gap-1 text-muted-foreground">
+                <badge.icon className="size-3" />
+                <span className="text-[10px]">{badge.label}</span>
+              </div>
+            ))}
+          </div>
           <p className="text-xs text-muted-foreground">
             © 2026 LexDoc — Moçambique. Todos os direitos reservados.
           </p>
         </footer>
       </div>
+
+      {/* Keyframe styles */}
+      <style jsx global>{`
+        @keyframes lexdoc-float-1 {
+          0%, 100% { transform: translateY(0) rotate(45deg); opacity: 0.6; }
+          50% { transform: translateY(-15px) rotate(45deg); opacity: 1; }
+        }
+        @keyframes lexdoc-float-2 {
+          0%, 100% { transform: translateY(0); opacity: 0.5; }
+          50% { transform: translateY(-20px); opacity: 0.9; }
+        }
+        @keyframes lexdoc-float-3 {
+          0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
+          50% { transform: translateY(-10px) scale(1.05); opacity: 0.6; }
+        }
+        @keyframes lexdoc-gradient-shift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .animate-lexdoc-gradient-shift {
+          background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(6,78,59,0.15) 25%, rgba(22,33,62,0.1) 50%, rgba(16,185,129,0.12) 75%, rgba(6,78,59,0.08) 100%);
+          background-size: 400% 400%;
+        }
+      `}</style>
     </div>
   );
 }

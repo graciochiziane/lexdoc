@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import {
   Shield,
@@ -17,6 +18,8 @@ import {
   FileText,
   Settings,
   Filter,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,7 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { auditApi, type AuditLogRecord } from '@/lib/api-client';
+import { auditApi, exportApi, type AuditLogRecord } from '@/lib/api-client';
 
 // ─────────────────────────────────────────
 // Constantes
@@ -223,6 +226,28 @@ export function AuditView() {
   const [page, setPage] = useState(1);
   const limit = 20;
 
+  // ── Export CSV ──
+  const [exporting, setExporting] = useState(false);
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const blob = await exportApi.audit();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `auditoria_lexdoc_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Exportação concluída!');
+    } catch {
+      toast.error('Erro ao exportar dados.');
+    } finally {
+      setExporting(false);
+    }
+  }, []);
+
   const params = new URLSearchParams();
   if (actionFilter !== 'all') params.set('action', actionFilter);
   if (entityFilter !== 'all') params.set('entity_type', entityFilter);
@@ -249,6 +274,16 @@ export function AuditView() {
           <h2 className="text-2xl font-bold tracking-tight">Trilha de Auditoria</h2>
           <p className="text-sm text-muted-foreground mt-1">{meta?.total ?? 0} registos de actividade</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExport}
+          disabled={exporting}
+          className="active:scale-[0.98] transition-all"
+        >
+          {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+          <span className="hidden sm:inline ml-2">Exportar CSV</span>
+        </Button>
       </div>
 
       {/* Filtros */}
