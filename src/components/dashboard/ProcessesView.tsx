@@ -599,10 +599,10 @@ export function ProcessesView() {
         {/* Filtro de estado */}
         <Tabs value={statusFilter} onValueChange={handleStatusFilter}>
           <TabsList className="h-9">
-            <TabsTrigger value="all" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-50 data-[state=active]:to-emerald-100 dark:data-[state=active]:from-emerald-950/40 dark:data-[state=active]:to-emerald-900/20">Todos</TabsTrigger>
-            <TabsTrigger value="ACTIVE" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-50 data-[state=active]:to-emerald-100 dark:data-[state=active]:from-emerald-950/40 dark:data-[state=active]:to-emerald-900/20">Activos</TabsTrigger>
-            <TabsTrigger value="SUSPENDED" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-50 data-[state=active]:to-amber-100 dark:data-[state=active]:from-amber-950/40 dark:data-[state=active]:to-amber-900/20">Suspensos</TabsTrigger>
-            <TabsTrigger value="CLOSED" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-gray-50 data-[state=active]:to-gray-100 dark:data-[state=active]:from-gray-900/40 dark:data-[state=active]:to-gray-800/20">Encerrados</TabsTrigger>
+            <TabsTrigger value="all" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-emerald-500/20 data-[state=active]:border-0 dark:data-[state=active]:from-emerald-600 dark:data-[state=active]:to-emerald-700">Todos</TabsTrigger>
+            <TabsTrigger value="ACTIVE" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-emerald-500/20 data-[state=active]:border-0 dark:data-[state=active]:from-emerald-600 dark:data-[state=active]:to-emerald-700">Activos</TabsTrigger>
+            <TabsTrigger value="SUSPENDED" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-amber-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-500/20 data-[state=active]:border-0 dark:data-[state=active]:from-amber-600 dark:data-[state=active]:to-amber-700">Suspensos</TabsTrigger>
+            <TabsTrigger value="CLOSED" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-gray-500 data-[state=active]:to-gray-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-gray-500/20 data-[state=active]:border-0 dark:data-[state=active]:from-gray-600 dark:data-[state=active]:to-gray-700">Encerrados</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -640,7 +640,7 @@ export function ProcessesView() {
       </div>
 
       {/* Tabela com DataTable */}
-      <Card className="hover:shadow-lg transition-all duration-200">
+      <Card className="hover:shadow-lg transition-all duration-200 processes-table-container">
         <CardContent className="p-0">
           <div className="p-4">
             <DataTable
@@ -866,6 +866,8 @@ export function ProcessesView() {
       {/* ── Diálogo: Detalhes do Processo ── */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-2xl max-w-[95vw] max-h-[90vh] overflow-y-auto">
+          {/* Gradient top border */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-600 animate-gradient rounded-t-lg" />
           {detailProcess && (
             <>
               <DialogHeader>

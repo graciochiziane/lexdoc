@@ -689,6 +689,8 @@ export const exportApi = {
   clients: () => apiFetchBlob('/export/clients?format=csv'),
   processes: () => apiFetchBlob('/export/processes?format=csv'),
   audit: () => apiFetchBlob('/export/audit?format=csv'),
+  reportPdf: (type: 'firm_overview' | 'processes' | 'clients' | 'deadlines' = 'firm_overview') =>
+    apiFetchBlob(`/export/report-pdf?type=${type}`),
 };
 
 // ─────────────────────────────────────────
@@ -874,4 +876,37 @@ export const knowledgeApi = {
     apiFetch<{ id: string; deleted: boolean }>(`/knowledge/${id}`, { method: 'DELETE' }),
   stats: () =>
     apiFetch<KnowledgeStats>('/knowledge/stats'),
+};
+
+// ─────────────────────────────────────────
+// API de IA — LexAssistent (Chat + Análise)
+// ─────────────────────────────────────────
+export interface AIChatRequest {
+  message: string;
+  context?: string;
+}
+
+export interface AIChatResponse {
+  message: string;
+  sources?: string[];
+}
+
+export interface AIAnalyzeRequest {
+  text: string;
+  type: 'contract' | 'petition' | 'legal_opinion' | 'general';
+}
+
+export interface AIAnalysisResponse {
+  summary: string;
+  key_points: string[];
+  risks: string[];
+  recommendations: string[];
+  full_analysis: string;
+}
+
+export const aiApi = {
+  chat: (data: AIChatRequest) =>
+    apiFetch<AIChatResponse>('/ai/chat', { method: 'POST', body: JSON.stringify(data) }),
+  analyze: (data: AIAnalyzeRequest) =>
+    apiFetch<AIAnalysisResponse>('/ai/analyze', { method: 'POST', body: JSON.stringify(data) }),
 };

@@ -465,3 +465,311 @@ button, a, input, [role='button'], [role='tab'], [role='option'] {
 .dark .card-premium:hover {
   box-shadow: 0 8px 30px oklch(0 0 0 / 30%), 0 2px 8px oklch(0 0 0 / 20%);
 }
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Shimmer Button Effect
+   Gradient shimmer moving left-to-right on hover/active
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-btn-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.shimmer-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    oklch(1 0 0 / 25%) 45%,
+    oklch(1 0 0 / 35%) 50%,
+    oklch(1 0 0 / 25%) 55%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: lexdoc-btn-shimmer 2.5s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.dark .shimmer-btn::after {
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    oklch(1 0 0 / 12%) 45%,
+    oklch(1 0 0 / 18%) 50%,
+    oklch(1 0 0 / 12%) 55%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Glass Card Hover
+   Glassmorphism card with enhanced hover state (lift + glow)
+   ─────────────────────────────────────────────── */
+.glass-card-hover {
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  background: oklch(1 0 0 / 75%);
+  border: 1px solid oklch(1 0 0 / 20%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px oklch(0.696 0.17 162.48 / 8%),
+              0 4px 12px oklch(0 0 0 / 6%);
+}
+
+.dark .glass-card-hover {
+  background: oklch(0.2 0 0 / 75%);
+  border-color: oklch(1 0 0 / 8%);
+}
+
+.dark .glass-card-hover:hover {
+  box-shadow: 0 12px 40px oklch(0.696 0.17 162.48 / 12%),
+              0 4px 12px oklch(0 0 0 / 30%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Stat Card Lift
+   Stat card with smooth lift on hover
+   ─────────────────────────────────────────────── */
+.stat-card-lift {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stat-card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px oklch(0 0 0 / 8%),
+              0 2px 6px oklch(0 0 0 / 4%);
+}
+
+.dark .stat-card-lift:hover {
+  box-shadow: 0 10px 25px oklch(0 0 0 / 35%),
+              0 2px 6px oklch(0 0 0 / 20%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Noise Texture Overlay (standalone)
+   Subtle noise pattern for backgrounds
+   ─────────────────────────────────────────────── */
+.noise-texture {
+  position: relative;
+}
+
+.noise-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 100px 100px;
+  mix-blend-mode: overlay;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+.dark .noise-texture::before {
+  opacity: 0.06;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Pulse Glow Effect
+   Pulsing glow for urgent/important items
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-pulse-glow {
+  0%, 100% { box-shadow: 0 0 4px oklch(0.696 0.17 162.48 / 30%); }
+  50% { box-shadow: 0 0 16px oklch(0.696 0.17 162.48 / 50%), 0 0 32px oklch(0.696 0.17 162.48 / 15%); }
+}
+
+.pulse-glow {
+  animation: lexdoc-pulse-glow 2s ease-in-out infinite;
+}
+
+.dark .pulse-glow {
+  animation: lexdoc-pulse-glow-dark 2s ease-in-out infinite;
+}
+
+@keyframes lexdoc-pulse-glow-dark {
+  0%, 100% { box-shadow: 0 0 4px oklch(0.556 0.16 162 / 25%); }
+  50% { box-shadow: 0 0 16px oklch(0.556 0.16 162 / 40%), 0 0 32px oklch(0.556 0.16 162 / 12%); }
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Emerald Text Glow
+   Subtle emerald glow on text
+   ─────────────────────────────────────────────── */
+.text-glow-emerald {
+  text-shadow: 0 0 8px oklch(0.696 0.17 162.48 / 35%),
+               0 0 20px oklch(0.696 0.17 162.48 / 15%);
+}
+
+.dark .text-glow-emerald {
+  text-shadow: 0 0 10px oklch(0.556 0.16 162 / 40%),
+               0 0 24px oklch(0.556 0.16 162 / 18%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Table Row Hover
+   Enhanced table row hover with background shift
+   ─────────────────────────────────────────────── */
+.table-row-hover {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.table-row-hover:hover {
+  background-color: oklch(0.696 0.17 162.48 / 5%);
+  box-shadow: inset 3px 0 0 oklch(0.696 0.17 162.48 / 60%);
+}
+
+.dark .table-row-hover:hover {
+  background-color: oklch(0.556 0.16 162 / 8%);
+  box-shadow: inset 3px 0 0 oklch(0.556 0.16 162 / 50%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Animated Gradient Border (Enhanced)
+   Shifting gradient border for form cards
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-border-shimmer {
+  0% { background-position: 0% 50%; }
+  25% { background-position: 100% 0%; }
+  50% { background-position: 100% 100%; }
+  75% { background-position: 0% 100%; }
+  100% { background-position: 0% 50%; }
+}
+
+.gradient-border-animated {
+  position: relative;
+}
+
+.gradient-border-animated::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    #10b981 0%,
+    #059669 20%,
+    #0d9488 40%,
+    #06b6d4 60%,
+    #10b981 80%,
+    #059669 100%
+  );
+  background-size: 300% 300%;
+  animation: lexdoc-border-shimmer 6s ease infinite;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.dark .gradient-border-animated::before {
+  opacity: 0.85;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Sidebar Bottom Gradient Line
+   Animated gradient line at sidebar bottom
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-sidebar-gradient-line {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.sidebar-gradient-line {
+  position: relative;
+}
+
+.sidebar-gradient-line::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #10b981, #0d9488, #06b6d4, #10b981);
+  background-size: 200% 100%;
+  animation: lexdoc-border-shimmer 4s ease infinite, lexdoc-sidebar-gradient-line 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Nav Item Hover Enhancement
+   Smoother, more prominent nav hover transition
+   ─────────────────────────────────────────────── */
+.nav-item-hover {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.nav-item-hover:hover {
+  transform: translateX(2px);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Form Progress Indicator
+   Animated progress bar for form completion
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-progress-fill {
+  0% { width: 0%; }
+  100% { width: var(--progress, 0%); }
+}
+
+.form-progress-bar {
+  height: 3px;
+  border-radius: 9999px;
+  background: oklch(0.97 0 0);
+  overflow: hidden;
+  position: relative;
+}
+
+.dark .form-progress-bar {
+  background: oklch(0.3 0 0);
+}
+
+.form-progress-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #10b981, #059669, #0d9488);
+  background-size: 200% 100%;
+  animation: lexdoc-border-shimmer 3s ease infinite;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Process Table Alternating Rows
+   Alternating row colors for process table
+   ─────────────────────────────────────────────── */
+.processes-table-container tbody tr:nth-child(even) {
+  background-color: oklch(0.97 0 0 / 50%);
+}
+
+.processes-table-container tbody tr:nth-child(even):hover {
+  background-color: oklch(0.696 0.17 162.48 / 5%);
+}
+
+.dark .processes-table-container tbody tr:nth-child(even) {
+  background-color: oklch(0.25 0 0 / 50%);
+}
+
+.dark .processes-table-container tbody tr:nth-child(even):hover {
+  background-color: oklch(0.556 0.16 162 / 8%);
+}

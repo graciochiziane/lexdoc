@@ -136,6 +136,31 @@ function FloatingShapes() {
       >
         <div className="absolute inset-0 bg-emerald-500/15 rounded-full" />
       </div>
+      {/* Shape 6 — rotating ring with dash */}
+      <div
+        className="absolute top-[70%] left-[25%] w-12 h-12 rounded-full"
+        style={{
+          border: '1.5px dashed oklch(0.696 0.17 162.48 / 18%)',
+          animation: 'lexdoc-float-4 12s linear infinite',
+        }}
+      />
+      {/* Shape 7 — pulsing hexagon-like shape */}
+      <div
+        className="absolute bottom-[45%] left-[50%] w-10 h-10 border border-emerald-500/12"
+        style={{
+          borderRadius: '30% 70% 70% 30% / 30% 30% 70% 70%',
+          animation: 'lexdoc-float-5 9s ease-in-out infinite',
+        }}
+      />
+      {/* Shape 8 — tiny floating triangle */}
+      <div
+        className="absolute top-[10%] left-[55%] w-4 h-4"
+        style={{
+          animation: 'lexdoc-float-6 7s ease-in-out infinite',
+        }}
+      >
+        <div className="w-full h-full bg-emerald-400/8 rotate-45" />
+      </div>
     </div>
   );
 }
@@ -390,15 +415,13 @@ export function LoginView() {
               </p>
             </div>
 
-            {/* Form card with glassmorphism + gradient border */}
+            {/* Form card with glassmorphism + animated gradient border */}
             <motion.div
               {...formCardEntry}
-              className="relative rounded-2xl"
+              className="relative rounded-2xl gradient-border-animated"
             >
-              {/* Gradient border wrapper */}
-              <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 opacity-80" />
               {/* Inner content — enhanced glassmorphism */}
-              <div className="relative rounded-2xl overflow-hidden backdrop-blur-2xl bg-white/85 dark:bg-gray-900/85 border border-white/30 dark:border-white/10 shadow-2xl shadow-emerald-500/5 dark:shadow-emerald-500/10 noise-overlay">
+              <div className="login-form-card relative rounded-2xl overflow-hidden backdrop-blur-2xl bg-white/85 dark:bg-gray-900/85 border border-white/30 dark:border-white/10 shadow-2xl shadow-emerald-500/5 dark:shadow-emerald-500/10 noise-overlay">
                 <AnimatePresence mode="wait">
                   {!showForgotPassword ? (
                     <motion.div
@@ -439,6 +462,14 @@ export function LoginView() {
 
                       {/* Email/password form */}
                       <LoginForm onForgotPassword={() => setShowForgotPassword(true)} />
+
+                      {/* Social proof — último acesso */}
+                      <div className="flex items-center justify-center gap-2 mt-5 pt-4 border-t border-border/50">
+                        <Clock className="size-3 text-emerald-500" />
+                        <span className="text-[11px] text-muted-foreground">
+                          Último acesso: Hoje, 14:30
+                        </span>
+                      </div>
                     </motion.div>
                   ) : (
                     <motion.div
@@ -474,7 +505,7 @@ export function LoginView() {
         </footer>
       </div>
 
-      {/* Keyframe styles for floating animations */}
+      {/* Keyframe styles for floating animations + shimmer button */}
       <style jsx global>{`
         @keyframes lexdoc-float-1 {
           0%, 100% { transform: translateY(0) rotate(45deg); opacity: 0.6; }
@@ -488,6 +519,22 @@ export function LoginView() {
           0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
           50% { transform: translateY(-10px) scale(1.05); opacity: 0.6; }
         }
+        @keyframes lexdoc-float-4 {
+          0% { transform: translateY(0) rotate(0deg); opacity: 0.25; }
+          25% { transform: translateY(-12px) rotate(90deg); opacity: 0.5; }
+          50% { transform: translateY(0) rotate(180deg); opacity: 0.25; }
+          75% { transform: translateY(8px) rotate(270deg); opacity: 0.4; }
+          100% { transform: translateY(0) rotate(360deg); opacity: 0.25; }
+        }
+        @keyframes lexdoc-float-5 {
+          0%, 100% { transform: translateY(0) scale(1) rotate(0deg); opacity: 0.2; }
+          33% { transform: translateY(-18px) scale(1.08) rotate(3deg); opacity: 0.5; }
+          66% { transform: translateY(-6px) scale(0.95) rotate(-2deg); opacity: 0.35; }
+        }
+        @keyframes lexdoc-float-6 {
+          0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.15; }
+          50% { transform: translateY(-22px) rotate(180deg); opacity: 0.45; }
+        }
         @keyframes lexdoc-gradient-shift {
           0% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
@@ -496,6 +543,32 @@ export function LoginView() {
         .animate-lexdoc-gradient-shift {
           background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(6,78,59,0.15) 25%, rgba(22,33,62,0.1) 50%, rgba(16,185,129,0.12) 75%, rgba(6,78,59,0.08) 100%);
           background-size: 400% 400%;
+        }
+        /* Shimmer effect on submit buttons inside login form */
+        .login-form-card button[type="submit"] {
+          position: relative;
+          overflow: hidden;
+        }
+        .login-form-card button[type="submit"]::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            105deg,
+            transparent 30%,
+            rgba(255,255,255,0.25) 45%,
+            rgba(255,255,255,0.35) 50%,
+            rgba(255,255,255,0.25) 55%,
+            transparent 70%
+          );
+          background-size: 200% 100%;
+          animation: lexdoc-btn-shimmer 2.5s ease-in-out infinite;
+          pointer-events: none;
+          border-radius: inherit;
+        }
+        @keyframes lexdoc-btn-shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
         }
       `}</style>
     </div>

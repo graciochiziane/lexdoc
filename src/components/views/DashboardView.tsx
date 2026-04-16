@@ -66,6 +66,7 @@ import { KeyboardShortcutsDialog } from '@/components/dashboard/KeyboardShortcut
 import { TaskManager } from '@/components/dashboard/TaskManager';
 import { NotificationsCenter } from '@/components/dashboard/NotificationsCenter';
 import { KnowledgeView } from '@/components/dashboard/KnowledgeView';
+import { AIChatPanel } from '@/components/dashboard/AIChatPanel';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 // ─────────────────────────────────────────
@@ -330,6 +331,7 @@ export function DashboardView() {
           transform transition-all duration-300 ease-in-out
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
           mt-[2px]
+          sidebar-gradient-line
         `}
       >
         {/* Sidebar pattern overlay */}
@@ -350,8 +352,8 @@ export function DashboardView() {
                 <span className="text-emerald-400 font-bold text-sm">LD</span>
               </div>
               <span className="font-bold text-lg">
-                <span className="text-white">lex</span>
-                <span className="text-emerald-400">Doc</span>
+                <span className="text-white text-glow-emerald">lex</span>
+                <span className="text-emerald-400 text-glow-emerald">Doc</span>
               </span>
             </button>
           ) : (
@@ -400,7 +402,7 @@ export function DashboardView() {
                 title={sidebarCollapsed ? item.label : undefined}
                 className={`
                   w-full flex items-center gap-3 rounded-lg text-sm font-medium
-                  transition-all duration-150 relative
+                  transition-all duration-200 cubic-bezier(0.4, 0, 0.2, 1) relative nav-item-hover
                   ${sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
                   ${
                     isActive
@@ -679,6 +681,9 @@ export function DashboardView() {
 
       {/* Onboarding Guide — shown on first login */}
       <OnboardingGuide />
+
+      {/* AI Chat Panel — LexAssistent */}
+      <AIChatPanel />
     </div>
   );
 }

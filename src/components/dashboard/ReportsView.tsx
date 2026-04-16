@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -21,6 +21,8 @@ import {
   Lock,
   HardDrive,
   Activity,
+  FileDown,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -44,7 +46,8 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from 'recharts';
-import { reportsApi, type ReportOverviewData } from '@/lib/api-client';
+import { reportsApi, exportApi, type ReportOverviewData } from '@/lib/api-client';
+import { toast } from 'sonner';
 
 // ─────────────────────────────────────────
 // Chart configs
@@ -394,6 +397,29 @@ export function ReportsView() {
     window.print();
   };
 
+  // Handle PDF export
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      const blob = await exportApi.reportPdf('firm_overview');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio_firm_overview_${new Date().toISOString().split('T')[0]}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Relatório exportado com sucesso!', { description: 'Abra o ficheiro HTML e utilize Imprimir > Guardar como PDF.' });
+    } catch {
+      toast.error('Erro ao exportar relatório.', { description: 'Não foi possível gerar o relatório. Tente novamente.' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -426,14 +452,29 @@ export function ReportsView() {
             Análise completa do escritório {report.firm.name}
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={handlePrint}
-          className="gap-2 active:scale-[0.98]"
-        >
-          <Printer className="size-4" />
-          Imprimir Relatório
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handlePrint}
+            className="gap-2 active:scale-[0.98]"
+          >
+            <Printer className="size-4" />
+            Imprimir Relatório
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExportPdf}
+            disabled={exporting}
+            className="gap-2 active:scale-[0.98] bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white border-0 shadow-md"
+          >
+            {exporting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <FileDown className="size-4" />
+            )}
+            {exporting ? 'A exportar...' : 'Exportar PDF'}
+          </Button>
+        </div>
       </div>
 
       {/* ── Executive Summary ── */}

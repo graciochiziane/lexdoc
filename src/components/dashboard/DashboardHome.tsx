@@ -22,6 +22,9 @@ import {
   ListTodo,
   Zap,
   Scale,
+  CheckCircle2,
+  AlertCircle,
+  CircleAlert,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth.store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,10 +57,10 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from 'recharts';
-import { statsApi, processesApi, type DashboardStats, type ProcessRecord, profileApi } from '@/lib/api-client';
+import { statsApi, processesApi, deadlinesApi, firmApi, type DashboardStats, type ProcessRecord, profileApi } from '@/lib/api-client';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
-import { differenceInDays } from 'date-fns';
+import { differenceInDays, addDays } from 'date-fns';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
@@ -340,6 +343,132 @@ function ChartSkeleton() {
 }
 
 // ─────────────────────────────────────────
+// Team Activity Widget
+// ─────────────────────────────────────────
+function TeamActivityWidget() {
+  const { data: membersData, isLoading } = useQuery({
+    queryKey: ['firm', 'members', 'widget'],
+    queryFn: () => firmApi.members('limit=10'),
+    staleTime: 60 * 1000,
+  });
+  const members = membersData?.data ?? [];
+
+  const activeMembers = members.filter((m) => m.is_active);
+  const recentLogins = members
+    .filter((m) => m.last_login_at)
+    .sort((a, b) => new Date(b.last_login_at!).getTime() - new Date(a.last_login_at!).getTime())
+    .slice(0, 5);
+
+  const AVATAR_COLORS = [
+    'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
+    'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400',
+    'bg-amber-500/20 text-amber-700 dark:text-amber-400',
+    'bg-purple-500/20 text-purple-700 dark:text-purple-400',
+    'bg-red-500/20 text-red-700 dark:text-red-400',
+    'bg-teal-500/20 text-teal-700 dark:text-teal-400',
+    'bg-orange-500/20 text-orange-700 dark:text-orange-400',
+    'bg-pink-500/20 text-pink-700 dark:text-pink-400',
+  ];
+
+  return (
+    <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 rounded-xl">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <Users className="size-4 text-cyan-500" />
+          Equipa da Firma
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Active users count + mini avatars */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted-foreground">Utilizadores activos</span>
+                <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200">
+                  {activeMembers.length}
+                </Badge>
+              </div>
+              {activeMembers.length > 0 && (
+                <div className="flex items-center -space-x-2">
+                  {activeMembers.slice(0, 6).map((member, i) => (
+                    <motion.div
+                      key={member.id}
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="w-8 h-8 rounded-full border-2 border-background flex items-center justify-center text-xs font-semibold shrink-0"
+                      style={{ zIndex: 10 - i }}
+                      title={member.full_name}
+                    >
+                      <span className={`w-full h-full rounded-full flex items-center justify-center ${AVATAR_COLORS[i % AVATAR_COLORS.length]}`}>
+                        {member.full_name.charAt(0).toUpperCase()}
+                      </span>
+                    </motion.div>
+                  ))}
+                  {activeMembers.length > 6 && (
+                    <span className="w-8 h-8 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-semibold text-muted-foreground shrink-0" style={{ zIndex: 3 }}>
+                      +{activeMembers.length - 6}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Separator */}
+            <div className="border-t" />
+
+            {/* Most recent logins */}
+            <div>
+              <span className="text-xs text-muted-foreground mb-2 block">Últimos acessos</span>
+              {recentLogins.length > 0 ? (
+                <div className="space-y-2">
+                  {recentLogins.map((member) => {
+                    const loginDate = member.last_login_at
+                      ? new Date(member.last_login_at)
+                      : null;
+                    const diffMs = loginDate ? Date.now() - loginDate.getTime() : 0;
+                    const diffMins = Math.floor(diffMs / (1000 * 60));
+                    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+                    let timeAgo = '';
+                    if (diffMins < 1) timeAgo = 'Agora mesmo';
+                    else if (diffMins < 60) timeAgo = `${diffMins}min atrás`;
+                    else if (diffHours < 24) timeAgo = `${diffHours}h atrás`;
+                    else timeAgo = `${diffDays}d atrás`;
+
+                    return (
+                      <div key={member.id} className="flex items-center gap-2.5">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 ${AVATAR_COLORS[activeMembers.indexOf(member) % AVATAR_COLORS.length]}`}>
+                          {member.full_name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{member.full_name}</p>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground shrink-0">{timeAgo}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-3">Sem registos de acesso</p>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────
 // Componente principal
 // ─────────────────────────────────────────
 export function DashboardHome() {
@@ -492,7 +621,7 @@ export function DashboardHome() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-500/20 gradient-border">
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-500/20 noise-texture rounded-xl">
           {/* Subtle gradient backdrop glow */}
           <div className="absolute -inset-4 bg-gradient-to-br from-emerald-400/20 via-transparent to-teal-400/20 blur-2xl pointer-events-none" />
           {/* Decorative pattern */}
@@ -573,6 +702,82 @@ export function DashboardHome() {
         </p>
       </div>
 
+      {/* ── Urgência Alert Widget ── */}
+      {!statsLoading && stats && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.15 }}
+          className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+        >
+          {/* Overdue — Red */}
+          <motion.div
+            whileHover={{ scale: 1.02, y: -1 }}
+            className="flex items-center gap-3 bg-gradient-to-r from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/10 border border-red-200 dark:border-red-800/30 rounded-xl p-4 cursor-pointer hover:shadow-md transition-all"
+          >
+            <div className="relative">
+              <motion.div
+                animate={{ scale: [1, 1.15, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center"
+              >
+                <CircleAlert className="size-5 text-red-600 dark:text-red-400" />
+              </motion.div>
+              {(deadlinesTimeline.filter(d => d.daysRemaining < 0).length ?? 0) > 0 && (
+                <motion.span
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+                />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-bold text-red-600 dark:text-red-400 [font-variant-numeric:tabular-nums]">
+                {deadlinesTimeline.filter(d => d.daysRemaining < 0).length}
+              </p>
+              <p className="text-xs text-red-600/80 dark:text-red-400/80">Prazos expirados</p>
+            </div>
+            <ChevronRight className="size-4 text-red-400/50 shrink-0 ml-auto" />
+          </motion.div>
+
+          {/* Due within 3 days — Amber */}
+          <motion.div
+            whileHover={{ scale: 1.02, y: -1 }}
+            className="flex items-center gap-3 bg-gradient-to-r from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl p-4 cursor-pointer hover:shadow-md transition-all"
+          >
+            <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+              <AlertCircle className="size-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-bold text-amber-600 dark:text-amber-400 [font-variant-numeric:tabular-nums]">
+                {deadlinesTimeline.filter(d => d.daysRemaining >= 0 && d.daysRemaining <= 3).length}
+              </p>
+              <p className="text-xs text-amber-600/80 dark:text-amber-400/80">Expiram em 3 dias</p>
+            </div>
+            <ChevronRight className="size-4 text-amber-400/50 shrink-0 ml-auto" />
+          </motion.div>
+
+          {/* Recently closed — Green */}
+          <motion.div
+            whileHover={{ scale: 1.02, y: -1 }}
+            className="flex items-center gap-3 bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/10 border border-emerald-200 dark:border-emerald-800/30 rounded-xl p-4 cursor-pointer hover:shadow-md transition-all"
+          >
+            <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+              <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 [font-variant-numeric:tabular-nums]">
+                {allProcesses.filter(p => p.status === 'CLOSED').slice(0, 5).length > 0
+                  ? allProcesses.filter(p => p.status === 'CLOSED').length
+                  : 0}
+              </p>
+              <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">Processos encerrados</p>
+            </div>
+            <ChevronRight className="size-4 text-emerald-400/50 shrink-0 ml-auto" />
+          </motion.div>
+        </motion.div>
+      )}
+
       {/* Cartões de estatísticas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statsLoading ? (
@@ -587,7 +792,7 @@ export function DashboardHome() {
               whileHover={{ scale: 1.02 }}
             >
               <Card
-                className={`border-l-4 ${stat.border} hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br ${stat.gradient} card-premium`}
+                className={`border-l-4 ${stat.border} hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br ${stat.gradient} stat-card-lift rounded-xl`}
               >
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -620,7 +825,7 @@ export function DashboardHome() {
         {/* Gráficos — 2 colunas */}
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Gráfico: Processos por Estado */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-emerald-50/20 dark:from-background dark:to-emerald-950/5 border-l-4 border-l-emerald-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-xl">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-emerald-50/20 dark:from-background dark:to-emerald-950/5 border-l-4 border-l-emerald-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.2)] rounded-xl glass-card-hover">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Processos por Estado</CardTitle>
             </CardHeader>
@@ -694,7 +899,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Gráfico: Actividade Mensal */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-amber-50/20 dark:from-background dark:to-amber-950/5 border-l-4 border-l-amber-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-xl">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-amber-50/20 dark:from-background dark:to-amber-950/5 border-l-4 border-l-amber-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.2)] rounded-xl glass-card-hover">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Actividade Mensal</CardTitle>
             </CardHeader>
@@ -716,7 +921,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Gráfico: Distribuição por Prioridade */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-red-50/20 dark:from-background dark:to-red-950/5 border-l-4 border-l-red-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-xl">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-red-50/20 dark:from-background dark:to-red-950/5 border-l-4 border-l-red-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.2)] rounded-xl glass-card-hover">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Distribuição por Prioridade</CardTitle>
             </CardHeader>
@@ -758,7 +963,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Gráfico: Distribuição por Área */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-purple-50/20 dark:from-background dark:to-purple-950/5 border-l-4 border-l-purple-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-xl">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-purple-50/20 dark:from-background dark:to-purple-950/5 border-l-4 border-l-purple-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.2)] rounded-xl glass-card-hover">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
                 <Scale className="size-4 text-purple-500" />
@@ -803,7 +1008,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Timeline: Próximos Prazos */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-cyan-50/20 dark:from-background dark:to-cyan-950/5 border-l-4 border-l-cyan-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-xl">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-cyan-50/20 dark:from-background dark:to-cyan-950/5 border-l-4 border-l-cyan-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.2)] rounded-xl glass-card-hover">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Próximos Prazos</CardTitle>
             </CardHeader>
@@ -876,68 +1081,79 @@ export function DashboardHome() {
         </div>
       </div>
 
-      {/* Processos Recentes */}
-      <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 rounded-xl">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Processos Recentes</CardTitle>
-          <Button variant="ghost" size="sm" className="text-xs active:scale-[0.98]">
-            Ver todos
-            <ArrowRight className="size-3.5 ml-1" />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {statsLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : stats?.recent_processes && stats.recent_processes.length > 0 ? (
-            <div className="max-h-[calc(100vh-680px)] overflow-y-auto rounded-lg border">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background backdrop-blur-sm">
-                  <TableRow>
-                    <TableHead>Nº Processo</TableHead>
-                    <TableHead className="hidden sm:table-cell">Título</TableHead>
-                    <TableHead className="hidden md:table-cell">Cliente</TableHead>
-                    <TableHead className="hidden lg:table-cell">Prioridade</TableHead>
-                    <TableHead className="hidden lg:table-cell">Estado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {stats.recent_processes.map((process, i) => (
-                    <TableRow
+      {/* ── Quick Process Overview + Team Activity ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Quick Process Overview — Mini Table */}
+        <Card className="lg:col-span-2 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 rounded-xl">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Briefcase className="size-4 text-emerald-500" />
+              Visão Rápida de Processos
+            </CardTitle>
+            <Button variant="ghost" size="sm" className="text-xs active:scale-[0.98]">
+              Ver todos
+              <ArrowRight className="size-3.5 ml-1" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {processesLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : (() => {
+              const top5 = [...allProcesses]
+                .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+                .slice(0, 5);
+              return top5.length > 0 ? (
+                <div className="space-y-2">
+                  {top5.map((process, i) => (
+                    <motion.div
                       key={process.id}
-                      className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/50 hover:shadow-sm transition-all cursor-pointer group"
                     >
-                      <TableCell className="font-medium">{process.process_number}</TableCell>
-                      <TableCell className="hidden sm:table-cell max-w-[200px] truncate">
-                        {process.title}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {process.client?.full_name ?? '—'}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <PriorityBadge priority={process.priority} />
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <StatusBadge status={process.status} />
-                      </TableCell>
-                    </TableRow>
+                      {/* Priority indicator dot */}
+                      <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                        process.priority === 'URGENT' ? 'bg-red-500 animate-pulse' :
+                        process.priority === 'HIGH' ? 'bg-orange-500' :
+                        process.priority === 'MEDIUM' ? 'bg-amber-500' :
+                        'bg-gray-400'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                          {process.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {process.process_number} {process.client?.full_name ? `— ${process.client.full_name}` : ''}
+                        </p>
+                      </div>
+                      <StatusBadge status={process.status} />
+                      <PriorityBadge priority={process.priority} />
+                      <span className="text-[10px] text-muted-foreground shrink-0 hidden sm:block">
+                        {format(new Date(process.updated_at), 'dd/MM')}
+                      </span>
+                      <ChevronRight className="size-3.5 text-muted-foreground/40 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </motion.div>
                   ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <EmptyState
-              icon={Briefcase}
-              title="Nenhum processo registado"
-              description="Crie o primeiro processo jurídico para começar."
-              actionLabel="Criar Processo"
-            />
-          )}
-        </CardContent>
-      </Card>
+                </div>
+              ) : (
+                <EmptyState
+                  icon={Briefcase}
+                  title="Nenhum processo registado"
+                  description="Crie o primeiro processo jurídico para começar."
+                />
+              );
+            })()}
+          </CardContent>
+        </Card>
+
+        {/* Team Activity Summary */}
+        <TeamActivityWidget />
+      </div>
 
       {/* Banner informativo com gradiente */}
       <Alert className="border-0 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 shadow-sm">

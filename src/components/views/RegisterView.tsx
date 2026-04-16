@@ -320,16 +320,21 @@ export function RegisterView() {
               </p>
             </div>
 
-            {/* Form card with glassmorphism + gradient border */}
+            {/* Form card with glassmorphism + animated gradient border */}
             <motion.div
               {...formCardEntry}
-              className="relative rounded-2xl"
+              className="relative rounded-2xl gradient-border-animated"
             >
-              {/* Gradient border wrapper */}
-              <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 opacity-80" />
               {/* Inner content — enhanced glassmorphism */}
-              <div className="relative rounded-2xl overflow-hidden backdrop-blur-2xl bg-white/85 dark:bg-gray-900/85 border border-white/30 dark:border-white/10 shadow-2xl shadow-emerald-500/5 dark:shadow-emerald-500/10 noise-overlay">
-                <div className="p-6 sm:p-8">
+              <div className="register-form-card relative rounded-2xl overflow-hidden backdrop-blur-2xl bg-white/85 dark:bg-gray-900/85 border border-white/30 dark:border-white/10 shadow-2xl shadow-emerald-500/5 dark:shadow-emerald-500/10 noise-overlay">
+                {/* Form completion progress indicator */}
+                <div className="form-progress-bar mx-6 sm:mx-8 mt-6 sm:mt-8">
+                  <div className="form-progress-bar-fill" style={{ width: '66%' }} />
+                </div>
+                <div className="px-6 sm:px-8 pt-1.5 pb-1">
+                  <p className="text-[10px] text-muted-foreground">Preencha os campos abaixo para criar a sua conta</p>
+                </div>
+                <div className="p-6 sm:p-8 pt-2">
                   <RegisterForm />
                 </div>
               </div>
@@ -375,6 +380,32 @@ export function RegisterView() {
         .animate-lexdoc-gradient-shift {
           background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(6,78,59,0.15) 25%, rgba(22,33,62,0.1) 50%, rgba(16,185,129,0.12) 75%, rgba(6,78,59,0.08) 100%);
           background-size: 400% 400%;
+        }
+        /* Shimmer effect on submit buttons inside register form */
+        .register-form-card button[type="submit"] {
+          position: relative;
+          overflow: hidden;
+        }
+        .register-form-card button[type="submit"]::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            105deg,
+            transparent 30%,
+            rgba(255,255,255,0.25) 45%,
+            rgba(255,255,255,0.35) 50%,
+            rgba(255,255,255,0.25) 55%,
+            transparent 70%
+          );
+          background-size: 200% 100%;
+          animation: lexdoc-btn-shimmer 2.5s ease-in-out infinite;
+          pointer-events: none;
+          border-radius: inherit;
+        }
+        @keyframes lexdoc-btn-shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
         }
       `}</style>
     </div>
