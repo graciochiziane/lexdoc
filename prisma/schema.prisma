@@ -1,0 +1,275 @@
+// ═══════════════════════════════════════════════════════════════
+// LEXDOC — Schema da Base de Dados
+// Plataforma SaaS de Gestão Documental Jurídica — Moçambique
+// ═══════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// MULTI-TENANCY: ESCRITÓRIO (FIRM)
+// ─────────────────────────────────────────
+model Firm {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  nif         String?  // NIF do escritório (dado sensível — PII)
+  oam_number  String?  // Número de registo na OAM
+  is_active   Boolean  @default(true)
+  plan        String   @default("STARTER")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  users       User[]
+  clients     Client[]
+  processes   LegalProcess[]
+  audit_logs  AuditLog[]
+  invitations Invitation[]
+
+  @@map("firms")
+}
+
+// ─────────────────────────────────────────
+// UTILIZADORES E RBAC
+// ─────────────────────────────────────────
+model User {
+  id                String    @id @default(cuid())
+  firm_id           String
+  email             String    @unique
+  password_hash     String
+  full_name         String
+  role              String    @default("CLIENT")
+  bi_number         String?   // BI — dado PII — armazenar com cuidado
+  phone             String?
+  is_active         Boolean   @default(true)
+  email_verified    Boolean   @default(false)
+  failed_login_count Int      @default(0)
+  locked_until      DateTime?
+
+  // MFA — preparado para implementação futura
+  mfa_enabled       Boolean   @default(false)
+  mfa_secret        String?   // Encriptado em repouso
+
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  last_login_at     DateTime?
+
+  firm              Firm      @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+  refresh_tokens    RefreshToken[]
+  audit_logs        AuditLog[]
+  documents_created Document[]     @relation("DocumentCreator")
+  documents_updated Document[]     @relation("DocumentUpdater")
+  process_assignments ProcessAssignment[]
+
+  @@index([firm_id])
+  @@index([email])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// TOKENS DE AUTENTICAÇÃO
+// ─────────────────────────────────────────
+model RefreshToken {
+  id          String   @id @default(cuid())
+  user_id     String
+  token_hash  String   @unique  // Armazenamos o hash, nunca o token em texto limpo
+  device_info String?           // User-agent para auditoria
+  ip_address  String?
+  expires_at  DateTime
+  revoked_at  DateTime?
+  created_at  DateTime @default(now())
+
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token_hash])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────
+// AUDIT TRAIL IMUTÁVEL
+// ─────────────────────────────────────────
+model AuditLog {
+  id           String      @id @default(cuid())
+  firm_id      String?     // Null para eventos de sistema (ex: tentativas de login falhadas)
+  user_id      String?     // Null se o utilizador não estava autenticado
+  action       String      // Ex: "LOGIN_SUCCESS", "LOGIN_FAILED"
+  entity_type  String      // Ex: "Document", "User", "LegalProcess"
+  entity_id    String?     // ID da entidade afectada
+  old_values   String?     // Estado anterior (JSON serializado) — para updates
+  new_values   String?     // Estado novo (JSON serializado) — para creates/updates
+  ip_address   String?
+  user_agent   String?
+  metadata     String?     // Dados adicionais contextuais (JSON serializado)
+  created_at   DateTime    @default(now())
+
+  firm         Firm?       @relation(fields: [firm_id], references: [id])
+  user         User?       @relation(fields: [user_id], references: [id])
+
+  @@index([firm_id])
+  @@index([user_id])
+  @@index([entity_type, entity_id])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────
+// CLIENTES DO ESCRITÓRIO
+// ─────────────────────────────────────────
+model Client {
+  id           String   @id @default(cuid())
+  firm_id      String
+  user_id      String?  // Se o cliente tiver conta na plataforma
+  full_name    String
+  email        String?
+  phone        String?
+  bi_number    String?  // PII — protegido
+  nif          String?  // PII — protegido
+  address      String?
+  client_type  String   @default("INDIVIDUAL")
+  is_active    Boolean  @default(true)
+  notes        String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  firm         Firm           @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+  processes    LegalProcess[]
+
+  @@index([firm_id])
+  @@map("clients")
+}
+
+// ─────────────────────────────────────────
+// PROCESSOS JURÍDICOS
+// ─────────────────────────────────────────
+model LegalProcess {
+  id              String         @id @default(cuid())
+  firm_id         String
+  client_id       String
+  process_number  String         // Número do processo (ex: 123/2026)
+  title           String
+  description     String?
+  area            String         // Área jurídica
+  status          String         @default("ACTIVE")
+  priority        String         @default("MEDIUM")
+  court           String?        // Tribunal competente
+  judge           String?        // Juiz responsável
+  opposing_party  String?        // Parte contrária
+  opened_at       DateTime       @default(now())
+  closed_at       DateTime?
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+
+  firm            Firm           @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+  client          Client         @relation(fields: [client_id], references: [id])
+  documents       Document[]
+  deadlines       Deadline[]
+  assignments     ProcessAssignment[]
+
+  @@unique([firm_id, process_number])
+  @@index([firm_id])
+  @@index([client_id])
+  @@map("legal_processes")
+}
+
+// ─────────────────────────────────────────
+// ATRIBUIÇÃO DE PROCESSOS A ADVOGADOS
+// ─────────────────────────────────────────
+model ProcessAssignment {
+  id          String       @id @default(cuid())
+  process_id  String
+  user_id     String
+  role        String       // Ex: "Lead", "Assistant", "Reviewer"
+  assigned_at DateTime     @default(now())
+
+  process     LegalProcess @relation(fields: [process_id], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [user_id], references: [id])
+
+  @@unique([process_id, user_id])
+  @@map("process_assignments")
+}
+
+// ─────────────────────────────────────────
+// DOCUMENTOS
+// ─────────────────────────────────────────
+model Document {
+  id              String          @id @default(cuid())
+  firm_id         String
+  process_id      String?
+  created_by_id   String
+  updated_by_id   String?
+  title           String
+  description     String?
+  file_key        String          // Chave do ficheiro
+  file_name       String          // Nome original do ficheiro
+  file_size       Int             // Tamanho em bytes
+  mime_type       String          // Ex: application/pdf
+  version         Int             @default(1)
+  parent_id       String?         // Para versões — aponta para documento pai
+  status          String          @default("DRAFT")
+  is_confidential Boolean         @default(false)
+  tags            String          // JSON serializado de array
+  ai_summary      String?         // Resumo gerado por IA
+  ai_processed_at DateTime?
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+
+  process         LegalProcess?   @relation(fields: [process_id], references: [id])
+  created_by      User            @relation("DocumentCreator", fields: [created_by_id], references: [id])
+  updated_by      User?           @relation("DocumentUpdater", fields: [updated_by_id], references: [id])
+  versions        Document[]      @relation("DocumentVersions")
+  parent          Document?       @relation("DocumentVersions", fields: [parent_id], references: [id])
+
+  @@index([firm_id])
+  @@index([process_id])
+  @@index([created_by_id])
+  @@map("documents")
+}
+
+// ─────────────────────────────────────────
+// PRAZOS PROCESSUAIS
+// ─────────────────────────────────────────
+model Deadline {
+  id           String       @id @default(cuid())
+  process_id   String
+  title        String
+  description  String?
+  due_date     DateTime
+  reminder_at  DateTime?    // Data de lembrete
+  status       String       @default("PENDING")
+  source       String       @default("MANUAL")
+  ai_extracted Boolean      @default(false)  // Extraído pela IA?
+  created_at   DateTime     @default(now())
+  updated_at   DateTime     @updatedAt
+
+  process      LegalProcess @relation(fields: [process_id], references: [id], onDelete: Cascade)
+
+  @@index([process_id])
+  @@index([due_date])
+  @@map("deadlines")
+}
+
+// ─────────────────────────────────────────
+// CONVITES DE UTILIZADORES
+// ─────────────────────────────────────────
+model Invitation {
+  id          String     @id @default(cuid())
+  firm_id     String
+  email       String
+  role        String     // UserRole
+  token_hash  String     @unique
+  expires_at  DateTime
+  accepted_at DateTime?
+  created_at  DateTime   @default(now())
+
+  firm        Firm       @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+
+  @@index([firm_id])
+  @@map("invitations")
+}
