@@ -230,7 +230,7 @@ function AnimatedCounter({ target }: { target: number }) {
     return () => clearInterval(timer);
   }, [target]);
 
-  return <span>{count}</span>;
+  return <span className="[font-variant-numeric:tabular-nums]">{count}</span>;
 }
 
 // ─────────────────────────────────────────
@@ -493,6 +493,8 @@ export function DashboardHome() {
         transition={{ duration: 0.4 }}
       >
         <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-500/20">
+          {/* Subtle gradient backdrop glow */}
+          <div className="absolute -inset-4 bg-gradient-to-br from-emerald-400/20 via-transparent to-teal-400/20 blur-2xl pointer-events-none" />
           {/* Decorative pattern */}
           <div className="absolute inset-0 opacity-10" style={{
             backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
@@ -527,7 +529,7 @@ export function DashboardHome() {
         </Card>
       </motion.div>
 
-      {/* Quick Stats Row */}
+      {/* Quick Stats Row - Animated Pills */}
       {!statsLoading && stats && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -535,26 +537,26 @@ export function DashboardHome() {
           transition={{ duration: 0.3, delay: 0.1 }}
           className="flex flex-wrap gap-3"
         >
-          <div className="flex items-center gap-2 bg-background border rounded-full px-4 py-2 shadow-sm">
-            <ListTodo className="size-4 text-emerald-500" />
-            <span className="text-sm text-muted-foreground">Hoje:</span>
-            <span className="text-sm font-semibold">{stats.upcoming_deadlines} tarefas</span>
-          </div>
-          <div className="flex items-center gap-2 bg-background border rounded-full px-4 py-2 shadow-sm">
-            <Calendar className="size-4 text-amber-500" />
-            <span className="text-sm text-muted-foreground">Esta semana:</span>
-            <span className="text-sm font-semibold">{stats.upcoming_deadlines} prazos</span>
-          </div>
-          <div className="flex items-center gap-2 bg-background border rounded-full px-4 py-2 shadow-sm">
-            <Briefcase className="size-4 text-cyan-500" />
-            <span className="text-sm text-muted-foreground">Activos:</span>
-            <span className="text-sm font-semibold">{stats.active_processes} processos</span>
-          </div>
-          <div className="flex items-center gap-2 bg-background border rounded-full px-4 py-2 shadow-sm">
-            <FileText className="size-4 text-purple-500" />
-            <span className="text-sm text-muted-foreground">Documentos:</span>
-            <span className="text-sm font-semibold">{stats.total_documents}</span>
-          </div>
+          {[
+            { icon: ListTodo, label: 'Hoje:', value: String(stats.upcoming_deadlines), unit: 'tarefas', iconColor: 'text-emerald-500', bgGlow: 'shadow-emerald-500/10' },
+            { icon: Calendar, label: 'Esta semana:', value: String(stats.upcoming_deadlines), unit: 'prazos', iconColor: 'text-amber-500', bgGlow: 'shadow-amber-500/10' },
+            { icon: Briefcase, label: 'Activos:', value: String(stats.active_processes), unit: 'processos', iconColor: 'text-cyan-500', bgGlow: 'shadow-cyan-500/10' },
+            { icon: FileText, label: 'Documentos:', value: String(stats.total_documents), unit: '', iconColor: 'text-purple-500', bgGlow: 'shadow-purple-500/10' },
+          ].map((stat, idx) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.15 + idx * 0.06, duration: 0.3 }}
+              whileHover={{ scale: 1.04, y: -1 }}
+              className="flex items-center gap-2 bg-background border rounded-full px-4 py-2 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 cursor-default"
+            >
+              <stat.icon className={`size-4 ${stat.iconColor}`} />
+              <span className="text-sm text-muted-foreground">{stat.label}</span>
+              <span className="text-sm font-bold [font-variant-numeric:tabular-nums]">{stat.value}</span>
+              {stat.unit && <span className="text-sm text-muted-foreground">{stat.unit}</span>}
+            </motion.div>
+          ))}
         </motion.div>
       )}
 
@@ -596,7 +598,7 @@ export function DashboardHome() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">
+                  <p className="text-2xl font-bold [font-variant-numeric:tabular-nums]">
                     <AnimatedCounter target={stats?.[stat.key] ?? 0} />
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -656,7 +658,7 @@ export function DashboardHome() {
                     </ChartContainer>
                     {/* Center label showing total */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-xl font-bold text-foreground">
+                      <span className="text-xl font-bold text-foreground [font-variant-numeric:tabular-nums]">
                         <AnimatedCounter target={statusData.reduce((s, d) => s + d.value, 0)} />
                       </span>
                       <span className="text-[10px] text-muted-foreground">total</span>
@@ -674,13 +676,13 @@ export function DashboardHome() {
                             {statusChartConfig[entry.name as keyof typeof statusChartConfig]?.label}
                           </span>
                         </div>
-                        <span className="text-sm font-semibold">{entry.value}</span>
+                        <span className="text-sm font-semibold [font-variant-numeric:tabular-nums]">{entry.value}</span>
                       </div>
                     ))}
                     <div className="pt-1 border-t">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Total</span>
-                        <span className="text-xs font-bold">
+                        <span className="text-xs font-bold [font-variant-numeric:tabular-nums]">
                           {statusData.reduce((s, d) => s + d.value, 0)}
                         </span>
                       </div>
@@ -736,7 +738,7 @@ export function DashboardHome() {
                       <div key={entry.name} className="space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">{entry.name}</span>
-                          <span className="text-sm font-semibold">{entry.value}</span>
+                          <span className="text-sm font-semibold [font-variant-numeric:tabular-nums]">{entry.value}</span>
                         </div>
                         <div className="h-2.5 rounded-full bg-muted overflow-hidden">
                           <motion.div
@@ -781,7 +783,7 @@ export function DashboardHome() {
                       <div key={entry.name} className="space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">{entry.label}</span>
-                          <span className="text-sm font-semibold">{entry.value}</span>
+                          <span className="text-sm font-semibold [font-variant-numeric:tabular-nums]">{entry.value}</span>
                         </div>
                         <div className="h-2.5 rounded-full bg-muted overflow-hidden">
                           <motion.div

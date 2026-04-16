@@ -189,7 +189,7 @@ function StatusPill({ status, count }: { status: string; count: number }) {
     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium ${colors[status] ?? ''}`}>
       <div className={`w-2 h-2 rounded-full ${STATUS_ICON_COLORS[status]}`} />
       <span>{STATUS_LABELS[status]}</span>
-      <span className="font-bold">{count}</span>
+      <span className="font-bold [font-variant-numeric:tabular-nums]">{count}</span>
     </div>
   );
 }
@@ -506,10 +506,10 @@ export function ProcessesView() {
         {/* Filtro de estado */}
         <Tabs value={statusFilter} onValueChange={handleStatusFilter}>
           <TabsList className="h-9">
-            <TabsTrigger value="all" className="text-xs">Todos</TabsTrigger>
-            <TabsTrigger value="ACTIVE" className="text-xs">Activos</TabsTrigger>
-            <TabsTrigger value="SUSPENDED" className="text-xs">Suspensos</TabsTrigger>
-            <TabsTrigger value="CLOSED" className="text-xs">Encerrados</TabsTrigger>
+            <TabsTrigger value="all" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-50 data-[state=active]:to-emerald-100 dark:data-[state=active]:from-emerald-950/40 dark:data-[state=active]:to-emerald-900/20">Todos</TabsTrigger>
+            <TabsTrigger value="ACTIVE" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-50 data-[state=active]:to-emerald-100 dark:data-[state=active]:from-emerald-950/40 dark:data-[state=active]:to-emerald-900/20">Activos</TabsTrigger>
+            <TabsTrigger value="SUSPENDED" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-50 data-[state=active]:to-amber-100 dark:data-[state=active]:from-amber-950/40 dark:data-[state=active]:to-amber-900/20">Suspensos</TabsTrigger>
+            <TabsTrigger value="CLOSED" className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-gray-50 data-[state=active]:to-gray-100 dark:data-[state=active]:from-gray-900/40 dark:data-[state=active]:to-gray-800/20">Encerrados</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -578,7 +578,7 @@ export function ProcessesView() {
                       <motion.tr
                         key={process.id}
                         variants={staggerItem}
-                        className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-all duration-150 hover:shadow-sm cursor-pointer border-l-4 ${PRIORITY_BORDER_COLORS[process.priority] ?? ''} ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
+                        className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-all duration-150 hover:shadow-sm hover:scale-[1.005] cursor-pointer border-l-4 ${PRIORITY_BORDER_COLORS[process.priority] ?? ''} ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
                         onClick={() => handleDetailOpen(process)}
                       >
                         <TableCell className="font-medium sticky left-0 bg-background/95 backdrop-blur-sm z-[5] min-w-[140px]">
@@ -684,6 +684,8 @@ export function ProcessesView() {
       {/* ── Diálogo: Novo Processo ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-lg max-w-[95vw] max-h-[90vh] overflow-y-auto">
+          {/* Animated gradient top border */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-600 animate-gradient rounded-t-lg" />
           <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
             <DialogTitle className="flex items-center gap-2 text-white">
               <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">

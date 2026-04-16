@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     let demoResetLink: string | null = null;
     if (user) {
       // Gerar token de reset
-      const rawToken = await createResetToken(
+      const rawToken = createResetToken(
         user.id,
         user.firm_id,
         TOKEN_EXPIRY_MS,

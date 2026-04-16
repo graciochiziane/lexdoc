@@ -16,6 +16,7 @@ import {
   CalendarDays,
   History,
   Loader2,
+  MessageSquare,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';

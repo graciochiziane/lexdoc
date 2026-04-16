@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -17,6 +17,7 @@ import {
   Loader2,
   Clock,
   AlertTriangle,
+  CalendarCheck,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -218,6 +219,15 @@ export function DeadlinesView() {
   });
 
   const handleStatusFilter = useCallback((value: string) => { setStatusFilter(value); setPage(1); }, []);
+
+  // ── Filter "Hoje" ──
+  const [hojeFilter, setHojeFilter] = useState(false);
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const filteredDeadlines = useMemo(() => {
+    if (!hojeFilter) return deadlines;
+    return deadlines.filter(d => d.due_date.split('T')[0] === todayStr);
+  }, [deadlines, hojeFilter, todayStr]);
+  const hojeCount = useMemo(() => deadlines.filter(d => d.due_date.split('T')[0] === todayStr).length, [deadlines, todayStr]);
   const handleCreate = useCallback(() => {
     if (!createForm.title || !createForm.due_date || !createForm.process_id) { toast.error('Preencha os campos obrigatórios (título, data e processo).'); return; }
     createMutation.mutate({ ...createForm, reminder_at: createForm.reminder_at || undefined });
@@ -252,14 +262,30 @@ export function DeadlinesView() {
       </div>
 
       {/* Filtros */}
-      <Tabs value={statusFilter} onValueChange={handleStatusFilter}>
-        <TabsList className="h-9">
-          <TabsTrigger value="all" className="text-xs">Todos</TabsTrigger>
-          <TabsTrigger value="PENDING" className="text-xs">Pendentes</TabsTrigger>
-          <TabsTrigger value="COMPLETED" className="text-xs">Concluídos</TabsTrigger>
-          <TabsTrigger value="OVERDUE" className="text-xs">Expirados</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex items-center gap-3">
+        <Tabs value={statusFilter} onValueChange={handleStatusFilter}>
+          <TabsList className="h-9">
+            <TabsTrigger value="all" className="text-xs">Todos</TabsTrigger>
+            <TabsTrigger value="PENDING" className="text-xs">Pendentes</TabsTrigger>
+            <TabsTrigger value="COMPLETED" className="text-xs">Concluídos</TabsTrigger>
+            <TabsTrigger value="OVERDUE" className="text-xs">Expirados</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Button
+          variant={hojeFilter ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setHojeFilter(f => !f)}
+          className={`text-xs active:scale-[0.98] transition-all ${hojeFilter ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600' : 'hover:border-emerald-300 dark:hover:border-emerald-700'}`}
+        >
+          <CalendarCheck className="size-3.5 mr-1" />
+          Hoje
+          {hojeCount > 0 && (
+            <Badge variant="secondary" className="ml-1.5 h-5 min-w-[20px] px-1 text-[10px] bg-white/20 text-inherit">
+              {hojeCount}
+            </Badge>
+          )}
+        </Button>
+      </div>
 
       {/* Lista */}
       {isLoading ? (
@@ -274,7 +300,7 @@ export function DeadlinesView() {
             animate="show"
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[calc(100vh-320px)] overflow-y-auto"
           >
-            {deadlines.map((deadline) => {
+            {filteredDeadlines.map((deadline) => {
               const daysInfo = getDaysInfo(deadline.due_date, deadline.status);
               const accent = getCardAccent(deadline.due_date, deadline.status);
               const isOverdue = deadline.status !== 'COMPLETED' && differenceInDays(new Date(deadline.due_date), new Date()) < 0;

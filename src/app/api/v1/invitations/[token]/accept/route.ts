@@ -160,7 +160,7 @@ export async function POST(
     const refreshToken = generateRefreshToken({ sub: user.id });
 
     // Hash e guardar refresh token
-    const refreshTokenHash = await hashToken(refreshToken);
+    const refreshTokenHash = hashToken(refreshToken);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 

@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     const { refresh_token } = body as { refresh_token?: string };
 
     if (refresh_token) {
-      const tokenHash = await hashToken(refresh_token);
+      const tokenHash = hashToken(refresh_token);
 
       // Buscar e revogar o token
       const storedToken = await db.refreshToken.findUnique({

@@ -3,20 +3,22 @@
 // Módulo compartilhado entre forgot-password e reset-password
 // ═══════════════════════════════════════════════════════════════
 
-import { hashToken, verifyPassword } from '@/lib/auth';
+import { hashToken } from '@/lib/auth';
+import crypto from 'crypto';
 
 // ─────────────────────────────────────────
 // Tipos
 // ─────────────────────────────────────────
 interface ResetTokenEntry {
   tokenHash: string;
+  rawToken: string;
   userId: string;
   firmId: string;
   expiresAt: number;
 }
 
 // ─────────────────────────────────────────
-// Armazenamento
+// Armazenamento (keyed by userId for fast lookup)
 // ─────────────────────────────────────────
 const store = new Map<string, ResetTokenEntry>();
 
@@ -45,19 +47,19 @@ function ensureCleanupTimer(): void {
 // ─────────────────────────────────────────
 
 /** Criar e armazenar um novo token de reset. Retorna o token raw. */
-export async function createResetToken(
+export function createResetToken(
   userId: string,
   firmId: string,
   expiryMs: number,
-): Promise<string> {
-  const crypto = await import('crypto');
+): string {
   const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = await hashToken(rawToken);
+  const tokenHash = hashToken(rawToken);
   const expiresAt = Date.now() + expiryMs;
 
   ensureCleanupTimer();
   store.set(userId, {
     tokenHash,
+    rawToken,
     userId,
     firmId,
     expiresAt,
@@ -66,13 +68,13 @@ export async function createResetToken(
   return rawToken;
 }
 
-/** Buscar entrada de reset por token raw (comparação segura). */
-export async function getResetTokenEntry(
+/** Buscar entrada de reset por token raw (comparação SHA-256). */
+export function getResetTokenEntry(
   rawToken: string,
-): Promise<ResetTokenEntry | null> {
+): ResetTokenEntry | null {
+  const tokenHash = hashToken(rawToken);
   for (const entry of store.values()) {
-    const isValid = await verifyPassword(rawToken, entry.tokenHash);
-    if (isValid) {
+    if (entry.tokenHash === tokenHash) {
       return entry;
     }
   }

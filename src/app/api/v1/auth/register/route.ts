@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Hash e guardar refresh token ──
-    const refreshTokenHash = await hashToken(refreshToken);
+    const refreshTokenHash = hashToken(refreshToken);
 
     // Calcular data de expiração do refresh token (7 dias)
     const expiresAt = new Date();

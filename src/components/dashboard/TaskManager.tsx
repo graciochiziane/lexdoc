@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -217,6 +217,18 @@ export function TaskManager() {
     });
   }, [newContent, newPriority, newDueDate, createMutation]);
 
+  // ── Keyboard shortcut: N for new task ──
+  useEffect(() => {
+    function handleGlobalKey(e: KeyboardEvent) {
+      if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName) && !(e.target as HTMLElement).isContentEditable) {
+        e.preventDefault();
+        setShowNewTask(true);
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, []);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -227,6 +239,8 @@ export function TaskManager() {
   // ── Contagens ──
   const activeCount = tasks.filter((t) => !t.is_completed).length;
   const completedCount = tasks.filter((t) => t.is_completed).length;
+  const totalCount = tasks.length;
+  const completionPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   // ── Filtrar e ordenar ──
   const filteredTasks = useMemo(() => {
@@ -292,6 +306,24 @@ export function TaskManager() {
         </div>
       </div>
 
+      {/* Progress bar */}
+      {totalCount > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Progresso geral</span>
+            <span className="font-medium [font-variant-numeric:tabular-nums]">{completionPct}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${completionPct}%` }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+              className={`h-full rounded-full ${completionPct === 100 ? 'bg-emerald-500' : completionPct >= 50 ? 'bg-emerald-400' : 'bg-amber-400'}`}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Barra de acções */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         {/* Filtros */}
@@ -332,6 +364,7 @@ export function TaskManager() {
         >
           <Plus className="size-4 mr-1.5" />
           Nova tarefa
+          <kbd className="hidden sm:inline-flex ml-1.5 items-center gap-0.5 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">N</kbd>
         </Button>
       </div>
 

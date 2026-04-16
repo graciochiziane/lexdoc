@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback, useSyncExternalStore } from 'react';
+import { useState, useCallback, useSyncExternalStore, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -161,6 +161,35 @@ function ComingSoonView({ title }: { title: string }) {
         Em breve
       </Badge>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Relógio do rodapé (Maputo)
+// ─────────────────────────────────────────
+function FooterClock() {
+  const [time, setTime] = useState('');
+  useEffect(() => {
+    function update() {
+      setTime(
+        new Date().toLocaleTimeString('pt-MZ', {
+          timeZone: 'Africa/Maputo',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }),
+      );
+    }
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, []);
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-mono [font-variant-numeric:tabular-nums]">
+      <Clock className="size-3 text-emerald-500" />
+      {time} <span className="text-muted-foreground/60">CAT</span>
+    </span>
   );
 }
 
@@ -605,8 +634,9 @@ export function DashboardView() {
             </p>
             <div className="flex items-center gap-3">
               <span className="text-[10px]">
-                Construído com <span className="text-red-500" aria-label="amor">❤️</span> em Moçambique
+                Feito com <span className="text-red-500" aria-label="amor">❤️</span> em Moçambique
               </span>
+              <FooterClock />
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold">
                 v1.0.0
               </span>

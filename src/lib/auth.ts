@@ -4,6 +4,7 @@
 
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 // ─────────────────────────────────────────
 // Configuração JWT
@@ -48,12 +49,20 @@ export function generateAccessToken(payload: {
   role: string;
   firm_id: string;
 }): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_EXPIRES });
+  return jwt.sign(
+    { ...payload, jti: crypto.randomUUID() },
+    JWT_SECRET,
+    { expiresIn: ACCESS_EXPIRES },
+  );
 }
 
 /** Gerar token de actualização (longo prazo) */
 export function generateRefreshToken(payload: { sub: string }): string {
-  return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES });
+  return jwt.sign(
+    { ...payload, jti: crypto.randomUUID() },
+    JWT_REFRESH_SECRET,
+    { expiresIn: REFRESH_EXPIRES },
+  );
 }
 
 /** Verificar e descodificar token de acesso — retorna null em caso de erro */
@@ -76,7 +85,7 @@ export function verifyRefreshToken(token: string): { sub: string } | null {
   }
 }
 
-/** Gerar hash de token (para armazenamento seguro na tabela refresh_tokens) */
-export async function hashToken(token: string): Promise<string> {
-  return bcrypt.hash(token, 10);
+/** Gerar hash SHA-256 determinístico de token (para lookup na tabela refresh_tokens) */
+export function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }

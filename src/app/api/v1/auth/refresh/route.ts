@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Hash do token recebido e buscar na base de dados ──
-    const tokenHash = await hashToken(refresh_token);
+    const tokenHash = hashToken(refresh_token);
 
     const storedToken = await db.refreshToken.findUnique({
       where: { token_hash: tokenHash },
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Hash e guardar novo refresh token ──
-    const newRefreshTokenHash = await hashToken(newRefreshToken);
+    const newRefreshTokenHash = hashToken(newRefreshToken);
 
     // Calcular data de expiração (7 dias)
     const expiresAt = new Date();
@@ -167,12 +167,19 @@ export async function POST(request: NextRequest) {
       user_agent: userAgent,
     });
 
-    // ── Resposta com novos tokens ──
+    // ── Resposta com novos tokens + user ──
     return NextResponse.json({
       success: true,
       data: {
         access_token: newAccessToken,
         refresh_token: newRefreshToken,
+        user: {
+          id: storedToken.user.id,
+          email: storedToken.user.email,
+          role: storedToken.user.role,
+          firm_id: storedToken.user.firm_id,
+          full_name: storedToken.user.full_name,
+        },
       },
     });
   } catch (error) {

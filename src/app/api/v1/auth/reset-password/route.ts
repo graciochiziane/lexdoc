@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Buscar entrada por token (comparação lenta mas segura)
-    const entry = await getResetTokenEntry(token);
+    const entry = getResetTokenEntry(token);
     if (!entry) {
       return NextResponse.json(
         {

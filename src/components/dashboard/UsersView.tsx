@@ -324,11 +324,14 @@ export function UsersView() {
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 text-xs font-bold ${ROLE_AVATAR_COLORS[user.role] ?? ''} ${ROLE_AVATAR_BORDER_COLORS[user.role] ?? ''}`}>
                               {user.full_name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
                             </div>
-                            <div>
-                              {user.full_name}
-                              {user.id === currentUser?.id && (
-                                <span className="text-[10px] text-muted-foreground ml-1">(você)</span>
-                              )}
+                            <div className="flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${user.is_active ? 'bg-emerald-500' : 'bg-red-500'}`} title={user.is_active ? 'Activo' : 'Inactivo'} />
+                              <div>
+                                {user.full_name}
+                                {user.id === currentUser?.id && (
+                                  <span className="text-[10px] text-muted-foreground ml-1">(você)</span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </TableCell>

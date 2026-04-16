@@ -109,6 +109,7 @@ function DayCell({
 }) {
   const today = isToday(date);
   const hasDeadlines = deadlines.length > 0;
+  const multiDeadlines = deadlines.length >= 3;
 
   return (
     <button
@@ -122,7 +123,7 @@ function DayCell({
           ? 'hover:bg-emerald-50 dark:hover:bg-emerald-950/20 cursor-pointer active:scale-[0.98] hover:shadow-sm'
           : 'cursor-default'
         }
-        ${today ? 'ring-2 ring-emerald-500 ring-offset-1 dark:ring-offset-background' : ''}
+        ${today ? 'ring-2 ring-emerald-500 ring-offset-1 dark:ring-offset-background bg-emerald-50/50 dark:bg-emerald-950/20 font-bold' : ''}
       `}
     >
       {/* Número do dia */}
@@ -136,18 +137,25 @@ function DayCell({
         {format(date, 'd')}
       </span>
 
+      {/* Mini deadline count badge for multiple deadlines */}
+      {multiDeadlines && (
+        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-emerald-500 text-white text-[8px] font-bold flex items-center justify-center leading-none [font-variant-numeric:tabular-nums]">
+          {deadlines.length}
+        </span>
+      )}
+
       {/* Indicadores de prazos */}
       {hasDeadlines && (
-        <div className="flex flex-wrap gap-0.5 mt-0.5 w-full">
-          {deadlines.slice(0, 3).map((item) => (
+        <div className="flex flex-wrap gap-0.5 mt-0.5 w-full items-center">
+          {deadlines.slice(0, 2).map((item) => (
             <div
               key={item.id}
               className={`w-1.5 h-1.5 rounded-full ${getDeadlineDotColor(item)} shrink-0`}
             />
           ))}
-          {deadlines.length > 3 && (
-            <span className="text-[9px] text-muted-foreground leading-none ml-0.5">
-              +{deadlines.length - 3}
+          {deadlines.length > 2 && (
+            <span className="text-[9px] font-semibold text-muted-foreground leading-none ml-0.5 [font-variant-numeric:tabular-nums]">
+              +{deadlines.length - 2}
             </span>
           )}
         </div>

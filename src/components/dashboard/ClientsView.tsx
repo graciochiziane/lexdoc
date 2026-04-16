@@ -422,13 +422,9 @@ export function ClientsView() {
                         className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
                       >
                         <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${CLIENT_TYPE_ICON_COLORS[client.client_type] ?? ''}`}>
-                              {client.client_type === 'EMPRESA' ? (
-                                <Building2 className="size-3.5" />
-                              ) : (
-                                <User className="size-3.5" />
-                              )}
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 text-xs font-bold ${CLIENT_TYPE_ICON_COLORS[client.client_type] ?? ''} ${client.client_type === 'EMPRESA' ? 'border-amber-300 dark:border-amber-700' : 'border-cyan-300 dark:border-cyan-700'}`}>
+                              {client.full_name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
                             </div>
                             {client.full_name}
                           </div>
@@ -442,7 +438,7 @@ export function ClientsView() {
                         <TableCell>
                           <Badge
                             variant="outline"
-                            className={`rounded-full text-[10px] shadow-sm ${CLIENT_TYPE_COLORS[client.client_type] ?? ''}`}
+                            className={`rounded-full text-[10px] shadow-sm hover:shadow-md transition-shadow ${CLIENT_TYPE_COLORS[client.client_type] ?? ''}`}
                           >
                             {CLIENT_TYPE_LABELS[client.client_type] ?? client.client_type}
                           </Badge>
