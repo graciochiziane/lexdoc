@@ -55,6 +55,7 @@ import { FirmSettingsDialog } from '@/components/dashboard/FirmSettingsDialog';
 import { InvitationsView } from '@/components/dashboard/InvitationsView';
 import { ReportsView } from '@/components/dashboard/ReportsView';
 import { QuickActionsFAB } from '@/components/dashboard/QuickActionsFAB';
+import { OnboardingGuide } from '@/components/dashboard/OnboardingGuide';
 
 // ─────────────────────────────────────────
 // Tipos
@@ -560,6 +561,9 @@ export function DashboardView() {
 
       {/* Quick Actions FAB */}
       <QuickActionsFAB />
+
+      {/* Onboarding Guide — shown on first login */}
+      <OnboardingGuide />
     </div>
   );
 }

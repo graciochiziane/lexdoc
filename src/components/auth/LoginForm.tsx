@@ -38,7 +38,11 @@ type LoginFormData = z.infer<typeof loginSchema>;
 // ─────────────────────────────────────────
 // Componente
 // ─────────────────────────────────────────
-export function LoginForm() {
+interface LoginFormProps {
+  onForgotPassword?: () => void;
+}
+
+export function LoginForm({ onForgotPassword }: LoginFormProps) {
   const { login, isLoggingIn, loginError } = useAuth();
   const navigate = useNavStore((s) => s.navigate);
   const [showPassword, setShowPassword] = useState(false);
@@ -130,7 +134,10 @@ export function LoginForm() {
                   <button
                     type="button"
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => navigate('forgot-password')}
+                    onClick={() => {
+                      if (onForgotPassword) onForgotPassword();
+                      else navigate('forgot-password');
+                    }}
                   >
                     Esqueceu a palavra-passe?
                   </button>

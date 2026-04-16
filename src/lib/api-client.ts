@@ -607,3 +607,58 @@ export const exportApi = {
   processes: () => apiFetchBlob('/export/processes?format=csv'),
   audit: () => apiFetchBlob('/export/audit?format=csv'),
 };
+
+// ─────────────────────────────────────────
+// API de Autenticação (pública)
+// ─────────────────────────────────────────
+
+// Fetch sem autenticação para endpoints públicos
+async function publicApiFetch<T>(
+  endpoint: string,
+  options?: RequestInit,
+): Promise<ApiResponse<T>> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+  const data: ApiResponse<T> = await response.json();
+  return data;
+}
+
+export const authApi = {
+  forgotPassword: (email: string) =>
+    publicApiFetch<{ message: string; reset_link?: string }>(
+      '/auth/forgot-password',
+      { method: 'POST', body: JSON.stringify({ email }) },
+    ),
+  resetPassword: (token: string, new_password: string, confirm_password: string) =>
+    publicApiFetch<{ message: string }>(
+      '/auth/reset-password',
+      { method: 'POST', body: JSON.stringify({ token, new_password, confirm_password }) },
+    ),
+};
+
+// ─────────────────────────────────────────
+// API de Actividade Recente
+// ─────────────────────────────────────────
+export interface ActivityItem {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  user_name: string;
+  user_id: string | null;
+  description: string;
+  created_at: string;
+}
+
+interface ActivityRecentData {
+  activities: ActivityItem[];
+  total: number;
+}
+
+export const activityApi = {
+  recent: (limit?: number) =>
+    apiFetch<ActivityRecentData>(`/activity/recent${limit ? `?limit=${limit}` : ''}`),
+};

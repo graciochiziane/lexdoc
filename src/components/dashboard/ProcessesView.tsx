@@ -26,6 +26,7 @@ import {
   Scale,
   Gavel,
   Download,
+  AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -90,6 +91,13 @@ const STATUS_COLORS: Record<string, string> = {
   ARCHIVED: 'bg-muted text-muted-foreground border-border',
 };
 
+const STATUS_ICON_COLORS: Record<string, string> = {
+  ACTIVE: 'text-emerald-500',
+  SUSPENDED: 'text-amber-500',
+  CLOSED: 'text-gray-400',
+  ARCHIVED: 'text-muted-foreground',
+};
+
 const PRIORITY_LABELS: Record<string, string> = {
   LOW: 'Baixa',
   MEDIUM: 'Média',
@@ -102,6 +110,13 @@ const PRIORITY_COLORS: Record<string, string> = {
   MEDIUM: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200',
   HIGH: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 border-orange-200',
   URGENT: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-red-200 animate-pulse',
+};
+
+const PRIORITY_BORDER_COLORS: Record<string, string> = {
+  URGENT: 'border-l-red-500',
+  HIGH: 'border-l-orange-400',
+  MEDIUM: 'border-l-amber-400',
+  LOW: 'border-l-gray-300 dark:border-l-gray-600',
 };
 
 const AREA_LABELS: Record<string, string> = {
@@ -129,6 +144,20 @@ const AREA_COLORS: Record<string, string> = {
 const AREAS = Object.keys(AREA_LABELS);
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
+// Stagger animation for list items
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.04 },
+  },
+};
+
+const staggerItem = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0 },
+};
+
 // ─────────────────────────────────────────
 // Badge genérico
 // ─────────────────────────────────────────
@@ -137,6 +166,50 @@ function ColoredBadge({ value, labels, colors }: { value: string; labels: Record
     <Badge variant="outline" className={`rounded-full text-[10px] shadow-sm ${colors[value] ?? ''}`}>
       {labels[value] ?? value}
     </Badge>
+  );
+}
+
+// ─────────────────────────────────────────
+// Kanban stat pill
+// ─────────────────────────────────────────
+function StatusPill({ status, count }: { status: string; count: number }) {
+  const colors: Record<string, string> = {
+    ACTIVE: 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300',
+    SUSPENDED: 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
+    CLOSED: 'bg-gray-50 dark:bg-gray-900/30 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400',
+    ARCHIVED: 'bg-muted border-border text-muted-foreground',
+  };
+  return (
+    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium ${colors[status] ?? ''}`}>
+      <div className={`w-2 h-2 rounded-full ${STATUS_ICON_COLORS[status]}`} />
+      <span>{STATUS_LABELS[status]}</span>
+      <span className="font-bold">{count}</span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Skeleton para tabela
+// ─────────────────────────────────────────
+function TableSkeleton() {
+  return (
+    <div className="p-4 space-y-0">
+      <div className="flex gap-4 mb-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-4 w-24 rounded" />
+        ))}
+      </div>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex gap-4 py-3 border-b last:border-0">
+          <Skeleton className="h-4 w-28 rounded" />
+          <Skeleton className="h-4 w-40 rounded hidden md:block" />
+          <Skeleton className="h-4 w-24 rounded hidden lg:block" />
+          <Skeleton className="h-6 w-16 rounded-full hidden sm:block" />
+          <Skeleton className="h-6 w-16 rounded-full hidden md:block" />
+          <Skeleton className="h-4 w-20 rounded ml-auto" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -164,6 +237,17 @@ function EmptyProcessesState() {
       <p className="text-xs text-muted-foreground mt-1 max-w-xs">
         Ajuste os filtros ou crie um novo processo jurídico.
       </p>
+      <Button
+        onClick={() => {
+          const event = new CustomEvent('lexdoc:open-create');
+          window.dispatchEvent(event);
+        }}
+        className="mt-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all"
+        size="sm"
+      >
+        <Plus className="size-4 mr-1.5" />
+        Criar Processo
+      </Button>
     </motion.div>
   );
 }
@@ -232,6 +316,14 @@ export function ProcessesView() {
 
   const processes: ProcessRecord[] = data?.data ?? [];
   const meta = data?.meta;
+
+  // ── Status counts (from meta or local) ──
+  const statusCounts = {
+    ACTIVE: processes.filter(p => p.status === 'ACTIVE').length,
+    SUSPENDED: processes.filter(p => p.status === 'SUSPENDED').length,
+    CLOSED: processes.filter(p => p.status === 'CLOSED').length,
+    ARCHIVED: processes.filter(p => p.status === 'ARCHIVED').length,
+  };
 
   // ── Query: clientes (para select) ──
   const { data: clientsData } = useQuery({
@@ -346,14 +438,14 @@ export function ProcessesView() {
             size="sm"
             onClick={handleExport}
             disabled={exporting}
-            className="active:scale-[0.98] transition-all"
+            className="active:scale-[0.98] transition-all hover:border-emerald-300 dark:hover:border-emerald-700"
           >
             {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
             <span className="hidden sm:inline ml-2">Exportar CSV</span>
           </Button>
           <Button
             onClick={() => setCreateOpen(true)}
-            className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98] transition-all"
+            className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all"
           >
             <Plus className="size-4" />
             Novo Processo
@@ -361,17 +453,36 @@ export function ProcessesView() {
         </div>
       </div>
 
+      {/* Kanban-like status pills */}
+      {!isLoading && processes.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-wrap gap-2"
+        >
+          <StatusPill status="ACTIVE" count={statusCounts.ACTIVE} />
+          <StatusPill status="SUSPENDED" count={statusCounts.SUSPENDED} />
+          <StatusPill status="CLOSED" count={statusCounts.CLOSED} />
+          <StatusPill status="ARCHIVED" count={statusCounts.ARCHIVED} />
+        </motion.div>
+      )}
+
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-3">
         {/* Pesquisa */}
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Pesquisar processo..."
-            value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="pl-9"
-          />
+          <motion.div
+            animate={search ? { scale: [1, 1.02, 1] } : {}}
+            transition={{ duration: 0.15 }}
+          >
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Pesquisar processo..."
+              value={search}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-9"
+            />
+          </motion.div>
         </div>
 
         {/* Filtro de estado */}
@@ -421,17 +532,13 @@ export function ProcessesView() {
       <Card className="hover:shadow-lg transition-all duration-200">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-4 space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full rounded-lg" />
-              ))}
-            </div>
+            <TableSkeleton />
           ) : processes.length === 0 ? (
             <EmptyProcessesState />
           ) : (
             <div className="max-h-[calc(100vh-340px)] overflow-y-auto rounded-lg border">
               <Table>
-                <TableHeader className="sticky top-0 bg-background backdrop-blur-sm">
+                <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                   <TableRow>
                     <TableHead>Nº Processo</TableHead>
                     <TableHead className="hidden md:table-cell">Título</TableHead>
@@ -444,78 +551,85 @@ export function ProcessesView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {processes.map((process, i) => (
-                    <TableRow
-                      key={process.id}
-                      className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors cursor-pointer ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
-                      onClick={() => handleDetailOpen(process)}
-                    >
-                      <TableCell className="font-medium">
-                        {process.process_number}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell max-w-[200px] truncate">
-                        {process.title}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground">
-                        {process.client?.full_name ?? '—'}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <ColoredBadge
-                          value={process.area}
-                          labels={AREA_LABELS}
-                          colors={AREA_COLORS}
-                        />
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <ColoredBadge
-                          value={process.priority}
-                          labels={PRIORITY_LABELS}
-                          colors={PRIORITY_COLORS}
-                        />
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <ColoredBadge
-                          value={process.status}
-                          labels={STATUS_LABELS}
-                          colors={STATUS_COLORS}
-                        />
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
-                        {process.closed_at
-                          ? format(new Date(process.closed_at), 'dd/MM/yyyy', { locale: pt })
-                          : format(new Date(process.opened_at), 'dd/MM/yyyy', { locale: pt })}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 active:scale-[0.95]"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDetailOpen(process);
-                            }}
-                          >
-                            <Eye className="size-3.5" />
-                          </Button>
-                          {process.status === 'ACTIVE' && (
+                  <motion.tbody
+                    variants={staggerContainer}
+                    initial="hidden"
+                    animate="show"
+                  >
+                    {processes.map((process, i) => (
+                      <motion.tr
+                        key={process.id}
+                        variants={staggerItem}
+                        className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-all duration-150 hover:shadow-sm cursor-pointer border-l-4 ${PRIORITY_BORDER_COLORS[process.priority] ?? ''} ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
+                        onClick={() => handleDetailOpen(process)}
+                      >
+                        <TableCell className="font-medium">
+                          {process.process_number}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell max-w-[200px] truncate">
+                          {process.title}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-muted-foreground">
+                          {process.client?.full_name ?? '—'}
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <ColoredBadge
+                            value={process.area}
+                            labels={AREA_LABELS}
+                            colors={AREA_COLORS}
+                          />
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <ColoredBadge
+                            value={process.priority}
+                            labels={PRIORITY_LABELS}
+                            colors={PRIORITY_COLORS}
+                          />
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <ColoredBadge
+                            value={process.status}
+                            labels={STATUS_LABELS}
+                            colors={STATUS_COLORS}
+                          />
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
+                          {process.closed_at
+                            ? format(new Date(process.closed_at), 'dd/MM/yyyy', { locale: pt })
+                            : format(new Date(process.opened_at), 'dd/MM/yyyy', { locale: pt })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-[0.95]"
+                              className="size-8 active:scale-[0.95]"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setCloseProcess(process);
-                                setCloseOpen(true);
+                                handleDetailOpen(process);
                               }}
                             >
-                              <Briefcase className="size-3.5" />
+                              <Eye className="size-3.5" />
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            {process.status === 'ACTIVE' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-[0.95]"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCloseProcess(process);
+                                  setCloseOpen(true);
+                                }}
+                              >
+                                <Briefcase className="size-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </motion.tr>
+                    ))}
+                  </motion.tbody>
                 </TableBody>
               </Table>
             </div>
@@ -553,12 +667,17 @@ export function ProcessesView() {
       {/* ── Diálogo: Novo Processo ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Novo Processo</DialogTitle>
-            <DialogDescription>
-              Crie um novo processo jurídico.
-            </DialogDescription>
-          </DialogHeader>
+          <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+                <Scale className="size-5" />
+              </div>
+              <div>
+                <p className="text-lg">Novo Processo</p>
+                <DialogDescription className="text-white/80 mt-0.5">Crie um novo processo jurídico.</DialogDescription>
+              </div>
+            </DialogTitle>
+          </div>
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
@@ -616,6 +735,10 @@ export function ProcessesView() {
               />
             </div>
 
+            <Separator />
+
+            <p className="text-xs text-muted-foreground font-medium">Detalhes do Processo</p>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Área Jurídica</Label>
@@ -656,6 +779,8 @@ export function ProcessesView() {
             </div>
 
             <Separator />
+
+            <p className="text-xs text-muted-foreground font-medium">Informações do Tribunal</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
@@ -701,7 +826,7 @@ export function ProcessesView() {
             <Button
               onClick={handleCreate}
               disabled={createMutation.isPending}
-              className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98]"
+              className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98]"
             >
               {createMutation.isPending && <Loader2 className="size-4 animate-spin" />}
               Criar Processo
@@ -710,37 +835,36 @@ export function ProcessesView() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Diálogo: Detalhes do Processo (melhorado) ── */}
+      {/* ── Diálogo: Detalhes do Processo ── */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           {detailProcess && (
             <>
               <DialogHeader>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-950/60 dark:to-emerald-900/30 flex items-center justify-center shrink-0">
-                    <Briefcase className="size-5 text-emerald-600 dark:text-emerald-400" />
+                {/* Emerald gradient header */}
+                <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0 border border-white/20">
+                      <Briefcase className="size-6" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <DialogTitle className="text-lg text-white">{detailProcess.process_number}</DialogTitle>
+                      <DialogDescription className="text-white/80 truncate">{detailProcess.title}</DialogDescription>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <DialogTitle className="text-lg">{detailProcess.process_number}</DialogTitle>
-                    <DialogDescription className="truncate">{detailProcess.title}</DialogDescription>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <Badge className="text-[10px] border-0 bg-white/20 text-white">{STATUS_LABELS[detailProcess.status]}</Badge>
+                    <Badge className="text-[10px] border-0 bg-white/20 text-white">{PRIORITY_LABELS[detailProcess.priority]}</Badge>
+                    <Badge className="text-[10px] border-0 bg-white/20 text-white">{AREA_LABELS[detailProcess.area]}</Badge>
                   </div>
                 </div>
               </DialogHeader>
 
-              <div className="space-y-5 py-2">
-                {/* Badges */}
-                <div className="flex flex-wrap gap-2">
-                  <ColoredBadge value={detailProcess.status} labels={STATUS_LABELS} colors={STATUS_COLORS} />
-                  <ColoredBadge value={detailProcess.priority} labels={PRIORITY_LABELS} colors={PRIORITY_COLORS} />
-                  <ColoredBadge value={detailProcess.area} labels={AREA_LABELS} colors={AREA_COLORS} />
-                </div>
-
-                <Separator />
-
+              <div className="space-y-5 pt-2">
                 {/* Info grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Cliente */}
-                  <div className="rounded-lg border p-3 bg-muted/30">
+                  <div className="rounded-lg border border-l-4 border-l-cyan-500 p-3 bg-gradient-to-r from-white to-cyan-50/30 dark:from-background dark:to-cyan-950/10">
                     <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                       <User className="size-3" /> Cliente
                     </p>
@@ -753,7 +877,7 @@ export function ProcessesView() {
                   </div>
 
                   {/* Tribunal */}
-                  <div className="rounded-lg border p-3 bg-muted/30">
+                  <div className="rounded-lg border border-l-4 border-l-emerald-500 p-3 bg-gradient-to-r from-white to-emerald-50/30 dark:from-background dark:to-emerald-950/10">
                     <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                       <Building className="size-3" /> Tribunal
                     </p>
@@ -769,14 +893,14 @@ export function ProcessesView() {
 
                   {/* Parte contrária */}
                   {(detailProcess.opposing_party) && (
-                    <div className="rounded-lg border p-3 bg-muted/30 sm:col-span-2">
+                    <div className="rounded-lg border border-l-4 border-l-red-400 p-3 bg-gradient-to-r from-white to-red-50/30 dark:from-background dark:to-red-950/10 sm:col-span-2">
                       <p className="text-xs text-muted-foreground mb-1">Parte Contrária</p>
                       <p className="text-sm font-medium">{detailProcess.opposing_party}</p>
                     </div>
                   )}
 
                   {/* Datas */}
-                  <div className="rounded-lg border p-3 bg-muted/30">
+                  <div className="rounded-lg border border-l-4 border-l-amber-400 p-3 bg-gradient-to-r from-white to-amber-50/30 dark:from-background dark:to-amber-950/10">
                     <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                       <Calendar className="size-3" /> Aberto em
                     </p>
@@ -784,7 +908,7 @@ export function ProcessesView() {
                       {format(new Date(detailProcess.opened_at), "dd 'de' MMMM, yyyy", { locale: pt })}
                     </p>
                   </div>
-                  <div className="rounded-lg border p-3 bg-muted/30">
+                  <div className="rounded-lg border border-l-4 border-l-gray-400 dark:border-l-gray-600 p-3 bg-gradient-to-r from-white to-gray-50/30 dark:from-background dark:to-gray-950/10">
                     <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                       <Clock className="size-3" /> Actualizado em
                     </p>
@@ -799,7 +923,7 @@ export function ProcessesView() {
                   <>
                     <Separator />
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Descrição</p>
+                      <p className="text-xs text-muted-foreground mb-1 font-medium">Descrição</p>
                       <p className="text-sm whitespace-pre-wrap leading-relaxed bg-muted/30 rounded-lg p-3 border">
                         {detailProcess.description}
                       </p>
@@ -815,7 +939,7 @@ export function ProcessesView() {
                       <Calendar className="size-4 text-emerald-600 dark:text-emerald-400" />
                       Prazos do Processo
                     </p>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-[10px] rounded-full shadow-sm">
                       {processDeadlines.length} prazo{processDeadlines.length !== 1 ? 's' : ''}
                     </Badge>
                   </div>
@@ -905,7 +1029,12 @@ export function ProcessesView() {
       <AlertDialog open={closeOpen} onOpenChange={setCloseOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Encerrar Processo</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+                <AlertTriangle className="size-4 text-red-600 dark:text-red-400" />
+              </div>
+              Encerrar Processo
+            </AlertDialogTitle>
             <AlertDialogDescription>
               Tem a certeza que deseja encerrar o processo{' '}
               <span className="font-semibold text-foreground">

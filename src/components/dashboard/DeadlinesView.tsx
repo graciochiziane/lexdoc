@@ -16,6 +16,7 @@ import {
   Calendar,
   Loader2,
   Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,24 +57,25 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200',
   COMPLETED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200',
-  OVERDUE: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-red-200 animate-pulse',
+  OVERDUE: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-red-200',
 };
 
 function formatDueDate(dateStr: string): string {
   return format(new Date(dateStr), 'dd/MM/yyyy', { locale: pt });
 }
 
-function getDaysInfo(dateStr: string, status: string): { text: string; color: string } {
+function getDaysInfo(dateStr: string, status: string): { text: string; color: string; progress: number } {
   const dueDate = new Date(dateStr);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   dueDate.setHours(0, 0, 0, 0);
   const diff = differenceInDays(dueDate, today);
-  if (status === 'COMPLETED') return { text: 'Concluído', color: 'text-emerald-600 dark:text-emerald-400' };
-  if (diff < 0) return { text: `Expirado há ${Math.abs(diff)} dia${Math.abs(diff) !== 1 ? 's' : ''}`, color: 'text-red-600 dark:text-red-400' };
-  if (diff === 0) return { text: 'Vence hoje!', color: 'text-red-600 dark:text-red-400' };
-  if (diff <= 3) return { text: `${diff} dia${diff !== 1 ? 's' : ''} restante${diff !== 1 ? 's' : ''}`, color: 'text-amber-600 dark:text-amber-400' };
-  return { text: `${diff} dias restantes`, color: 'text-emerald-600 dark:text-emerald-400' };
+  if (status === 'COMPLETED') return { text: 'Concluído', color: 'text-emerald-600 dark:text-emerald-400', progress: 100 };
+  if (diff < 0) return { text: `Expirado há ${Math.abs(diff)} dia${Math.abs(diff) !== 1 ? 's' : ''}`, color: 'text-red-600 dark:text-red-400', progress: 0 };
+  if (diff === 0) return { text: 'Vence hoje!', color: 'text-red-600 dark:text-red-400', progress: 10 };
+  if (diff <= 3) return { text: `${diff} dia${diff !== 1 ? 's' : ''} restante${diff !== 1 ? 's' : ''}`, color: 'text-amber-600 dark:text-amber-400', progress: Math.max(10, 100 - diff * 10) };
+  if (diff <= 14) return { text: `${diff} dias restantes`, color: 'text-amber-600 dark:text-amber-400', progress: Math.max(20, 100 - diff * 5) };
+  return { text: `${diff} dias restantes`, color: 'text-emerald-600 dark:text-emerald-400', progress: Math.max(50, 100 - diff) };
 }
 
 function getCardAccent(dateStr: string, status: string): string {
@@ -84,7 +86,41 @@ function getCardAccent(dateStr: string, status: string): string {
   return 'border-l-emerald-500';
 }
 
+function getProgressBarColor(dateStr: string, status: string): string {
+  if (status === 'COMPLETED') return 'bg-emerald-500';
+  if (status === 'OVERDUE') return 'bg-red-500';
+  const diff = differenceInDays(new Date(dateStr), new Date());
+  if (diff <= 3) return 'bg-amber-500';
+  return 'bg-emerald-500';
+}
+
 const EMPTY_FORM = { title: '', due_date: '', description: '', process_id: '', reminder_at: '' };
+
+// Stagger
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.05 } },
+};
+const staggerItem = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0 },
+};
+
+// ─────────────────────────────────────────
+// Skeleton
+// ─────────────────────────────────────────
+function CardGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="space-y-3">
+          <Skeleton className="h-4 w-32 rounded" />
+          <Skeleton className="h-20 w-full rounded-xl" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────
 // Empty state
@@ -106,6 +142,17 @@ function EmptyDeadlinesState() {
       </motion.div>
       <p className="text-sm font-medium text-foreground">Nenhum prazo encontrado</p>
       <p className="text-xs text-muted-foreground mt-1 max-w-xs">Ajuste os filtros ou crie um novo prazo.</p>
+      <Button
+        onClick={() => {
+          const event = new CustomEvent('lexdoc:open-create');
+          window.dispatchEvent(event);
+        }}
+        className="mt-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all"
+        size="sm"
+      >
+        <Plus className="size-4 mr-1.5" />
+        Criar Prazo
+      </Button>
     </motion.div>
   );
 }
@@ -198,7 +245,7 @@ export function DeadlinesView() {
           <h2 className="text-2xl font-bold tracking-tight">Gestão de Prazos</h2>
           <p className="text-sm text-muted-foreground mt-1">{meta?.total ?? 0} prazos registados</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98] transition-all">
+        <Button onClick={() => setCreateOpen(true)} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all">
           <Plus className="size-4" />
           Novo Prazo
         </Button>
@@ -216,54 +263,76 @@ export function DeadlinesView() {
 
       {/* Lista */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-36 w-full rounded-xl" />)}
-        </div>
+        <CardGridSkeleton />
       ) : deadlines.length === 0 ? (
         <EmptyDeadlinesState />
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[calc(100vh-320px)] overflow-y-auto">
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            animate="show"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[calc(100vh-320px)] overflow-y-auto"
+          >
             {deadlines.map((deadline) => {
               const daysInfo = getDaysInfo(deadline.due_date, deadline.status);
               const accent = getCardAccent(deadline.due_date, deadline.status);
+              const isOverdue = deadline.status !== 'COMPLETED' && differenceInDays(new Date(deadline.due_date), new Date()) < 0;
               return (
-                <Card key={deadline.id} className={`bg-gradient-to-br from-white to-muted/20 dark:from-background dark:to-card rounded-xl border border-l-4 ${accent} p-4 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200`}>
-                  <CardContent className="p-0">
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <h3 className="font-semibold text-sm leading-tight line-clamp-2">{deadline.title}</h3>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {deadline.status !== 'COMPLETED' && (
-                          <Button variant="ghost" size="icon" className="size-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 active:scale-[0.95]" onClick={() => handleComplete(deadline.id)} title="Marcar como concluído">
-                            <CheckCircle2 className="size-3.5" />
+                <motion.div key={deadline.id} variants={staggerItem}>
+                  <Card className={`bg-gradient-to-br from-white to-muted/20 dark:from-background dark:to-card rounded-xl border border-l-4 ${accent} p-4 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 ${isOverdue ? 'ring-1 ring-red-200 dark:ring-red-800/30 animate-pulse' : ''}`}>
+                    <CardContent className="p-0">
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <h3 className="font-semibold text-sm leading-tight line-clamp-2">{deadline.title}</h3>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {deadline.status !== 'COMPLETED' && (
+                            <Button variant="ghost" size="icon" className="size-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 active:scale-[0.95]" onClick={() => handleComplete(deadline.id)} title="Marcar como concluído">
+                              <CheckCircle2 className="size-3.5" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" className="size-7 active:scale-[0.95]" onClick={() => handleEditOpen(deadline)} title="Editar prazo">
+                            <Pencil className="size-3.5" />
                           </Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="size-7 active:scale-[0.95]" onClick={() => handleEditOpen(deadline)} title="Editar prazo">
-                          <Pencil className="size-3.5" />
-                        </Button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Calendar className="size-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-foreground font-medium">{formatDueDate(deadline.due_date)}</span>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Calendar className="size-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-foreground font-medium">{formatDueDate(deadline.due_date)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className={`size-3.5 shrink-0 ${daysInfo.color} ${isOverdue ? 'animate-pulse' : ''}`} />
+                          <span className={`text-xs font-medium ${daysInfo.color}`}>{daysInfo.text}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className={`size-3.5 shrink-0 ${daysInfo.color}`} />
-                        <span className={`text-xs font-medium ${daysInfo.color}`}>{daysInfo.text}</span>
+                      {/* Progress bar */}
+                      <div className="mt-2">
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${daysInfo.progress}%` }}
+                            transition={{ duration: 0.6, ease: 'easeOut' }}
+                            className={`h-full rounded-full ${getProgressBarColor(deadline.due_date, deadline.status)}`}
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                      <span className="text-xs text-muted-foreground truncate max-w-[60%]">{deadline.process?.title ?? deadline.process?.process_number ?? '—'}</span>
-                      <Badge variant="outline" className={`text-[10px] rounded-full shadow-sm ${STATUS_COLORS[deadline.status] ?? ''}`}>
-                        {STATUS_LABELS[deadline.status] ?? deadline.status}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
+                      <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {isOverdue && (
+                            <AlertTriangle className="size-3 text-red-500 shrink-0 animate-pulse" />
+                          )}
+                          <span className="text-xs text-muted-foreground truncate">{deadline.process?.title ?? deadline.process?.process_number ?? '—'}</span>
+                        </div>
+                        <Badge variant="outline" className={`text-[10px] rounded-full shadow-sm flex items-center gap-1 ${STATUS_COLORS[deadline.status] ?? ''}`}>
+                          {STATUS_LABELS[deadline.status] ?? deadline.status}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
           {meta && meta.pages > 1 && (
             <div className="flex items-center justify-center gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="active:scale-[0.98]">Anterior</Button>
@@ -277,7 +346,17 @@ export function DeadlinesView() {
       {/* ── Diálogos ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Novo Prazo</DialogTitle><DialogDescription>Adicione um novo prazo processual.</DialogDescription></DialogHeader>
+          <div className="bg-gradient-to-r from-red-500 to-red-400 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+                <Calendar className="size-5" />
+              </div>
+              <div>
+                <p className="text-lg">Novo Prazo</p>
+                <DialogDescription className="text-white/80 mt-0.5">Adicione um novo prazo processual.</DialogDescription>
+              </div>
+            </DialogTitle>
+          </div>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2"><Label htmlFor="deadline-title">Título *</Label><Input id="deadline-title" placeholder="Ex: Prazo para contestação" value={createForm.title} onChange={(e) => setCreateForm((f) => ({ ...f, title: e.target.value }))} /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -289,7 +368,7 @@ export function DeadlinesView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} className="active:scale-[0.98]">Cancelar</Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98]">
+            <Button onClick={handleCreate} disabled={createMutation.isPending} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98]">
               {createMutation.isPending && <Loader2 className="size-4 animate-spin" />}Criar Prazo
             </Button>
           </DialogFooter>
@@ -298,7 +377,17 @@ export function DeadlinesView() {
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Editar Prazo</DialogTitle><DialogDescription>Actualize os dados do prazo.</DialogDescription></DialogHeader>
+          <div className="bg-gradient-to-r from-amber-600 to-amber-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+                <Pencil className="size-5" />
+              </div>
+              <div>
+                <p className="text-lg">Editar Prazo</p>
+                <DialogDescription className="text-white/80 mt-0.5">Actualize os dados do prazo.</DialogDescription>
+              </div>
+            </DialogTitle>
+          </div>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2"><Label htmlFor="edit-deadline-title">Título *</Label><Input id="edit-deadline-title" value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -310,7 +399,7 @@ export function DeadlinesView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} className="active:scale-[0.98]">Cancelar</Button>
-            <Button onClick={handleEditSave} disabled={updateMutation.isPending} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98]">
+            <Button onClick={handleEditSave} disabled={updateMutation.isPending} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98]">
               {updateMutation.isPending && <Loader2 className="size-4 animate-spin" />}Guardar
             </Button>
           </DialogFooter>

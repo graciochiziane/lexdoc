@@ -477,7 +477,7 @@ export function ReportsView() {
       {/* ── Process Analytics ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Area breakdown */}
-        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow">
+        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-emerald-50/30 dark:from-background dark:to-emerald-950/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <FileText className="size-4 text-emerald-500" />
@@ -502,7 +502,7 @@ export function ReportsView() {
         </Card>
 
         {/* Priority breakdown */}
-        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow">
+        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-amber-50/30 dark:from-background dark:to-amber-950/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <TrendingUp className="size-4 text-amber-500" />
@@ -525,7 +525,7 @@ export function ReportsView() {
         </Card>
 
         {/* Monthly comparison */}
-        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow lg:col-span-2">
+        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow lg:col-span-2 bg-gradient-to-br from-white to-cyan-50/30 dark:from-background dark:to-cyan-950/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Calendar className="size-4 text-cyan-500" />
@@ -582,7 +582,7 @@ export function ReportsView() {
 
       {/* ── Client Analytics ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow">
+        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-cyan-50/30 dark:from-background dark:to-cyan-950/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Users className="size-4 text-cyan-500" />
@@ -598,7 +598,7 @@ export function ReportsView() {
           </CardContent>
         </Card>
 
-        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow">
+        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-purple-50/30 dark:from-background dark:to-purple-950/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Novos Clientes</CardTitle>
           </CardHeader>
@@ -626,7 +626,7 @@ export function ReportsView() {
 
       {/* ── Document Analytics ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow">
+        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-amber-50/30 dark:from-background dark:to-amber-950/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <FileText className="size-4 text-amber-500" />
@@ -642,7 +642,7 @@ export function ReportsView() {
           </CardContent>
         </Card>
 
-        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow">
+        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-emerald-50/30 dark:from-background dark:to-emerald-950/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Armazenamento e Segurança</CardTitle>
           </CardHeader>
@@ -681,7 +681,7 @@ export function ReportsView() {
       </div>
 
       {/* ── Deadline Analytics ── */}
-      <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow">
+      <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-red-50/30 dark:from-background dark:to-red-950/10">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <Calendar className="size-4 text-red-500" />
@@ -739,7 +739,7 @@ export function ReportsView() {
       {/* ── Activity Section ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Most active users */}
-        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow">
+        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-purple-50/30 dark:from-background dark:to-purple-950/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Activity className="size-4 text-purple-500" />
@@ -793,7 +793,7 @@ export function ReportsView() {
         </Card>
 
         {/* Activity type breakdown */}
-        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow">
+        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-emerald-50/30 dark:from-background dark:to-emerald-950/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Shield className="size-4 text-emerald-500" />

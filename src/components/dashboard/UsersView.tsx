@@ -17,6 +17,9 @@ import {
   UserMinus,
   Users,
   Loader2,
+  Shield,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -71,13 +74,56 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_COLORS: Record<string, string> = {
-  ADMIN: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-red-200',
-  ADVOGADO: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200',
+  ADMIN: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200',
+  ADVOGADO: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-400 border-cyan-200',
   SECRETARIO: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200',
   CLIENT: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200',
 };
 
+const ROLE_AVATAR_COLORS: Record<string, string> = {
+  ADMIN: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400',
+  ADVOGADO: 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-400',
+  SECRETARIO: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400',
+  CLIENT: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400',
+};
+
+const ROLE_AVATAR_BORDER_COLORS: Record<string, string> = {
+  ADMIN: 'border-emerald-300 dark:border-emerald-700',
+  ADVOGADO: 'border-cyan-300 dark:border-cyan-700',
+  SECRETARIO: 'border-amber-300 dark:border-amber-700',
+  CLIENT: 'border-gray-300 dark:border-gray-600',
+};
+
 const ROLE_OPTIONS = ['ADMIN', 'ADVOGADO', 'SECRETARIO', 'CLIENT'];
+
+// Stagger animations
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
+};
+const staggerItem = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0 },
+};
+
+// ─────────────────────────────────────────
+// Relative time
+// ─────────────────────────────────────────
+function relativeTime(dateStr: string | null): string {
+  if (!dateStr) return 'Nunca';
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffH = Math.floor(diffMin / 60);
+  const diffD = Math.floor(diffH / 24);
+  if (diffMin < 1) return 'agora';
+  if (diffMin < 60) return `há ${diffMin} min`;
+  if (diffH < 24) return `há ${diffH}h`;
+  if (diffD === 1) return 'ontem';
+  if (diffD < 7) return `há ${diffD} dias`;
+  return date.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Africa/Maputo' });
+}
 
 // ─────────────────────────────────────────
 // Empty state
@@ -103,6 +149,14 @@ function EmptyUsersState() {
       <p className="text-xs text-muted-foreground mt-1 max-w-xs">
         Crie o primeiro utilizador para começar.
       </p>
+      <Button
+        onClick={() => document.querySelector<HTMLButtonElement>('[data-action="create-user"]')?.click()}
+        className="mt-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all"
+        size="sm"
+      >
+        <UserPlus className="size-4 mr-1.5" />
+        Criar Utilizador
+      </Button>
     </motion.div>
   );
 }
@@ -212,7 +266,7 @@ export function UsersView() {
           <p className="text-sm text-muted-foreground mt-1">{meta?.total ?? 0} utilizadores registados</p>
         </div>
         {canManage && (
-          <Button onClick={() => setCreateOpen(true)} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98] transition-all">
+          <Button data-action="create-user" onClick={() => setCreateOpen(true)} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all">
             <UserPlus className="size-4" />
             Novo Utilizador
           </Button>
@@ -221,23 +275,35 @@ export function UsersView() {
 
       {/* Pesquisa */}
       <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <Input placeholder="Pesquisar por nome ou email..." value={search} onChange={(e) => handleSearch(e.target.value)} className="pl-9" />
+        <motion.div animate={search ? { scale: [1, 1.02, 1] } : {}} transition={{ duration: 0.15 }}>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input placeholder="Pesquisar por nome ou email..." value={search} onChange={(e) => handleSearch(e.target.value)} className="pl-9" />
+        </motion.div>
       </div>
 
       {/* Tabela */}
       <Card className="hover:shadow-lg transition-all duration-200">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-4 space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+            <div className="p-4 space-y-0">
+              <div className="flex gap-4 mb-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-4 w-20 rounded" />)}</div>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex gap-4 py-3 border-b last:border-0">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <Skeleton className="h-4 w-32 rounded" />
+                  <Skeleton className="h-4 w-36 rounded hidden sm:block" />
+                  <Skeleton className="h-6 w-24 rounded-full hidden md:block" />
+                  <Skeleton className="h-4 w-20 rounded hidden lg:block" />
+                  <Skeleton className="h-4 w-16 rounded ml-auto" />
+                </div>
+              ))}
             </div>
           ) : users.length === 0 ? (
             <EmptyUsersState />
           ) : (
             <div className="max-h-[calc(100vh-280px)] overflow-y-auto rounded-lg border">
               <Table>
-                <TableHeader className="sticky top-0 bg-background backdrop-blur-sm">
+                <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                   <TableRow>
                     <TableHead>Nome</TableHead>
                     <TableHead className="hidden sm:table-cell">Email</TableHead>
@@ -248,43 +314,72 @@ export function UsersView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user, i) => (
-                    <TableRow key={user.id} className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors ${i % 2 === 1 ? 'bg-muted/30' : ''}`}>
-                      <TableCell className="font-medium">{user.full_name}</TableCell>
-                      <TableCell className="hidden sm:table-cell text-muted-foreground">{user.email}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`rounded-full text-[10px] shadow-sm ${ROLE_COLORS[user.role] ?? ''}`}>
-                          {ROLE_LABELS[user.role] ?? user.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <Badge variant="outline" className={`rounded-full text-[10px] shadow-sm ${user.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200'}`}>
-                          {user.is_active ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
-                        {user.last_login_at
-                          ? new Date(user.last_login_at).toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Africa/Maputo' })
-                          : 'Nunca'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {canManage && user.id !== currentUser?.id && (
-                            <>
-                              <Button variant="ghost" size="icon" className="size-8 active:scale-[0.95]" onClick={() => handleEditOpen(user)}>
-                                <Pencil className="size-3.5" />
-                              </Button>
-                              {user.is_active && (
-                                <Button variant="ghost" size="icon" className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-[0.95]" onClick={() => handleDeactivateOpen(user)}>
-                                  <UserMinus className="size-3.5" />
-                                </Button>
+                  <motion.tbody variants={staggerContainer} initial="hidden" animate="show">
+                    {users.map((user, i) => (
+                      <motion.tr
+                        key={user.id}
+                        variants={staggerItem}
+                        className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-all duration-150 hover:shadow-sm ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 text-xs font-bold ${ROLE_AVATAR_COLORS[user.role] ?? ''} ${ROLE_AVATAR_BORDER_COLORS[user.role] ?? ''}`}>
+                              {user.full_name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                            </div>
+                            <div>
+                              {user.full_name}
+                              {user.id === currentUser?.id && (
+                                <span className="text-[10px] text-muted-foreground ml-1">(você)</span>
                               )}
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-muted-foreground">{user.email}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`rounded-full text-[10px] shadow-sm ${ROLE_COLORS[user.role] ?? ''}`}>
+                            {ROLE_LABELS[user.role] ?? user.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full text-[10px] shadow-sm flex items-center gap-1 w-fit ${
+                              user.is_active
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200'
+                            }`}
+                          >
+                            {user.is_active ? (
+                              <><ShieldCheck className="size-3" /> Activo</>
+                            ) : (
+                              <><AlertTriangle className="size-3" /> Inactivo</>
+                            )}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
+                          {user.last_login_at
+                            ? relativeTime(user.last_login_at)
+                            : 'Nunca'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {canManage && user.id !== currentUser?.id && (
+                              <>
+                                <Button variant="ghost" size="icon" className="size-8 active:scale-[0.95]" onClick={() => handleEditOpen(user)}>
+                                  <Pencil className="size-3.5" />
+                                </Button>
+                                {user.is_active && (
+                                  <Button variant="ghost" size="icon" className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-[0.95]" onClick={() => handleDeactivateOpen(user)}>
+                                    <UserMinus className="size-3.5" />
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </motion.tr>
+                    ))}
+                  </motion.tbody>
                 </TableBody>
               </Table>
             </div>
@@ -304,10 +399,17 @@ export function UsersView() {
       {/* ── Diálogos ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Novo Utilizador</DialogTitle>
-            <DialogDescription>Crie uma nova conta de utilizador na plataforma.</DialogDescription>
-          </DialogHeader>
+          <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+                <UserPlus className="size-5" />
+              </div>
+              <div>
+                <p className="text-lg">Novo Utilizador</p>
+                <DialogDescription className="text-white/80 mt-0.5">Crie uma nova conta de utilizador na plataforma.</DialogDescription>
+              </div>
+            </DialogTitle>
+          </div>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
               <Label htmlFor="create-name">Nome Completo *</Label>
@@ -331,7 +433,7 @@ export function UsersView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} className="active:scale-[0.98]">Cancelar</Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98]">
+            <Button onClick={handleCreate} disabled={createMutation.isPending} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98]">
               {createMutation.isPending && <Loader2 className="size-4 animate-spin" />}
               Criar Utilizador
             </Button>
@@ -341,10 +443,17 @@ export function UsersView() {
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar Utilizador</DialogTitle>
-            <DialogDescription>Actualize os dados do utilizador.</DialogDescription>
-          </DialogHeader>
+          <div className="bg-gradient-to-r from-amber-600 to-amber-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+                <Pencil className="size-5" />
+              </div>
+              <div>
+                <p className="text-lg">Editar Utilizador</p>
+                <DialogDescription className="text-white/80 mt-0.5">Actualize os dados do utilizador.</DialogDescription>
+              </div>
+            </DialogTitle>
+          </div>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
               <Label htmlFor="edit-name">Nome Completo</Label>
@@ -364,7 +473,7 @@ export function UsersView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} className="active:scale-[0.98]">Cancelar</Button>
-            <Button onClick={handleEditSave} disabled={updateMutation.isPending} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98]">
+            <Button onClick={handleEditSave} disabled={updateMutation.isPending} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98]">
               {updateMutation.isPending && <Loader2 className="size-4 animate-spin" />}
               Guardar
             </Button>
@@ -375,8 +484,15 @@ export function UsersView() {
       <AlertDialog open={deactivateOpen} onOpenChange={setDeactivateOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Desactivar Utilizador</AlertDialogTitle>
-            <AlertDialogDescription>Tem a certeza que deseja desactivar o utilizador <span className="font-semibold text-foreground">{deactivateUser?.full_name}</span>? Esta acção pode ser revertida posteriormente.</AlertDialogDescription>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+                <AlertTriangle className="size-4 text-red-600 dark:text-red-400" />
+              </div>
+              Desactivar Utilizador
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem a certeza que deseja desactivar o utilizador <span className="font-semibold text-foreground">{deactivateUser?.full_name}</span>? Esta acção pode ser revertida posteriormente.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>

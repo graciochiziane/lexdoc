@@ -8,7 +8,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Search,
@@ -18,6 +18,11 @@ import {
   Building2,
   User,
   Download,
+  LayoutGrid,
+  LayoutList,
+  Mail,
+  Phone,
+  FileText,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,6 +69,29 @@ const CLIENT_TYPE_COLORS: Record<string, string> = {
   EMPRESA: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200',
 };
 
+const CLIENT_TYPE_ICON_COLORS: Record<string, string> = {
+  INDIVIDUAL: 'text-cyan-500 bg-cyan-100 dark:bg-cyan-900/40',
+  EMPRESA: 'text-amber-500 bg-amber-100 dark:bg-amber-900/40',
+};
+
+// Stagger animations
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
+};
+const staggerItem = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0 },
+};
+const gridStaggerContainer = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.05 } },
+};
+const gridStaggerItem = {
+  hidden: { opacity: 0, scale: 0.95 },
+  show: { opacity: 1, scale: 1 },
+};
+
 // ─────────────────────────────────────────
 // Empty state
 // ─────────────────────────────────────────
@@ -88,7 +116,52 @@ function EmptyClientsState() {
       <p className="text-xs text-muted-foreground mt-1 max-w-xs">
         Adicione o primeiro cliente para começar.
       </p>
+      <Button
+        onClick={() => {
+          const event = new CustomEvent('lexdoc:open-create');
+          window.dispatchEvent(event);
+        }}
+        className="mt-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all"
+        size="sm"
+      >
+        <Plus className="size-4 mr-1.5" />
+        Criar Cliente
+      </Button>
     </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Skeletons
+// ─────────────────────────────────────────
+function TableSkeleton() {
+  return (
+    <div className="p-4 space-y-0">
+      <div className="flex gap-4 mb-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-4 w-20 rounded" />
+        ))}
+      </div>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex gap-4 py-3 border-b last:border-0">
+          <Skeleton className="h-4 w-36 rounded" />
+          <Skeleton className="h-4 w-40 rounded hidden sm:block" />
+          <Skeleton className="h-4 w-24 rounded hidden md:block" />
+          <Skeleton className="h-6 w-20 rounded-full" />
+          <Skeleton className="h-4 w-16 rounded ml-auto" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <Skeleton key={i} className="h-32 w-full rounded-xl" />
+      ))}
+    </div>
   );
 }
 
@@ -111,8 +184,9 @@ export function ClientsView() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [page, setPage] = useState(1);
-  const limit = 10;
+  const limit = 12;
 
   // ── Diálogo de criação ──
   const [createOpen, setCreateOpen] = useState(false);
@@ -259,14 +333,14 @@ export function ClientsView() {
             size="sm"
             onClick={handleExport}
             disabled={exporting}
-            className="active:scale-[0.98] transition-all"
+            className="active:scale-[0.98] transition-all hover:border-emerald-300 dark:hover:border-emerald-700"
           >
             {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
             <span className="hidden sm:inline ml-2">Exportar CSV</span>
           </Button>
           <Button
             onClick={() => setCreateOpen(true)}
-            className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98] transition-all"
+            className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all"
           >
             <Plus className="size-4" />
             Novo Cliente
@@ -274,32 +348,60 @@ export function ClientsView() {
         </div>
       </div>
 
-      {/* Pesquisa */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <Input
-          placeholder="Pesquisar por nome..."
-          value={search}
-          onChange={(e) => handleSearch(e.target.value)}
-          className="pl-9"
-        />
+      {/* Pesquisa + View Toggle */}
+      <div className="flex items-center gap-3">
+        <motion.div
+          animate={search ? { scale: [1, 1.02, 1] } : {}}
+          transition={{ duration: 0.15 }}
+          className="relative flex-1 max-w-sm"
+        >
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            placeholder="Pesquisar por nome..."
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-9"
+          />
+        </motion.div>
+        <div className="flex items-center rounded-lg border bg-muted/50 p-0.5">
+          <Button
+            variant={viewMode === 'table' ? 'default' : 'ghost'}
+            size="icon"
+            className="size-8 rounded-md active:scale-[0.95]"
+            onClick={() => setViewMode('table')}
+          >
+            <LayoutList className="size-4" />
+          </Button>
+          <Button
+            variant={viewMode === 'grid' ? 'default' : 'ghost'}
+            size="icon"
+            className="size-8 rounded-md active:scale-[0.95]"
+            onClick={() => setViewMode('grid')}
+          >
+            <LayoutGrid className="size-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* Tabela */}
-      <Card className="hover:shadow-lg transition-all duration-200">
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-4 space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : clients.length === 0 ? (
+      {/* Conteúdo */}
+      {isLoading ? (
+        <Card className="hover:shadow-lg transition-all duration-200">
+          <CardContent className="p-0">
+            {viewMode === 'table' ? <TableSkeleton /> : <GridSkeleton />}
+          </CardContent>
+        </Card>
+      ) : clients.length === 0 ? (
+        <Card className="hover:shadow-lg transition-all duration-200">
+          <CardContent className="p-0">
             <EmptyClientsState />
-          ) : (
+          </CardContent>
+        </Card>
+      ) : viewMode === 'table' ? (
+        <Card className="hover:shadow-lg transition-all duration-200">
+          <CardContent className="p-0">
             <div className="max-h-[calc(100vh-280px)] overflow-y-auto rounded-lg border">
               <Table>
-                <TableHeader className="sticky top-0 bg-background backdrop-blur-sm">
+                <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                   <TableRow>
                     <TableHead>Nome</TableHead>
                     <TableHead className="hidden sm:table-cell">Email</TableHead>
@@ -310,86 +412,163 @@ export function ClientsView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clients.map((client, i) => (
-                    <TableRow
-                      key={client.id}
-                      className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
-                    >
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {client.client_type === 'EMPRESA' ? (
-                            <Building2 className="size-4 text-amber-500 shrink-0" />
-                          ) : (
-                            <User className="size-4 text-cyan-500 shrink-0" />
-                          )}
-                          {client.full_name}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-muted-foreground">
-                        {client.email ?? '—'}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground">
-                        {client.phone ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`rounded-full text-[10px] shadow-sm ${CLIENT_TYPE_COLORS[client.client_type] ?? ''}`}
-                        >
-                          {CLIENT_TYPE_LABELS[client.client_type] ?? client.client_type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <Badge
-                          variant="outline"
-                          className={`rounded-full text-[10px] shadow-sm ${
-                            client.is_active
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200'
-                              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200'
-                          }`}
-                        >
-                          {client.is_active ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 active:scale-[0.95]"
-                          onClick={() => handleEditOpen(client)}
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  <motion.tbody variants={staggerContainer} initial="hidden" animate="show">
+                    {clients.map((client, i) => (
+                      <motion.tr
+                        key={client.id}
+                        variants={staggerItem}
+                        className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${CLIENT_TYPE_ICON_COLORS[client.client_type] ?? ''}`}>
+                              {client.client_type === 'EMPRESA' ? (
+                                <Building2 className="size-3.5" />
+                              ) : (
+                                <User className="size-3.5" />
+                              )}
+                            </div>
+                            {client.full_name}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-muted-foreground">
+                          {client.email ?? '—'}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground">
+                          {client.phone ?? '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full text-[10px] shadow-sm ${CLIENT_TYPE_COLORS[client.client_type] ?? ''}`}
+                          >
+                            {CLIENT_TYPE_LABELS[client.client_type] ?? client.client_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full text-[10px] shadow-sm ${
+                              client.is_active
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200'
+                            }`}
+                          >
+                            {client.is_active ? 'Activo' : 'Inactivo'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 active:scale-[0.95]"
+                            onClick={() => handleEditOpen(client)}
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </TableCell>
+                      </motion.tr>
+                    ))}
+                  </motion.tbody>
                 </TableBody>
               </Table>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : (
+        /* Grid View */
+        <motion.div
+          variants={gridStaggerContainer}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[calc(100vh-320px)] overflow-y-auto"
+        >
+          {clients.map((client) => (
+            <motion.div
+              key={client.id}
+              variants={gridStaggerItem}
+            >
+              <Card className="bg-gradient-to-br from-white to-muted/20 dark:from-background dark:to-card hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 border-l-4 border-l-cyan-400 dark:border-l-cyan-600 cursor-pointer"
+                onClick={() => handleEditOpen(client)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${CLIENT_TYPE_ICON_COLORS[client.client_type] ?? ''}`}>
+                      {client.client_type === 'EMPRESA' ? (
+                        <Building2 className="size-5" />
+                      ) : (
+                        <User className="size-5" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm truncate">{client.full_name}</p>
+                      <Badge
+                        variant="outline"
+                        className={`rounded-full text-[10px] shadow-sm mt-1 ${CLIENT_TYPE_COLORS[client.client_type] ?? ''}`}
+                      >
+                        {CLIENT_TYPE_LABELS[client.client_type]}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    {client.email && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Mail className="size-3 shrink-0" />
+                        <span className="truncate">{client.email}</span>
+                      </div>
+                    )}
+                    {client.phone && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Phone className="size-3 shrink-0" />
+                        <span>{client.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                    <Badge
+                      variant="outline"
+                      className={`rounded-full text-[10px] shadow-sm ${
+                        client.is_active
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200'
+                          : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200'
+                      }`}
+                    >
+                      {client.is_active ? 'Activo' : 'Inactivo'}
+                    </Badge>
+                    <Button variant="ghost" size="icon" className="size-7 active:scale-[0.95]">
+                      <Pencil className="size-3" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </motion.div>
+      )}
 
       {/* Paginação */}
       {meta && meta.pages > 1 && (
         <div className="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="active:scale-[0.98]">
-            Anterior
-          </Button>
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="active:scale-[0.98]">Anterior</Button>
           <span className="text-sm text-muted-foreground">Página {page} de {meta.pages}</span>
-          <Button variant="outline" size="sm" disabled={page >= meta.pages} onClick={() => setPage((p) => p + 1)} className="active:scale-[0.98]">
-            Próxima
-          </Button>
+          <Button variant="outline" size="sm" disabled={page >= meta.pages} onClick={() => setPage((p) => p + 1)} className="active:scale-[0.98]">Próxima</Button>
         </div>
       )}
 
       {/* ── Diálogo: Novo Cliente ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Novo Cliente</DialogTitle>
-            <DialogDescription>Adicione um novo cliente ao escritório.</DialogDescription>
-          </DialogHeader>
+          <div className="bg-gradient-to-r from-cyan-600 to-cyan-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+                <Users className="size-5" />
+              </div>
+              <div>
+                <p className="text-lg">Novo Cliente</p>
+                <DialogDescription className="text-white/80 mt-0.5">Adicione um novo cliente ao escritório.</DialogDescription>
+              </div>
+            </DialogTitle>
+          </div>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
               <Label htmlFor="client-name">Nome Completo *</Label>
@@ -426,7 +605,7 @@ export function ClientsView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} className="active:scale-[0.98]">Cancelar</Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98]">
+            <Button onClick={handleCreate} disabled={createMutation.isPending} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98]">
               {createMutation.isPending && <Loader2 className="size-4 animate-spin" />}
               Criar Cliente
             </Button>
@@ -437,10 +616,17 @@ export function ClientsView() {
       {/* ── Diálogo: Editar Cliente ── */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Editar Cliente</DialogTitle>
-            <DialogDescription>Actualize os dados do cliente.</DialogDescription>
-          </DialogHeader>
+          <div className="bg-gradient-to-r from-cyan-600 to-cyan-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+                <Pencil className="size-5" />
+              </div>
+              <div>
+                <p className="text-lg">Editar Cliente</p>
+                <DialogDescription className="text-white/80 mt-0.5">Actualize os dados do cliente.</DialogDescription>
+              </div>
+            </DialogTitle>
+          </div>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
               <Label htmlFor="edit-client-name">Nome Completo</Label>
@@ -477,7 +663,7 @@ export function ClientsView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} className="active:scale-[0.98]">Cancelar</Button>
-            <Button onClick={handleEditSave} disabled={updateMutation.isPending} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98]">
+            <Button onClick={handleEditSave} disabled={updateMutation.isPending} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98]">
               {updateMutation.isPending && <Loader2 className="size-4 animate-spin" />}
               Guardar
             </Button>

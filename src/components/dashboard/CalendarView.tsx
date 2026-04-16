@@ -73,7 +73,7 @@ function getDeadlineColor(item: CalendarDeadlineItem): string {
 function getDeadlineDotColor(item: CalendarDeadlineItem): string {
   if (item.status === 'COMPLETED') return 'bg-emerald-500';
   const diff = differenceInDays(new Date(item.due_date), new Date());
-  if (diff < 0) return 'bg-red-500';
+  if (diff < 0) return 'bg-red-500 animate-pulse';
   if (diff <= 3) return 'bg-amber-500';
   return 'bg-emerald-400';
 }
@@ -119,7 +119,7 @@ function DayCell({
         min-h-[60px] sm:min-h-[80px] transition-all duration-150
         ${!isCurrentMonth ? 'opacity-30' : ''}
         ${hasDeadlines
-          ? 'hover:bg-emerald-50 dark:hover:bg-emerald-950/20 cursor-pointer active:scale-[0.98]'
+          ? 'hover:bg-emerald-50 dark:hover:bg-emerald-950/20 cursor-pointer active:scale-[0.98] hover:shadow-sm'
           : 'cursor-default'
         }
         ${today ? 'ring-2 ring-emerald-500 ring-offset-1 dark:ring-offset-background' : ''}
@@ -401,7 +401,7 @@ export function CalendarView({ onNavigateToPrazos }: CalendarViewProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={goToToday} className="text-xs">
+          <Button variant="outline" size="sm" onClick={goToToday} className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 hover:border-emerald-700 shadow-sm active:scale-[0.98] transition-all">
             Hoje
           </Button>
         </div>

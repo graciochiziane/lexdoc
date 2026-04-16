@@ -54,6 +54,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { statsApi, processesApi, type DashboardStats, type ProcessRecord, profileApi } from '@/lib/api-client';
+import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { differenceInDays } from 'date-fns';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -539,203 +540,211 @@ export function DashboardHome() {
         ))}
       </div>
 
-      {/* ── Gráficos em grelha 2x2 ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Gráfico: Processos por Estado */}
-        <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-emerald-50/20 dark:from-background dark:to-emerald-950/5 border-l-4 border-l-emerald-400">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Processos por Estado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {processesLoading ? (
-              <ChartSkeleton />
-            ) : statusData.length === 0 ? (
-              <EmptyState
-                icon={Briefcase}
-                title="Sem dados de processos"
-                description="Crie processos para ver a distribuição."
-              />
-            ) : (
-              <div className="flex items-center gap-4">
-                <ChartContainer config={statusChartConfig} className="w-[140px] h-[140px] shrink-0">
-                  <PieChart>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Pie
-                      data={statusData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={35}
-                      outerRadius={65}
-                      strokeWidth={2}
-                      stroke="var(--background)"
-                    >
-                      {statusData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ChartContainer>
-                <div className="flex-1 space-y-2">
-                  {statusData.map((entry) => (
-                    <div key={entry.name} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-sm"
-                          style={{ backgroundColor: entry.fill }}
-                        />
-                        <span className="text-sm text-muted-foreground capitalize">
-                          {statusChartConfig[entry.name as keyof typeof statusChartConfig]?.label}
+      {/* ── Gráficos em grelha 2x2 + Feed de Actividade ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Gráficos — 2 colunas */}
+        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Gráfico: Processos por Estado */}
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-emerald-50/20 dark:from-background dark:to-emerald-950/5 border-l-4 border-l-emerald-400">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">Processos por Estado</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {processesLoading ? (
+                <ChartSkeleton />
+              ) : statusData.length === 0 ? (
+                <EmptyState
+                  icon={Briefcase}
+                  title="Sem dados de processos"
+                  description="Crie processos para ver a distribuição."
+                />
+              ) : (
+                <div className="flex items-center gap-4">
+                  <ChartContainer config={statusChartConfig} className="w-[140px] h-[140px] shrink-0">
+                    <PieChart>
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Pie
+                        data={statusData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={35}
+                        outerRadius={65}
+                        strokeWidth={2}
+                        stroke="var(--background)"
+                      >
+                        {statusData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ChartContainer>
+                  <div className="flex-1 space-y-2">
+                    {statusData.map((entry) => (
+                      <div key={entry.name} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-sm"
+                            style={{ backgroundColor: entry.fill }}
+                          />
+                          <span className="text-sm text-muted-foreground capitalize">
+                            {statusChartConfig[entry.name as keyof typeof statusChartConfig]?.label}
+                          </span>
+                        </div>
+                        <span className="text-sm font-semibold">{entry.value}</span>
+                      </div>
+                    ))}
+                    <div className="pt-1 border-t">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Total</span>
+                        <span className="text-xs font-bold">
+                          {statusData.reduce((s, d) => s + d.value, 0)}
                         </span>
                       </div>
-                      <span className="text-sm font-semibold">{entry.value}</span>
-                    </div>
-                  ))}
-                  <div className="pt-1 border-t">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Total</span>
-                      <span className="text-xs font-bold">
-                        {statusData.reduce((s, d) => s + d.value, 0)}
-                      </span>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Gráfico: Actividade Mensal */}
-        <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-amber-50/20 dark:from-background dark:to-amber-950/5 border-l-4 border-l-amber-400">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Actividade Mensal</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {processesLoading ? (
-              <ChartSkeleton />
-            ) : (
-              <ChartContainer config={activityChartConfig} className="h-[180px] w-full">
-                <BarChart data={activityData} barGap={4}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} allowDecimals={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="processes" fill="var(--color-processes)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
+          {/* Gráfico: Actividade Mensal */}
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-amber-50/20 dark:from-background dark:to-amber-950/5 border-l-4 border-l-amber-400">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">Actividade Mensal</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {processesLoading ? (
+                <ChartSkeleton />
+              ) : (
+                <ChartContainer config={activityChartConfig} className="h-[180px] w-full">
+                  <BarChart data={activityData} barGap={4}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} allowDecimals={false} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="processes" fill="var(--color-processes)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Gráfico: Distribuição por Prioridade */}
-        <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-red-50/20 dark:from-background dark:to-red-950/5 border-l-4 border-l-red-400">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Distribuição por Prioridade</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {processesLoading ? (
-              <ChartSkeleton />
-            ) : priorityData.length === 0 ? (
-              <EmptyState
-                icon={AlertTriangle}
-                title="Sem dados"
-                description="Crie processos para ver a distribuição."
-              />
-            ) : (
-              <div className="space-y-3 pt-1">
-                {priorityData.map((entry) => {
-                  const maxVal = Math.max(...priorityData.map((d) => d.value), 1);
-                  const pct = (entry.value / maxVal) * 100;
-                  return (
-                    <div key={entry.name} className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">{entry.name}</span>
-                        <span className="text-sm font-semibold">{entry.value}</span>
+          {/* Gráfico: Distribuição por Prioridade */}
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-red-50/20 dark:from-background dark:to-red-950/5 border-l-4 border-l-red-400">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">Distribuição por Prioridade</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {processesLoading ? (
+                <ChartSkeleton />
+              ) : priorityData.length === 0 ? (
+                <EmptyState
+                  icon={AlertTriangle}
+                  title="Sem dados"
+                  description="Crie processos para ver a distribuição."
+                />
+              ) : (
+                <div className="space-y-3 pt-1">
+                  {priorityData.map((entry) => {
+                    const maxVal = Math.max(...priorityData.map((d) => d.value), 1);
+                    const pct = (entry.value / maxVal) * 100;
+                    return (
+                      <div key={entry.name} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">{entry.name}</span>
+                          <span className="text-sm font-semibold">{entry.value}</span>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 0.6, ease: 'easeOut' }}
+                            className="h-full rounded-full"
+                            style={{ backgroundColor: entry.fill }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${pct}%` }}
-                          transition={{ duration: 0.6, ease: 'easeOut' }}
-                          className="h-full rounded-full"
-                          style={{ backgroundColor: entry.fill }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Timeline: Próximos Prazos */}
-        <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-cyan-50/20 dark:from-background dark:to-cyan-950/5 border-l-4 border-l-cyan-400">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Próximos Prazos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {statsLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-14 w-full rounded-lg" />
-                ))}
-              </div>
-            ) : deadlinesTimeline.length === 0 ? (
-              <EmptyState
-                icon={Calendar}
-                title="Sem prazos próximos"
-                description="Os prazos processuais aparecerão aqui."
-              />
-            ) : (
-              <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                {deadlinesTimeline.map((deadline) => {
-                  const colorClasses =
-                    deadline.color === 'red'
-                      ? 'border-l-red-500 bg-red-50/50 dark:bg-red-950/20'
-                      : deadline.color === 'amber'
-                        ? 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20'
-                        : 'border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20';
-                  const textClasses =
-                    deadline.color === 'red'
-                      ? 'text-red-600 dark:text-red-400'
-                      : deadline.color === 'amber'
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-emerald-600 dark:text-emerald-400';
-                  const daysText =
-                    deadline.daysRemaining < 0
-                      ? `Expirado há ${Math.abs(deadline.daysRemaining)}d`
-                      : deadline.daysRemaining === 0
-                        ? 'Vence hoje!'
-                        : `${deadline.daysRemaining}d restantes`;
+          {/* Timeline: Próximos Prazos */}
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-cyan-50/20 dark:from-background dark:to-cyan-950/5 border-l-4 border-l-cyan-400">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">Próximos Prazos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {statsLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : deadlinesTimeline.length === 0 ? (
+                <EmptyState
+                  icon={Calendar}
+                  title="Sem prazos próximos"
+                  description="Os prazos processuais aparecerão aqui."
+                />
+              ) : (
+                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                  {deadlinesTimeline.map((deadline) => {
+                    const colorClasses =
+                      deadline.color === 'red'
+                        ? 'border-l-red-500 bg-red-50/50 dark:bg-red-950/20'
+                        : deadline.color === 'amber'
+                          ? 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20'
+                          : 'border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20';
+                    const textClasses =
+                      deadline.color === 'red'
+                        ? 'text-red-600 dark:text-red-400'
+                        : deadline.color === 'amber'
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-emerald-600 dark:text-emerald-400';
+                    const daysText =
+                      deadline.daysRemaining < 0
+                        ? `Expirado há ${Math.abs(deadline.daysRemaining)}d`
+                        : deadline.daysRemaining === 0
+                          ? 'Vence hoje!'
+                          : `${deadline.daysRemaining}d restantes`;
 
-                  return (
-                    <motion.div
-                      key={deadline.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className={`flex items-center gap-3 p-2.5 rounded-lg border-l-4 ${colorClasses} hover:shadow-sm transition-shadow`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{deadline.title}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {deadline.process_title}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className={`text-xs font-semibold ${textClasses}`}>{daysText}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {format(new Date(deadline.due_date), 'dd/MM', { locale: pt })}
-                        </p>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    return (
+                      <motion.div
+                        key={deadline.id}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className={`flex items-center gap-3 p-2.5 rounded-lg border-l-4 ${colorClasses} hover:shadow-sm transition-shadow`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{deadline.title}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {deadline.process_title}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className={`text-xs font-semibold ${textClasses}`}>{daysText}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {format(new Date(deadline.due_date), 'dd/MM', { locale: pt })}
+                          </p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Feed de Actividade — 1 coluna lateral */}
+        <div className="lg:col-span-1">
+          <ActivityFeed />
+        </div>
       </div>
 
       {/* Processos Recentes */}

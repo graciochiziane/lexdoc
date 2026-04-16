@@ -20,6 +20,11 @@ import {
   Filter,
   Download,
   Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  Clock,
+  Eye,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,9 +48,9 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { auditApi, exportApi, type AuditLogRecord } from '@/lib/api-client';
 
-// ─────────────────────────────────────────
+// ─────────────────────────────────
 // Constantes
-// ─────────────────────────────────────────
+// ─────────────────────────────────
 const TIMEZONE = 'Africa/Maputo';
 
 const ACTION_LABELS: Record<string, string> = {
@@ -74,32 +79,59 @@ const ENTITY_LABELS: Record<string, string> = {
   System: 'Sistema',
 };
 
-const ACTION_ICONS: Record<string, { icon: React.ElementType; color: string }> = {
-  LOGIN_SUCCESS: { icon: LogIn, color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' },
-  LOGIN_FAILED: { icon: LogIn, color: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40' },
-  LOGOUT: { icon: LogOut, color: 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800' },
-  USER_CREATED: { icon: UserPlus, color: 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40' },
-  USER_UPDATED: { icon: Settings, color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' },
-  USER_DEACTIVATED: { icon: UserMinus, color: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40' },
-  CLIENT_CREATED: { icon: UserPlus, color: 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40' },
-  CLIENT_UPDATED: { icon: Settings, color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' },
-  PROCESS_CREATED: { icon: FileText, color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' },
-  PROCESS_UPDATED: { icon: Settings, color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' },
-  PROCESS_CLOSED: { icon: FileText, color: 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800' },
-  DOCUMENT_CREATED: { icon: FileText, color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' },
-  DOCUMENT_UPDATED: { icon: Settings, color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' },
-  DOCUMENT_DELETED: { icon: FileText, color: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40' },
+const ACTION_ICONS: Record<string, { icon: React.ElementType; color: string; bgColor: string }> = {
+  LOGIN_SUCCESS: { icon: LogIn, color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  LOGIN_FAILED: { icon: LogIn, color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-50 dark:bg-red-950/40' },
+  LOGOUT: { icon: LogOut, color: 'text-gray-600 dark:text-gray-400', bgColor: 'bg-gray-50 dark:bg-gray-800' },
+  USER_CREATED: { icon: UserPlus, color: 'text-cyan-600 dark:text-cyan-400', bgColor: 'bg-cyan-50 dark:bg-cyan-950/40' },
+  USER_UPDATED: { icon: Settings, color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-950/40' },
+  USER_DEACTIVATED: { icon: UserMinus, color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-50 dark:bg-red-950/40' },
+  CLIENT_CREATED: { icon: UserPlus, color: 'text-cyan-600 dark:text-cyan-400', bgColor: 'bg-cyan-50 dark:bg-cyan-950/40' },
+  CLIENT_UPDATED: { icon: Settings, color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-950/40' },
+  PROCESS_CREATED: { icon: Plus, color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  PROCESS_UPDATED: { icon: Settings, color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-950/40' },
+  PROCESS_CLOSED: { icon: FileText, color: 'text-gray-600 dark:text-gray-400', bgColor: 'bg-gray-50 dark:bg-gray-800' },
+  DOCUMENT_CREATED: { icon: FileText, color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  DOCUMENT_UPDATED: { icon: Settings, color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-950/40' },
+  DOCUMENT_DELETED: { icon: Trash2, color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-50 dark:bg-red-950/40' },
 };
+
+const ACTION_TYPE_COLORS: Record<string, string> = {
+  LOGIN_SUCCESS: 'text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30',
+  LOGIN_FAILED: 'text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/30',
+  LOGOUT: 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800',
+  CREATE: 'text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30',
+  UPDATE: 'text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30',
+  DELETE: 'text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/30',
+};
+
+function getActionTypeColor(action: string): string {
+  if (action.startsWith('LOGIN') || action === 'LOGOUT') return ACTION_TYPE_COLORS.LOGIN_SUCCESS;
+  if (action.startsWith('USER')) return ACTION_TYPE_COLORS[action] ?? ACTION_TYPE_COLORS.UPDATE;
+  if (action === 'PROCESS_CLOSED') return ACTION_TYPE_COLORS.DELETE;
+  if (action === 'DOCUMENT_DELETED') return ACTION_TYPE_COLORS.DELETE;
+  return ACTION_TYPE_COLORS.CREATE;
+}
 
 const ACTION_OPTIONS = [
   'all', 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT',
   'USER_CREATED', 'USER_UPDATED', 'USER_DEACTIVATED',
   'CLIENT_CREATED', 'CLIENT_UPDATED',
   'PROCESS_CREATED', 'PROCESS_UPDATED', 'PROCESS_CLOSED',
-  'DOCUMENT_CREATED', 'DOCUMENT_UPDATED',
+  'DOCUMENT_CREATED', 'DOCUMENT_UPDATED', 'DOCUMENT_DELETED',
 ];
 
 const ENTITY_OPTIONS = ['all', 'User', 'Client', 'LegalProcess', 'Document'];
+
+// Stagger
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.03 } },
+};
+const staggerItem = {
+  hidden: { opacity: 0, y: 6 },
+  show: { opacity: 1, y: 0 },
+};
 
 // ─────────────────────────────────────────
 // Formatação de data
@@ -117,11 +149,11 @@ function formatAuditDate(dateStr: string): string {
 // Ícone por tipo de acção
 // ─────────────────────────────────────────
 function ActionIcon({ action }: { action: string }) {
-  const config = ACTION_ICONS[action] ?? { icon: Shield, color: 'text-muted-foreground bg-muted' };
+  const config = ACTION_ICONS[action] ?? { icon: Shield, color: 'text-muted-foreground', bgColor: 'bg-muted' };
   const IconComp = config.icon;
   return (
-    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${config.color}`}>
-      <IconComp className="size-4" />
+    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${config.bgColor}`}>
+      <IconComp className={`size-4 ${config.color}`} />
     </div>
   );
 }
@@ -133,27 +165,36 @@ function TimelineView({ logs }: { logs: AuditLogRecord[] }) {
   return (
     <div className="relative space-y-1 max-h-[calc(100vh-340px)] overflow-y-auto">
       <div className="absolute left-[15px] top-2 bottom-2 w-px bg-border" />
-      {logs.map((log) => (
-        <div key={log.id} className="relative flex items-start gap-4 py-3 pl-1">
-          <div className="relative z-10 mt-1"><ActionIcon action={log.action} /></div>
-          <div className="flex-1 min-w-0 bg-muted/30 rounded-lg p-3 hover:bg-muted/60 transition-colors">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{ACTION_LABELS[log.action] ?? log.action}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {log.user_name ?? 'Sistema'}{' '}
-                  {log.entity_type && (
-                    <>— {ENTITY_LABELS[log.entity_type] ?? log.entity_type}
-                      {log.entity_id && <span className="ml-1 font-mono text-[10px] opacity-60">#{log.entity_id.slice(0, 6)}</span>}
-                    </>
-                  )}
-                </p>
+      <motion.div variants={staggerContainer} initial="hidden" animate="show">
+        {logs.map((log, index) => (
+          <motion.div
+            key={log.id}
+            variants={staggerItem}
+            className="relative flex items-start gap-4 py-3 pl-1"
+          >
+            <div className="relative z-10 mt-1"><ActionIcon action={log.action} /></div>
+            <div className={`flex-1 min-w-0 rounded-lg p-3 transition-colors ${index % 2 === 0 ? 'bg-muted/30' : 'bg-muted/10'}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{ACTION_LABELS[log.action] ?? log.action}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {log.user_name ?? 'Sistema'}{' '}
+                    {log.entity_type && (
+                      <>{ENTITY_LABELS[log.entity_type] ?? log.entity_type}
+                        {log.entity_id && <span className="ml-1 font-mono text-[10px] opacity-60">#{log.entity_id.slice(0, 6)}</span>}
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Clock className="size-3 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{formatAuditDate(log.created_at)}</span>
+                </div>
               </div>
-              <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{formatAuditDate(log.created_at)}</span>
             </div>
-          </div>
-        </div>
-      ))}
+          </motion.div>
+        ))}
+      </motion.div>
     </div>
   );
 }
@@ -165,7 +206,7 @@ function TableView({ logs }: { logs: AuditLogRecord[] }) {
   return (
     <div className="max-h-[calc(100vh-340px)] overflow-y-auto rounded-lg border">
       <Table>
-        <TableHeader className="sticky top-0 bg-background backdrop-blur-sm">
+        <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
           <TableRow>
             <TableHead>Data/Hora</TableHead>
             <TableHead>Utilizador</TableHead>
@@ -174,20 +215,29 @@ function TableView({ logs }: { logs: AuditLogRecord[] }) {
             <TableHead className="hidden lg:table-cell">Detalhes</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
-          {logs.map((log, i) => (
-            <TableRow key={log.id} className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors ${i % 2 === 1 ? 'bg-muted/30' : ''}`}>
-              <TableCell className="text-sm font-mono whitespace-nowrap">{formatAuditDate(log.created_at)}</TableCell>
-              <TableCell className="text-sm">{log.user_name ?? 'Sistema'}</TableCell>
-              <TableCell className="hidden sm:table-cell">
-                <Badge variant="outline" className="text-[10px] rounded-full shadow-sm">{ACTION_LABELS[log.action] ?? log.action}</Badge>
-              </TableCell>
-              <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{ENTITY_LABELS[log.entity_type] ?? log.entity_type ?? '—'}</TableCell>
-              <TableCell className="hidden lg:table-cell text-xs text-muted-foreground max-w-[200px] truncate">{log.metadata ?? log.new_values ?? '—'}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+        <motion.tbody variants={staggerContainer} initial="hidden" animate="show">
+            {logs.map((log, i) => (
+              <motion.tr
+                key={log.id}
+                variants={staggerItem}
+                className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
+              >
+                <TableCell className="text-sm font-mono whitespace-nowrap">{formatAuditDate(log.created_at)}</TableCell>
+                <TableCell className="text-sm">{log.user_name ?? 'Sistema'}</TableCell>
+                <TableCell className="hidden sm:table-cell">
+                  <Badge
+                    variant="outline"
+                    className={`rounded-full text-[10px] shadow-sm ${getActionTypeColor(log.action)}`}
+                  >
+                    {ACTION_LABELS[log.action] ?? log.action}
+                  </Badge>
+                </TableCell>
+                <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{ENTITY_LABELS[log.entity_type] ?? log.entity_type ?? '—'}</TableCell>
+                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground max-w-[200px] truncate">{log.metadata ?? log.new_values ?? '—'}</TableCell>
+              </motion.tr>
+            ))}
+          </motion.tbody>
+        </Table>
     </div>
   );
 }
@@ -279,7 +329,7 @@ export function AuditView() {
           size="sm"
           onClick={handleExport}
           disabled={exporting}
-          className="active:scale-[0.98] transition-all"
+          className="active:scale-[0.98] transition-all hover:border-emerald-300 dark:hover:border-emerald-700"
         >
           {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
           <span className="hidden sm:inline ml-2">Exportar CSV</span>
@@ -323,7 +373,19 @@ export function AuditView() {
       <Card className="hover:shadow-lg transition-all duration-200">
         <CardContent className="p-4">
           {isLoading ? (
-            <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}</div>
+            <div className="space-y-3">
+              <div className="flex gap-4 mb-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-5 w-24 rounded" />)}</div>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 py-3">
+                  <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-40 rounded" />
+                    <Skeleton className="h-3 w-56 rounded" />
+                  </div>
+                  <Skeleton className="h-4 w-20 rounded" />
+                </div>
+              ))}
+            </div>
           ) : logs.length === 0 ? (
             <EmptyAuditState />
           ) : viewMode === 'timeline' ? (

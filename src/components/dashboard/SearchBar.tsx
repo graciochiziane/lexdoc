@@ -141,7 +141,7 @@ export function SearchBar({ onSelect }: SearchBarProps) {
         <span className="flex-1 text-left truncate">
           Pesquisar...
         </span>
-        <kbd className="hidden sm:inline-flex pointer-events-none items-center gap-0.5 rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
+        <kbd className="hidden sm:inline-flex pointer-events-none items-center gap-0.5 rounded-md border border-border bg-muted/80 px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground shadow-sm">
           <Command className="size-2.5" />K
         </kbd>
       </button>
@@ -226,15 +226,19 @@ export function SearchBar({ onSelect }: SearchBarProps) {
 
           {!loading && !hasSearched && query.length < 2 && (
             <div className="flex flex-col items-center gap-3 py-8">
-              <div className="size-12 rounded-2xl bg-muted flex items-center justify-center">
-                <Search className="size-6 text-muted-foreground" />
-              </div>
+              <motion.div
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                className="size-14 rounded-2xl bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center"
+              >
+                <Search className="size-6 text-muted-foreground/60" />
+              </motion.div>
               <div className="text-center">
-                <p className="text-sm text-muted-foreground">
-                  Digite pelo menos 2 caracteres para pesquisar
+                <p className="text-sm font-medium text-muted-foreground">
+                  Pesquisa rápida em todo o escritório
                 </p>
                 <p className="text-xs text-muted-foreground/60 mt-1">
-                  Pesquisa em processos, clientes, documentos e prazos
+                  Comece a digitar para pesquisar processos, clientes, documentos e prazos
                 </p>
               </div>
             </div>

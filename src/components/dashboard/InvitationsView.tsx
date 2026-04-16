@@ -70,6 +70,11 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
     color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400 border-gray-200',
     icon: AlertCircle,
   },
+  REVOKED: {
+    label: 'Revogado',
+    color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200',
+    icon: Trash2,
+  },
 };
 
 // ─────────────────────────────────────────
@@ -96,6 +101,14 @@ function EmptyInvitationsState() {
       <p className="text-xs text-muted-foreground mt-1 max-w-xs">
         Envie um convite para adicionar novos membros ao escritório.
       </p>
+      <Button
+        onClick={() => setCreateOpen(true)}
+        className="mt-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all"
+        size="sm"
+      >
+        <Plus className="size-4 mr-1.5" />
+        Enviar Convite
+      </Button>
     </motion.div>
   );
 }

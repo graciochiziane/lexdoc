@@ -17,6 +17,10 @@ import {
   Loader2,
   Trash2,
   Lock,
+  FileSpreadsheet,
+  FileImage,
+  FileType,
+  AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -80,11 +84,30 @@ const MIME_OPTIONS = [
   { value: 'application/pdf', label: 'PDF' },
   { value: 'application/msword', label: 'DOC' },
   { value: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', label: 'DOCX' },
+  { value: 'image/png', label: 'PNG' },
+  { value: 'image/jpeg', label: 'JPEG' },
+  { value: 'text/plain', label: 'TXT' },
 ];
 const MIME_LABELS: Record<string, string> = {
   'application/pdf': 'PDF', 'application/msword': 'DOC',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
   'image/png': 'PNG', 'image/jpeg': 'JPEG', 'text/plain': 'TXT',
+};
+const MIME_COLORS: Record<string, string> = {
+  'application/pdf': 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
+  'application/msword': 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400',
+  'image/png': 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400',
+  'image/jpeg': 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-400',
+  'text/plain': 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+};
+const MIME_ICONS: Record<string, React.ElementType> = {
+  'application/pdf': FileText,
+  'application/msword': FileSpreadsheet,
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': FileText,
+  'image/png': FileImage,
+  'image/jpeg': FileImage,
+  'text/plain': FileType,
 };
 
 function formatFileSize(bytes: number): string {
@@ -100,6 +123,38 @@ function formatDate(dateStr: string): string {
 }
 
 const EMPTY_FORM = { title: '', description: '', process_id: '', file_name: '', mime_type: 'application/pdf', file_size: 0, tags: '', is_confidential: false };
+
+// Stagger
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
+};
+const staggerItem = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0 },
+};
+
+// ─────────────────────────────────────────
+// Skeleton
+// ─────────────────────────────────────────
+function TableSkeleton() {
+  return (
+    <div className="p-4 space-y-0">
+      <div className="flex gap-4 mb-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-4 w-20 rounded" />)}</div>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex gap-4 py-3 border-b last:border-0">
+          <Skeleton className="h-4 w-40 rounded" />
+          <Skeleton className="h-4 w-32 rounded hidden md:block" />
+          <Skeleton className="h-6 w-14 rounded-full hidden sm:block" />
+          <Skeleton className="h-4 w-16 rounded hidden lg:block" />
+          <Skeleton className="h-6 w-10 rounded-full hidden lg:block" />
+          <Skeleton className="h-4 w-20 rounded hidden md:block" />
+          <Skeleton className="h-4 w-16 rounded ml-auto" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────
 // Empty state
@@ -121,7 +176,28 @@ function EmptyDocumentsState() {
       </motion.div>
       <p className="text-sm font-medium text-foreground">Nenhum documento encontrado</p>
       <p className="text-xs text-muted-foreground mt-1 max-w-xs">Ajuste os filtros ou crie um novo documento.</p>
+      <Button
+        onClick={() => {
+          const event = new CustomEvent('lexdoc:open-create');
+          window.dispatchEvent(event);
+        }}
+        className="mt-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all"
+        size="sm"
+      >
+        <Plus className="size-4 mr-1.5" />
+        Criar Documento
+      </Button>
     </motion.div>
+  );
+}
+
+// ── MIME Type Icon ──
+function MimeIcon({ mimeType }: { mimeType: string }) {
+  const Icon = MIME_ICONS[mimeType] ?? FileText;
+  return (
+    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${MIME_COLORS[mimeType] ?? 'bg-gray-100 text-gray-500'}`}>
+      <Icon className="size-3.5" />
+    </div>
   );
 }
 
@@ -218,7 +294,7 @@ export function DocumentsView() {
           <h2 className="text-2xl font-bold tracking-tight">Gestão de Documentos</h2>
           <p className="text-sm text-muted-foreground mt-1">{meta?.total ?? 0} documentos registados</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98] transition-all">
+        <Button onClick={() => setCreateOpen(true)} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all">
           <Plus className="size-4" />
           Novo Documento
         </Button>
@@ -226,8 +302,10 @@ export function DocumentsView() {
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input placeholder="Pesquisar documento..." value={search} onChange={(e) => handleSearch(e.target.value)} className="pl-9" />
+          <motion.div animate={search ? { scale: [1, 1.02, 1] } : {}} transition={{ duration: 0.15 }}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input placeholder="Pesquisar documento..." value={search} onChange={(e) => handleSearch(e.target.value)} className="pl-9" />
+          </motion.div>
         </div>
         <Tabs value={statusFilter} onValueChange={handleStatusFilter}>
           <TabsList className="h-9">
@@ -243,13 +321,13 @@ export function DocumentsView() {
       <Card className="hover:shadow-lg transition-all duration-200">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-4 space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div>
+            <TableSkeleton />
           ) : documents.length === 0 ? (
             <EmptyDocumentsState />
           ) : (
             <div className="max-h-[calc(100vh-340px)] overflow-y-auto rounded-lg border">
               <Table>
-                <TableHeader className="sticky top-0 bg-background backdrop-blur-sm">
+                <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                   <TableRow>
                     <TableHead>Título</TableHead>
                     <TableHead className="hidden md:table-cell">Processo</TableHead>
@@ -261,38 +339,55 @@ export function DocumentsView() {
                     <TableHead className="text-right">Acções</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {documents.map((doc, i) => (
-                    <TableRow key={doc.id} className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors ${i % 2 === 1 ? 'bg-muted/30' : ''}`}>
-                      <TableCell className="font-medium max-w-[200px]">
-                        <div className="flex items-center gap-2">
-                          {doc.is_confidential && <Lock className="size-3.5 text-red-500 shrink-0" />}
-                          <span className="truncate">{doc.title}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{doc.process?.title ?? '—'}</TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <Badge variant="outline" className="text-[10px] rounded-full shadow-sm">{MIME_LABELS[doc.mime_type] ?? doc.mime_type.split('/').pop()?.toUpperCase() ?? '—'}</Badge>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{formatFileSize(doc.file_size)}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">v{doc.version}</TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <Badge variant="outline" className={`text-[10px] rounded-full shadow-sm ${STATUS_COLORS[doc.status] ?? ''}`}>{STATUS_LABELS[doc.status] ?? doc.status}</Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{formatDate(doc.created_at)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="size-8 active:scale-[0.95]" onClick={() => handleEditOpen(doc)}><Pencil className="size-3.5" /></Button>
-                          {doc.status !== 'ARCHIVED' && (
-                            <Button variant="ghost" size="icon" className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-[0.95]" onClick={() => { setDeleteDocument(doc); setDeleteOpen(true); }}><Trash2 className="size-3.5" /></Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  <motion.tbody variants={staggerContainer} initial="hidden" animate="show">
+                    {documents.map((doc, i) => (
+                      <motion.tr
+                        key={doc.id}
+                        variants={staggerItem}
+                        className={`hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10 transition-colors ${i % 2 === 1 ? 'bg-muted/30' : ''}`}
+                      >
+                        <TableCell className="font-medium max-w-[200px]">
+                          <div className="flex items-center gap-2">
+                            {doc.is_confidential && (
+                              <div className="relative">
+                                <Lock className="size-3.5 text-red-500 shrink-0" />
+                              </div>
+                            )}
+                            <span className="truncate">{doc.title}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{doc.process?.title ?? '—'}</TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <div className="flex items-center gap-1.5">
+                            <MimeIcon mimeType={doc.mime_type} />
+                            <Badge variant="outline" className={`text-[10px] rounded-full shadow-sm ${MIME_COLORS[doc.mime_type] ?? 'bg-gray-100 text-gray-500'}`}>
+                              {MIME_LABELS[doc.mime_type] ?? doc.mime_type.split('/').pop()?.toUpperCase() ?? '—'}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{formatFileSize(doc.file_size)}</TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <Badge variant="outline" className="text-[10px] rounded-full shadow-sm bg-muted/50 border-border">
+                            v{doc.version}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <Badge variant="outline" className={`text-[10px] rounded-full shadow-sm ${STATUS_COLORS[doc.status] ?? ''}`}>{STATUS_LABELS[doc.status] ?? doc.status}</Badge>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{formatDate(doc.created_at)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="size-8 active:scale-[0.95]" onClick={() => handleEditOpen(doc)}><Pencil className="size-3.5" /></Button>
+                            {doc.status !== 'ARCHIVED' && (
+                              <Button variant="ghost" size="icon" className="size-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-[0.95]" onClick={() => { setDeleteDocument(doc); setDeleteOpen(true); }}><Trash2 className="size-3.5" /></Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </motion.tr>
+                    ))}
+                  </motion.tbody>
+                </Table>
+              </div>
           )}
         </CardContent>
       </Card>
@@ -308,7 +403,15 @@ export function DocumentsView() {
       {/* ── Diálogos ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Novo Documento</DialogTitle><DialogDescription>Adicione um novo documento ao sistema.</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-950/60 dark:to-amber-900/30 flex items-center justify-center">
+                <FileText className="size-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              Novo Documento
+            </DialogTitle>
+            <DialogDescription>Adicione um novo documento ao sistema.</DialogDescription>
+          </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2"><Label htmlFor="doc-title">Título *</Label><Input id="doc-title" placeholder="Título do documento" value={createForm.title} onChange={(e) => setCreateForm((f) => ({ ...f, title: e.target.value }))} /></div>
             <div className="grid gap-2"><Label htmlFor="doc-desc">Descrição</Label><Textarea id="doc-desc" placeholder="Descrição do documento..." value={createForm.description} onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))} /></div>
@@ -323,7 +426,7 @@ export function DocumentsView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} className="active:scale-[0.98]">Cancelar</Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98]">
+            <Button onClick={handleCreate} disabled={createMutation.isPending} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98]">
               {createMutation.isPending && <Loader2 className="size-4 animate-spin" />}Criar Documento
             </Button>
           </DialogFooter>
@@ -332,7 +435,15 @@ export function DocumentsView() {
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Editar Documento</DialogTitle><DialogDescription>Actualize os dados do documento.</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-950/60 dark:to-amber-900/30 flex items-center justify-center">
+                <Pencil className="size-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              Editar Documento
+            </DialogTitle>
+            <DialogDescription>Actualize os dados do documento.</DialogDescription>
+          </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2"><Label htmlFor="edit-doc-title">Título *</Label><Input id="edit-doc-title" value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} /></div>
             <div className="grid gap-2"><Label htmlFor="edit-doc-desc">Descrição</Label><Textarea id="edit-doc-desc" value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} /></div>
@@ -346,7 +457,7 @@ export function DocumentsView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} className="active:scale-[0.98]">Cancelar</Button>
-            <Button onClick={handleEditSave} disabled={updateMutation.isPending} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-md active:scale-[0.98]">
+            <Button onClick={handleEditSave} disabled={updateMutation.isPending} className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98]">
               {updateMutation.isPending && <Loader2 className="size-4 animate-spin" />}Guardar
             </Button>
           </DialogFooter>
@@ -356,7 +467,12 @@ export function DocumentsView() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Arquivar Documento</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+                <AlertTriangle className="size-4 text-red-600 dark:text-red-400" />
+              </div>
+              Arquivar Documento
+            </AlertDialogTitle>
             <AlertDialogDescription>Tem a certeza que deseja arquivar o documento <span className="font-semibold text-foreground">{deleteDocument?.title}</span>? O documento será marcado como arquivado.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -198,12 +198,12 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
         {/* Cabeçalho visual */}
-        <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 pt-6 pb-8 text-white">
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-500 px-6 pt-6 pb-8 text-white">
           <div className="flex items-center gap-4">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-2xl font-bold border border-white/20"
+              className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-3xl font-bold border border-white/20"
             >
               {initials}
             </motion.div>
@@ -233,8 +233,8 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
         <div className="px-6 pb-6">
           <Tabs defaultValue="info" className="mt-2">
             <TabsList className="w-full">
-              <TabsTrigger value="info" className="flex-1">Informações</TabsTrigger>
-              <TabsTrigger value="password" className="flex-1">Palavra-passe</TabsTrigger>
+              <TabsTrigger value="info" className="flex-1 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200">Informações</TabsTrigger>
+              <TabsTrigger value="password" className="flex-1 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200">Palavra-passe</TabsTrigger>
             </TabsList>
 
             {/* Tab: Informações */}

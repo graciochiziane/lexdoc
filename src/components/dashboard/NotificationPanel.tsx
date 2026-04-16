@@ -22,9 +22,11 @@ import {
   CheckCheck,
   ExternalLink,
   Loader2,
+  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { notificationsApi, type NotificationItem } from '@/lib/api-client';
 
 // ─────────────────────────────────────────
@@ -288,8 +290,16 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
             {/* Lista de notificações */}
             <div className="max-h-80 overflow-y-auto">
               {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                <div className="p-4 space-y-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <Skeleton className="size-8 rounded-lg shrink-0" />
+                      <div className="flex-1 space-y-1.5">
+                        <Skeleton className="h-3.5 w-full" />
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : notifications.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-12 text-center">
@@ -305,7 +315,7 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
                 </div>
               ) : (
                 <div className="divide-y">
-                  {notifications.slice(0, 5).map((notification) => {
+                  {notifications.slice(0, 5).map((notification, idx) => {
                     const config = getActionConfig(notification.action);
                     const ActionIcon = config.icon;
                     const description = getNotificationDescription(notification);
@@ -315,14 +325,15 @@ export function NotificationPanel({ onViewAll }: NotificationPanelProps) {
                         key={notification.id}
                         initial={{ opacity: 0, x: -4 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50 transition-colors cursor-default"
+                        className={`flex items-start gap-3 px-4 py-3 hover:bg-accent/50 transition-colors cursor-default ${idx % 2 === 0 ? 'bg-muted/20' : ''}`}
                       >
                         <div className={`flex items-center justify-center size-8 rounded-lg ${config.bgColor} shrink-0 mt-0.5`}>
                           <ActionIcon className={`size-4 ${config.color}`} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm leading-snug">{description}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
+                          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                            <Clock className="size-2.5" />
                             {timeAgo(notification.created_at)}
                           </p>
                         </div>
