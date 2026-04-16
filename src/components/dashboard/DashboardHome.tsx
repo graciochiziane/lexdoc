@@ -492,7 +492,7 @@ export function DashboardHome() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-500/20">
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-500/20 gradient-border">
           {/* Subtle gradient backdrop glow */}
           <div className="absolute -inset-4 bg-gradient-to-br from-emerald-400/20 via-transparent to-teal-400/20 blur-2xl pointer-events-none" />
           {/* Decorative pattern */}
@@ -587,7 +587,7 @@ export function DashboardHome() {
               whileHover={{ scale: 1.02 }}
             >
               <Card
-                className={`border-l-4 ${stat.border} hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br ${stat.gradient}`}
+                className={`border-l-4 ${stat.border} hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br ${stat.gradient} card-premium`}
               >
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -620,7 +620,7 @@ export function DashboardHome() {
         {/* Gráficos — 2 colunas */}
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Gráfico: Processos por Estado */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-emerald-50/20 dark:from-background dark:to-emerald-950/5 border-l-4 border-l-emerald-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-emerald-50/20 dark:from-background dark:to-emerald-950/5 border-l-4 border-l-emerald-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-xl">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Processos por Estado</CardTitle>
             </CardHeader>
@@ -694,7 +694,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Gráfico: Actividade Mensal */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-amber-50/20 dark:from-background dark:to-amber-950/5 border-l-4 border-l-amber-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-amber-50/20 dark:from-background dark:to-amber-950/5 border-l-4 border-l-amber-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-xl">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Actividade Mensal</CardTitle>
             </CardHeader>
@@ -716,7 +716,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Gráfico: Distribuição por Prioridade */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-red-50/20 dark:from-background dark:to-red-950/5 border-l-4 border-l-red-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-red-50/20 dark:from-background dark:to-red-950/5 border-l-4 border-l-red-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-xl">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Distribuição por Prioridade</CardTitle>
             </CardHeader>
@@ -758,7 +758,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Gráfico: Distribuição por Área */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-purple-50/20 dark:from-background dark:to-purple-950/5 border-l-4 border-l-purple-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-purple-50/20 dark:from-background dark:to-purple-950/5 border-l-4 border-l-purple-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-xl">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
                 <Scale className="size-4 text-purple-500" />
@@ -803,7 +803,7 @@ export function DashboardHome() {
           </Card>
 
           {/* Timeline: Próximos Prazos */}
-          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-cyan-50/20 dark:from-background dark:to-cyan-950/5 border-l-4 border-l-cyan-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-white to-cyan-50/20 dark:from-background dark:to-cyan-950/5 border-l-4 border-l-cyan-400 shadow-[inset_0_1px_0_rgba(0,0,0,0.04),inset_0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-xl">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Próximos Prazos</CardTitle>
             </CardHeader>
@@ -877,7 +877,7 @@ export function DashboardHome() {
       </div>
 
       {/* Processos Recentes */}
-      <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+      <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 rounded-xl">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Processos Recentes</CardTitle>
           <Button variant="ghost" size="sm" className="text-xs active:scale-[0.98]">

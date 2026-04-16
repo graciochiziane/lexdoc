@@ -238,8 +238,12 @@ export function RegisterView() {
             ))}
           </div>
 
-          {/* Social proof */}
-          <div className="flex items-center gap-3 pt-2">
+          {/* Social proof — smooth entrance */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.5, ease: 'easeOut' }}
+            className="flex items-center gap-3 pt-2">
             <div className="flex -space-x-2">
               {[...Array(4)].map((_, i) => (
                 <div
@@ -263,17 +267,30 @@ export function RegisterView() {
                 confiam no LexDoc
               </p>
             </div>
-          </div>
+          </motion.div>
         </motion.div>
 
-        {/* Bottom — Trust badges */}
-        <motion.div {...fadeIn} className="relative z-10 space-y-4">
+        {/* Bottom — Trust badges — smooth stagger entrance */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.7, ease: 'easeOut' }}
+          className="relative z-10 space-y-4"
+        >
           <div className="flex items-center gap-4 flex-wrap">
-            {TRUST_BADGES.map((badge) => (
-              <div key={badge.label} className="flex items-center gap-1.5 text-gray-500">
-                <badge.icon className="size-3.5" />
+            {TRUST_BADGES.map((badge, idx) => (
+              <motion.div
+                key={badge.label}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.4, delay: 0.8 + idx * 0.1 }}
+                className="flex items-center gap-1.5 text-gray-500"
+              >
+                <div className="flex items-center justify-center size-6 rounded-md bg-emerald-500/10">
+                  <badge.icon className="size-3 text-emerald-400/70" />
+                </div>
                 <span className="text-[11px]">{badge.label}</span>
-              </div>
+              </motion.div>
             ))}
           </div>
           <p className="text-xs text-gray-600">
@@ -310,8 +327,8 @@ export function RegisterView() {
             >
               {/* Gradient border wrapper */}
               <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 opacity-80" />
-              {/* Inner content */}
-              <div className="relative rounded-2xl overflow-hidden backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border border-white/20 dark:border-white/10 shadow-2xl shadow-emerald-500/5 dark:shadow-emerald-500/10">
+              {/* Inner content — enhanced glassmorphism */}
+              <div className="relative rounded-2xl overflow-hidden backdrop-blur-2xl bg-white/85 dark:bg-gray-900/85 border border-white/30 dark:border-white/10 shadow-2xl shadow-emerald-500/5 dark:shadow-emerald-500/10 noise-overlay">
                 <div className="p-6 sm:p-8">
                   <RegisterForm />
                 </div>

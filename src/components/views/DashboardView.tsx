@@ -32,6 +32,7 @@ import {
   Columns3,
   CheckSquare,
   Bell,
+  BookOpen,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Card, CardContent } from '@/components/ui/card';
@@ -64,6 +65,7 @@ import { OnboardingGuide } from '@/components/dashboard/OnboardingGuide';
 import { KeyboardShortcutsDialog } from '@/components/dashboard/KeyboardShortcutsDialog';
 import { TaskManager } from '@/components/dashboard/TaskManager';
 import { NotificationsCenter } from '@/components/dashboard/NotificationsCenter';
+import { KnowledgeView } from '@/components/dashboard/KnowledgeView';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 // ─────────────────────────────────────────
@@ -76,6 +78,7 @@ type DashboardTab =
   | 'quadro'
   | 'documentos'
   | 'clientes'
+  | 'base-conhecimento'
   | 'prazos'
   | 'calendario'
   | 'utilizadores'
@@ -99,6 +102,7 @@ const NAV_ITEMS: Array<{
   { id: 'quadro', icon: Columns3, label: 'Quadro Kanban' },
   { id: 'documentos', icon: FileText, label: 'Documentos' },
   { id: 'clientes', icon: Users, label: 'Clientes' },
+  { id: 'base-conhecimento', icon: BookOpen, label: 'Base de Conhecimento' },
   { id: 'prazos', icon: Calendar, label: 'Prazos' },
   { id: 'calendario', icon: CalendarDays, label: 'Calendário' },
   { id: 'utilizadores', icon: UserCog, label: 'Utilizadores', roles: ['ADMIN', 'ADVOGADO'] },
@@ -120,6 +124,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   prazos: 'Gestão de Prazos',
   calendario: 'Calendário de Prazos',
   documentos: 'Gestão de Documentos',
+  'base-conhecimento': 'Base de Conhecimento',
   auditoria: 'Trilha de Auditoria',
   convites: 'Gestão de Convites',
   relatorios: 'Relatórios e Análises',
@@ -284,6 +289,8 @@ export function DashboardView() {
         return <CalendarView onNavigateToPrazos={navigateToPrazos} />;
       case 'documentos':
         return <DocumentsView />;
+      case 'base-conhecimento':
+        return <KnowledgeView />;
       case 'convites':
         return <InvitationsView />;
       case 'relatorios':
@@ -332,11 +339,11 @@ export function DashboardView() {
         }} />
 
         {/* Logo */}
-        <div className="relative flex items-center justify-between p-4 border-b border-white/10">
+        <div className="relative flex items-center justify-between p-4 border-b border-white/10 group">
           {!sidebarCollapsed ? (
             <button
               onClick={() => setFirmSettingsOpen(true)}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+              className="flex items-center gap-2 hover:opacity-80 transition-all duration-200 cursor-pointer hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]"
               title="Configurações do Escritório"
             >
               <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
@@ -350,7 +357,7 @@ export function DashboardView() {
           ) : (
             <button
               onClick={() => setFirmSettingsOpen(true)}
-              className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center mx-auto hover:opacity-80 transition-opacity cursor-pointer"
+              className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center mx-auto hover:opacity-80 transition-all duration-200 cursor-pointer hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]"
               title="Configurações do Escritório"
             >
               <span className="text-emerald-400 font-bold text-sm">LD</span>
@@ -383,7 +390,7 @@ export function DashboardView() {
         </div>
 
         {/* Navegação */}
-        <nav className="relative flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="relative flex-1 px-3 py-4 space-y-1 overflow-y-auto sidebar-fade-overlay">
           {visibleNavItems.map((item) => {
             const isActive = activeTab === item.id;
             return (
@@ -414,6 +421,10 @@ export function DashboardView() {
                 {item.id === 'auditoria' && (
                   <span className={`absolute ${sidebarCollapsed ? 'top-1 right-1' : 'top-1.5 right-1.5'} w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]`} />
                 )}
+                {/* Home indicator dot on Painel */}
+                {item.id === 'painel' && (
+                  <span className={`absolute ${sidebarCollapsed ? 'top-1 right-1' : 'top-1.5 right-1.5'} w-2 h-2 rounded-full bg-emerald-400/50`} />
+                )}
                 <item.icon className="size-4 shrink-0" />
                 {!sidebarCollapsed && <span>{item.label}</span>}
                 {!sidebarCollapsed && isActive && (
@@ -443,9 +454,11 @@ export function DashboardView() {
           </div>
         )}
 
-        {/* Informações do utilizador */}
+        {/* Informações do utilizador — gradient background */}
         <div className={`relative ${sidebarCollapsed ? 'px-2' : 'px-4'} pb-4`}>
           <Separator className="border-white/10 mb-4" />
+          {/* Subtle gradient background for user section */}
+          <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-emerald-900/10 via-emerald-900/5 to-transparent pointer-events-none" />
           {sidebarCollapsed ? (
             <div className="flex flex-col items-center gap-2">
               <button
@@ -471,7 +484,7 @@ export function DashboardView() {
             <>
               <button
                 onClick={() => setProfileOpen(true)}
-                className="flex items-center gap-3 mb-3 w-full text-left hover:bg-white/5 -mx-2 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                className="flex items-center gap-3 mb-3 w-full text-left hover:bg-white/5 -mx-2 px-2 py-1 rounded-lg transition-all duration-200 cursor-pointer relative"
               >
                 <div className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
                   <span className="text-emerald-400 font-semibold text-sm">
@@ -507,7 +520,7 @@ export function DashboardView() {
       {/* Área principal */}
       <div className="flex-1 flex flex-col min-w-0 mt-[2px]">
         {/* Cabeçalho */}
-        <header className="bg-background border-b px-4 sm:px-6 py-4 shadow-sm relative">
+        <header className="backdrop-blur-md bg-background/80 border-b px-4 sm:px-6 py-4 shadow-sm relative sticky top-[2px] z-30">
           {/* Gradient shadow at bottom */}
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-200/50 dark:via-emerald-800/30 to-transparent" />
           <div className="flex items-center justify-between gap-3">
@@ -516,7 +529,7 @@ export function DashboardView() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="md:hidden active:scale-[0.95] shrink-0"
+                className="md:hidden active:scale-[0.95] shrink-0 hover:bg-emerald-500/10"
                 onClick={() => setSidebarOpen(true)}
               >
                 <Menu className="size-5" />
@@ -567,7 +580,7 @@ export function DashboardView() {
                     size="icon"
                     onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                     title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
-                    className="active:scale-[0.95]"
+                    className="active:scale-[0.95] hover:bg-amber-500/10"
                   >
                     {theme === 'dark' ? (
                       <Sun className="size-4 text-amber-500" />
@@ -584,7 +597,7 @@ export function DashboardView() {
                 size="icon"
                 onClick={() => setShortcutsOpen(true)}
                 title="Atalhos de teclado (?)"
-                className="active:scale-[0.95]"
+                className="active:scale-[0.95] hover:bg-emerald-500/10"
               >
                 <Keyboard className="size-4" />
               </Button>

@@ -115,6 +115,7 @@ export function LoginForm({ onForgotPassword }: LoginFormProps) {
                     autoComplete="email"
                     placeholder="nome@exemplo.co.mz"
                     disabled={isLoggingIn}
+                    className="input-glow"
                     {...field}
                   />
                 </FormControl>
@@ -149,7 +150,7 @@ export function LoginForm({ onForgotPassword }: LoginFormProps) {
                       autoComplete="current-password"
                       placeholder="••••••••"
                       disabled={isLoggingIn}
-                      className="pr-10"
+                      className="pr-10 input-glow"
                       {...field}
                     />
                   </FormControl>
@@ -175,7 +176,7 @@ export function LoginForm({ onForgotPassword }: LoginFormProps) {
           {/* Botão de login */}
           <Button
             type="submit"
-            className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white border-0 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200"
+            className="w-full bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-500 hover:from-emerald-600 hover:via-emerald-700 hover:to-teal-600 text-white border-0 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300"
             size="lg"
             disabled={isLoggingIn}
           >

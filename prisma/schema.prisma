@@ -32,6 +32,7 @@ model Firm {
   audit_logs  AuditLog[]
   invitations Invitation[]
   notes       Note[]
+  knowledge_articles KnowledgeArticle[]
 
   @@map("firms")
 }
@@ -68,6 +69,7 @@ model User {
   documents_updated Document[]     @relation("DocumentUpdater")
   process_assignments ProcessAssignment[]
   notes             Note[]      @relation("NoteCreator")
+  knowledge_articles KnowledgeArticle[] @relation("KnowledgeCreator")
 
   @@index([firm_id])
   @@index([email])
@@ -281,6 +283,32 @@ model Note {
   @@index([entity_type, entity_id])
   @@index([created_by_id])
   @@map("notes")
+}
+
+// ─────────────────────────────────────────
+// BASE DE CONHECIMENTO JURÍDICO
+// ─────────────────────────────────────────
+model KnowledgeArticle {
+  id            String   @id @default(cuid())
+  firm_id       String
+  title         String
+  content       String   // Rich text content
+  category      String   @default("OUTRO")
+  source        String?  // Legal reference (e.g., "Lei nº 5/2019")
+  tags          String   // JSON array string
+  is_pinned     Boolean  @default(false)
+  view_count    Int      @default(0)
+  created_by_id String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  created_by  User     @relation("KnowledgeCreator", fields: [created_by_id], references: [id])
+  firm        Firm     @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+
+  @@index([firm_id])
+  @@index([category])
+  @@index([created_by_id])
+  @@map("knowledge_articles")
 }
 
 // ─────────────────────────────────────────

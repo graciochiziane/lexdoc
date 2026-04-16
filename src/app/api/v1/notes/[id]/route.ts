@@ -74,7 +74,7 @@ export async function PATCH(
     // Audit log
     logAudit({
       firm_id: auth.payload.firm_id,
-      user_id: auth.payload.userId,
+      user_id: auth.payload.sub,
       action: 'NOTE_UPDATED',
       entity_type: existing.entity_type.toUpperCase(),
       entity_id: existing.entity_id,
@@ -119,7 +119,7 @@ export async function DELETE(
     // Audit log
     logAudit({
       firm_id: auth.payload.firm_id,
-      user_id: auth.payload.userId,
+      user_id: auth.payload.sub,
       action: 'NOTE_DELETED',
       entity_type: existing.entity_type.toUpperCase(),
       entity_id: existing.entity_id,

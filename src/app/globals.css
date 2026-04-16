@@ -125,52 +125,45 @@
    LEXDOC — Scrollbar personalizado
    Estilo limpo para áreas com scroll (tabelas, timeline)
    ─────────────────────────────────────────────── */
-.overflow-y-auto,
-.overflow-x-auto {
+/* ── Global thin scrollbar (emerald accent) ── */
+* {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0.8 0 0) transparent;
+  scrollbar-color: oklch(0.75 0.06 162) transparent;
 }
 
-.overflow-y-auto::-webkit-scrollbar,
-.overflow-x-auto::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
 }
 
-.overflow-y-auto::-webkit-scrollbar-track,
-.overflow-x-auto::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.overflow-y-auto::-webkit-scrollbar-thumb,
-.overflow-x-auto::-webkit-scrollbar-thumb {
-  background-color: oklch(0.8 0 0);
+*::-webkit-scrollbar-thumb {
+  background-color: oklch(0.75 0.06 162);
   border-radius: 9999px;
+  transition: background-color 0.2s;
 }
 
-.overflow-y-auto::-webkit-scrollbar-thumb:hover,
-.overflow-x-auto::-webkit-scrollbar-thumb:hover {
-  background-color: oklch(0.65 0 0);
+*::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.55 0.12 162);
 }
 
-.dark .overflow-y-auto,
-.dark .overflow-x-auto {
-  scrollbar-color: oklch(0.3 0 0) transparent;
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
-.dark .overflow-y-auto::-webkit-scrollbar-track,
-.dark .overflow-x-auto::-webkit-scrollbar-track {
-  background: oklch(0.2 0 0 / 30%);
+.dark * {
+  scrollbar-color: oklch(0.35 0.06 162) transparent;
 }
 
-.dark .overflow-y-auto::-webkit-scrollbar-thumb,
-.dark .overflow-x-auto::-webkit-scrollbar-thumb {
-  background-color: oklch(0.3 0 0);
+.dark *::-webkit-scrollbar-thumb {
+  background-color: oklch(0.35 0.06 162);
 }
 
-.dark .overflow-y-auto::-webkit-scrollbar-thumb:hover,
-.dark .overflow-x-auto::-webkit-scrollbar-thumb:hover {
-  background-color: oklch(0.45 0 0);
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.5 0.12 162);
 }
 
 /* ───────────────────────────────────────────────
@@ -313,4 +306,162 @@ html.dark {
    ─────────────────────────────────────────────── */
 .dark .hover\:bg-muted\/50:hover {
   background-color: oklch(0.269 0 0 / 50%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Glassmorphism Utility
+   ─────────────────────────────────────────────── */
+.glass {
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background: oklch(1 0 0 / 80%);
+  border: 1px solid oklch(1 0 0 / 20%);
+}
+
+.dark .glass {
+  background: oklch(0.205 0 0 / 80%);
+  border-color: oklch(1 0 0 / 8%);
+}
+
+.glass-strong {
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  background: oklch(1 0 0 / 85%);
+  border: 1px solid oklch(1 0 0 / 25%);
+  box-shadow: 0 8px 32px oklch(0 0 0 / 6%);
+}
+
+.dark .glass-strong {
+  background: oklch(0.15 0 0 / 85%);
+  border-color: oklch(1 0 0 / 10%);
+  box-shadow: 0 8px 32px oklch(0 0 0 / 25%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Noise Texture Overlay
+   ─────────────────────────────────────────────── */
+.noise-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 128px 128px;
+  mix-blend-mode: overlay;
+  border-radius: inherit;
+}
+
+.dark .noise-overlay::before {
+  opacity: 0.04;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Input Focus Glow (Emerald)
+   ─────────────────────────────────────────────── */
+.input-glow:focus {
+  border-color: oklch(0.696 0.17 162.48);
+  box-shadow: 0 0 0 3px oklch(0.696 0.17 162.48 / 15%), 0 0 16px oklch(0.696 0.17 162.48 / 10%);
+  outline: none;
+}
+
+.dark .input-glow:focus {
+  border-color: oklch(0.556 0.16 162);
+  box-shadow: 0 0 0 3px oklch(0.556 0.16 162 / 15%), 0 0 20px oklch(0.556 0.16 162 / 8%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Gradient Border Utility
+   ─────────────────────────────────────────────── */
+.gradient-border {
+  position: relative;
+  border: none !important;
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #10b981, #059669, #0d9488, #10b981);
+  background-size: 300% 300%;
+  animation: gradient-border-rotate 4s linear infinite;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+}
+
+@keyframes gradient-border-rotate {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Smooth Transitions for Interactive Elements
+   ─────────────────────────────────────────────── */
+button, a, input, [role='button'], [role='tab'], [role='option'] {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Breathing Animation (FAB)
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.696 0.17 162.48 / 40%); }
+  50% { box-shadow: 0 0 0 12px oklch(0.696 0.17 162.48 / 0%); }
+}
+
+.breathe {
+  animation: lexdoc-breathe 3s ease-in-out infinite;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Sidebar Gradient Fade Overlay
+   ─────────────────────────────────────────────── */
+.sidebar-fade-overlay {
+  position: relative;
+}
+
+.sidebar-fade-overlay::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: linear-gradient(to top, #0f0f1e, transparent);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Avatar Gradient Ring
+   ─────────────────────────────────────────────── */
+.avatar-gradient-ring {
+  background: conic-gradient(from 0deg, #10b981, #059669, #0d9488, #06b6d4, #10b981);
+  padding: 2px;
+  border-radius: inherit;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Premium Card Hover Effect
+   ─────────────────────────────────────────────── */
+.card-premium {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.card-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px oklch(0 0 0 / 8%), 0 2px 8px oklch(0 0 0 / 4%);
+}
+
+.dark .card-premium:hover {
+  box-shadow: 0 8px 30px oklch(0 0 0 / 30%), 0 2px 8px oklch(0 0 0 / 20%);
 }

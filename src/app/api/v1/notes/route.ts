@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       firm_id: auth.payload.firm_id,
       entity_type: entityType,
       entity_id: entityId,
-      created_by_id: auth.payload.userId,
+      created_by_id: auth.payload.sub,
       page,
       limit,
     });

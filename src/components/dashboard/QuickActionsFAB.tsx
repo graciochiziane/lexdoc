@@ -142,7 +142,7 @@ export function QuickActionsFAB({ onAction }: QuickActionsFABProps) {
                   type: 'spring',
                   stiffness: 350,
                   damping: 20,
-                  delay: index * 0.06,
+                  delay: index * 0.08,
                 }}
                 className="flex items-center gap-3 group"
                 onMouseEnter={() => setHoveredAction(action.id)}
@@ -153,8 +153,8 @@ export function QuickActionsFAB({ onAction }: QuickActionsFABProps) {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 10 }}
-                  transition={{ duration: 0.15, delay: index * 0.06 + 0.05 }}
-                  className="bg-popover text-popover-foreground shadow-lg rounded-lg px-3 py-2 border pointer-events-none min-w-0"
+                  transition={{ duration: 0.15, delay: index * 0.08 + 0.05 }}
+                  className="bg-popover text-popover-foreground shadow-lg rounded-lg px-3 py-2 border border-border/50 backdrop-blur-sm pointer-events-none min-w-0"
                 >
                   <p className="text-sm font-medium whitespace-nowrap">{action.label}</p>
                   <p className="text-[10px] text-muted-foreground hidden sm:block whitespace-nowrap">
@@ -202,7 +202,7 @@ export function QuickActionsFAB({ onAction }: QuickActionsFABProps) {
         className={`w-14 h-14 rounded-full text-white shadow-xl flex items-center justify-center transition-all duration-300 ${
           isOpen
             ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-red-500/25 rotate-0'
-            : 'bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-emerald-500/25'
+            : 'bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-emerald-500/25 breathe'
         }`}
         aria-label={isOpen ? 'Fechar ações rápidas' : 'Ações rápidas'}
       >

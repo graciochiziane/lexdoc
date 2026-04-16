@@ -232,18 +232,22 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-w-[95vw] p-0 overflow-hidden">
-        {/* Cabeçalho visual */}
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-500 px-6 pt-6 pb-8 text-white">
-          <div className="flex items-center gap-4">
+        {/* Cabeçalho visual — gradient with glassmorphism */}
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-500 px-6 pt-6 pb-8 text-white relative">
+          {/* Subtle noise texture overlay */}
+          <div className="absolute inset-0 noise-overlay pointer-events-none" />
+          <div className="flex items-center gap-4 relative z-10">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-              className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-3xl font-bold border border-white/20"
+              className="avatar-gradient-ring"
             >
-              {initials}
+              <div className="w-20 h-20 rounded-[14px] bg-white/20 backdrop-blur-sm flex items-center justify-center text-3xl font-bold border border-white/20">
+                {initials}
+              </div>
             </motion.div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 relative z-10">
               <h2 className="text-lg font-bold truncate">{profile?.full_name}</h2>
               <p className="text-sm text-white/80 truncate flex items-center gap-1.5">
                 {profile?.email}
@@ -272,10 +276,10 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
           <DialogDescription>Visualizar e editar informações do perfil</DialogDescription>
         </DialogHeader>
 
-        {/* Conteúdo em tabs */}
+        {/* Conteúdo em tabs — subtle glass effect */}
         <div className="px-6 pb-6">
           <Tabs defaultValue="info" className="mt-2">
-            <TabsList className="w-full">
+            <TabsList className="w-full bg-muted/50 backdrop-blur-sm">
               <TabsTrigger value="info" className="flex-1 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200">Informações</TabsTrigger>
               <TabsTrigger value="password" className="flex-1 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200">Palavra-passe</TabsTrigger>
             </TabsList>
@@ -390,6 +394,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
                             placeholder="Nome completo"
+                            className="input-glow"
                           />
                         </div>
                         <div className="space-y-1.5">
@@ -399,6 +404,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                             value={editPhone}
                             onChange={(e) => setEditPhone(e.target.value)}
                             placeholder="+258 84 XXX XXXX"
+                            className="input-glow"
                           />
                         </div>
                       </div>
@@ -449,7 +455,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       placeholder="Palavra-passe actual"
-                      className="pl-9 pr-9"
+                      className="pl-9 pr-9 input-glow"
                     />
                     <Button
                       variant="ghost"
@@ -478,7 +484,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Nova palavra-passe"
-                      className="pl-9 pr-9"
+                      className="pl-9 pr-9 input-glow"
                     />
                     <Button
                       variant="ghost"
@@ -504,6 +510,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirmar nova palavra-passe"
+                    className="input-glow"
                   />
                   {confirmPassword && newPassword !== confirmPassword && (
                     <p className="text-xs text-red-500">As palavras-passe não coincidem.</p>

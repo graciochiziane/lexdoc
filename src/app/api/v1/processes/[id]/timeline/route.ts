@@ -132,9 +132,9 @@ export async function GET(
       updated_at: string;
       user_name: string | null;
     }>>(
-      `SELECT n.*, u.full_name as user_name
+      `SELECT n.id, n.firm_id, n.entity_type, n.entity_id, n.content, n.is_pinned, n.created_by_id as created_by, n.created_at, n.updated_at, u.full_name as user_name
        FROM notes n
-       LEFT JOIN users u ON n.created_by = u.id
+       LEFT JOIN users u ON n.created_by_id = u.id
        WHERE n.firm_id = ? AND n.entity_type = 'process' AND n.entity_id = ?
        ORDER BY n.created_at DESC
        LIMIT 20`,

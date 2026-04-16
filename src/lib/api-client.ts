@@ -726,3 +726,73 @@ export interface TimelineEntry {
   created_at: string;
   details?: Record<string, unknown>;
 }
+
+// ─────────────────────────────────────────
+// API de Base de Conhecimento Jurídico
+// ─────────────────────────────────────────
+export interface KnowledgeArticle {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  source: string | null;
+  tags: string;
+  is_pinned: boolean;
+  view_count: number;
+  created_at: string;
+  updated_at: string;
+  created_by: {
+    id: string;
+    full_name: string;
+  };
+}
+
+export interface KnowledgeStats {
+  total_articles: number;
+  pinned_articles: number;
+  total_views: number;
+  by_category: Record<string, number>;
+  recent_articles: Array<{
+    id: string;
+    title: string;
+    category: string;
+    view_count: number;
+    created_at: string;
+    created_by: { full_name: string };
+  }>;
+  most_viewed: Array<{
+    id: string;
+    title: string;
+    category: string;
+    view_count: number;
+  }>;
+}
+
+export const knowledgeApi = {
+  list: (params?: string) =>
+    apiFetch<KnowledgeArticle[]>(`/knowledge${params ? `?${params}` : ''}`),
+  get: (id: string) =>
+    apiFetch<KnowledgeArticle>(`/knowledge/${id}`),
+  create: (data: {
+    title: string;
+    content: string;
+    category: string;
+    source?: string;
+    tags?: string;
+    is_pinned?: boolean;
+  }) =>
+    apiFetch<KnowledgeArticle>('/knowledge', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: {
+    title?: string;
+    content?: string;
+    category?: string;
+    source?: string;
+    tags?: string;
+    is_pinned?: boolean;
+  }) =>
+    apiFetch<KnowledgeArticle>(`/knowledge/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    apiFetch<{ id: string; deleted: boolean }>(`/knowledge/${id}`, { method: 'DELETE' }),
+  stats: () =>
+    apiFetch<KnowledgeStats>('/knowledge/stats'),
+};

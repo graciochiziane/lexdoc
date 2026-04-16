@@ -221,13 +221,13 @@ export function SearchBar({ onSelect }: SearchBarProps) {
       {/* Botão/trigger da pesquisa */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-input bg-background text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors w-full sm:w-64 lg:w-80"
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-input bg-background text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-[0_0_12px_rgba(16,185,129,0.1)] w-full sm:w-64 lg:w-80"
       >
         <Search className="size-4 shrink-0" />
         <span className="flex-1 text-left truncate">
           Pesquisar...
         </span>
-        <kbd className="hidden sm:inline-flex pointer-events-none items-center gap-0.5 rounded-md border border-border bg-muted/80 px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground shadow-sm">
+        <kbd className="hidden sm:inline-flex pointer-events-none items-center gap-0.5 rounded-md border border-border bg-muted/80 px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground shadow-sm tracking-wide">
           <Command className="size-2.5" />K
         </kbd>
       </button>
@@ -398,9 +398,9 @@ export function SearchBar({ onSelect }: SearchBarProps) {
             >
               <span>{totalResults} resultado{totalResults !== 1 ? 's' : ''} encontrado{totalResults !== 1 ? 's' : ''}</span>
               <div className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">↑↓</kbd>
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] tracking-wide">↑↓</kbd>
                 <span>navegar</span>
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] ml-2">↵</kbd>
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] tracking-wide ml-2">↵</kbd>
                 <span>seleccionar</span>
               </div>
             </motion.div>
