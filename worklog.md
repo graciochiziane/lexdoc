@@ -893,3 +893,75 @@ Stage Summary:
 - CSV Import: Full feature for bulk client import with validation and duplicate detection
 - Dark mode fully supported, all text in Portuguese (pt-MZ)
 
+---
+Task ID: 20 (Phase 2 — O Motor de IA)
+Agent: Main Orchestrator + full-stack-developer subagents
+Task: Build Phase 2 AI Engine — RAG, Document Generation, Conversation Memory, Deadline Extraction
+
+Work Log:
+- Updated prisma/schema.prisma — Added 3 new models: AIConversation (chat sessions), AIMessage (chat messages), AIGeneration (generated documents). Added relations to Firm and User models. Pushed schema to SQLite successfully.
+- Created src/lib/rag-search.ts — Knowledge Base RAG Search Engine. Tokenizes queries with Portuguese stop words (70+), searches title/content/tags/source fields, relevance scoring (title=5pts, tags=4pts, source=3pts, content=1pt, position bonuses, pinned bonus), firm-scoped filtering.
+- Rewrote src/app/api/v1/ai/chat/route.ts — Enhanced AI Chat with RAG + Memory. POST creates/loads AIConversation, saves messages to DB, searches Knowledge Base (up to 3 articles), injects context into system prompt, loads last 10 messages for continuity, calls z-ai-web-dev-sdk LLM, saves response with sources/knowledge_ids. GET lists conversations with pagination, last message preview, message count.
+- Created src/app/api/v1/ai/conversations/[id]/route.ts — Conversation management. GET loads full conversation with all messages, POST adds message with RAG+memory, DELETE soft-deletes conversation (is_active=false). All operations verify ownership.
+- Created src/app/api/v1/ai/generate/route.ts — AI Document Generation. Types: contract, petition, legal_opinion, summary, custom_document. Type-specific system prompts with Mozambican legal structures (CPC, LGT). Fetches process/template context if provided. Saves to AIGeneration table. Rate limit: 10 req/hour.
+- Created src/app/api/v1/ai/generate/list/route.ts — List AI generations with pagination and type filter.
+- Created src/app/api/v1/ai/generate/[id]/route.ts — Get single generation, delete generation. Ownership verification.
+- Created src/app/api/v1/ai/extract-deadlines/route.ts — Deadline Extraction from legal text. Specialized prompt for CPC Mozambicano rules (dia a quo, counting rules). JSON response parsing with 3-stage fallback. Auto-create deadlines in processes. Rate limit: 15 req/hour.
+- Created src/components/dashboard/AIHubView.tsx — Full-page AI command center (~730 lines). 4 tabs: Assistente IA (chat with conversation sidebar + RAG source indicators), Gerar Documento (form + result + history), Extrair Prazos (textarea + results cards), Histórico (table of all generations).
+- Updated src/lib/api-client.ts — Added AI API types and methods: chat (with conversation_id + RAG), listConversations, getConversation, deleteConversation, generate, listGenerations, getGeneration, deleteGeneration, extractDeadlines.
+- Updated src/components/views/DashboardView.tsx — Added 'ia' tab with Bot icon, placed after 'painel' in sidebar (accessible to all roles). Added AIHubView import and renderContent case.
+- Fixed TypeScript errors: removed SQLite-incompatible `mode: 'insensitive'` from rag-search.ts, added `as any` cast for LLM message types.
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+- Verified AI chat endpoint: GET /api/v1/ai/chat returned 200 with empty conversations list
+
+Stage Summary:
+- 3 new Prisma models (AIConversation, AIMessage, AIGeneration) — 16 total models
+- 1 new lib (rag-search.ts) — Knowledge Base RAG search engine
+- 7 new/modified API endpoints (chat with RAG+memory, conversations CRUD, generate, generate/list, generate/[id], extract-deadlines) — ~53 total endpoints
+- 1 new frontend component (AIHubView.tsx) — Full AI Hub with 4 tabs
+- 1 new dashboard tab (Centro de IA) — accessible to all roles
+- AI Features: RAG knowledge base search, conversation memory, document generation (5 types), deadline extraction from legal text
+- All endpoints filtered by firm_id, rate-limited, audit-logged
+- z-ai-web-dev-sdk used exclusively on backend, never on client side
+
+---
+## HANDOVER DOCUMENT — Phase 2 Update
+
+### Current Project Status / Assessment
+LexDoc is now in Phase 2 with AI capabilities integrated into the existing mature platform. The application combines comprehensive legal document management (Phase 1+) with intelligent AI-powered features (Phase 2). The platform is fully functional with ~53 API endpoints, 17+ frontend views, and 16 Prisma models.
+
+### Architecture
+- Backend: ~53 API endpoints with JWT auth, RBAC, audit trail, multi-tenant isolation (firm_id), AI with RAG
+- Frontend: 17+ views, client-side routing, Zustand + TanStack Query, dark mode, responsive, framer-motion animations
+- Database: 16 Prisma models (11 original + 3 AI: AIConversation, AIMessage, AIGeneration + ProcessTemplate, ProcessNote, KnowledgeArticle, Note)
+- AI: z-ai-web-dev-sdk for LLM (chat, generation, extraction), RAG via SQLite text search, conversation memory in DB
+- Security: bcrypt hashing, JWT access+refresh tokens, PII masking, rate limiting (AI: 10-20 req/hr), account lockout
+
+### Completed AI Features (Phase 2)
+1. **RAG Knowledge Base Search**: Searches articles by title/content/tags/source with Portuguese stop words and relevance scoring
+2. **AI Chat with Memory**: Conversations persisted in DB, loads last 10 messages for context continuity
+3. **RAG Context Injection**: Up to 3 knowledge articles automatically injected into LLM system prompt
+4. **Conversation Management**: Create, list, view, delete conversations with sidebar UI
+5. **AI Document Generation**: 5 types (Contract, Petition, Legal Opinion, Summary, Custom) with Mozambican legal structures
+6. **Process Context**: Generated documents can reference process details (client, court, judge, area)
+7. **Deadline Extraction**: Extract deadlines from legal text with CPC Mozambicano rule awareness
+8. **Auto-create Deadlines**: Extracted deadlines can be automatically created in the process
+9. **Generation History**: All AI generations saved with metadata for review
+10. **AI Hub**: Dedicated tab for all AI features with 4 sub-views
+
+### Unresolved Issues / Risks
+- SQLite RAG: No vector search — uses keyword matching (adequate for small knowledge bases)
+- LLM latency: AI responses depend on z-ai-web-dev-sdk response time
+- No conversation title editing (auto-titled from first message)
+- No streaming responses (full response wait)
+- No AI usage analytics/dashboard metrics
+
+### Priority Recommendations for Next Phase
+1. Streaming AI responses via SSE for better UX
+2. Advanced RAG with SQLite FTS5 full-text search
+3. File upload with S3 POST policy
+4. Email notifications (deadline reminders, invitation emails)
+5. Real-time WebSocket notifications
+6. Mobile PWA optimization
+7. Data export enhancements (PDF reports)
+8. Unit/integration tests

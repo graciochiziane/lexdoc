@@ -34,6 +34,8 @@ model Firm {
   notes       Note[]
   knowledge_articles KnowledgeArticle[]
   process_templates ProcessTemplate[]
+  ai_conversations AIConversation[]
+  ai_generations   AIGeneration[]
 
   @@map("firms")
 }
@@ -72,6 +74,8 @@ model User {
   notes             Note[]      @relation("NoteCreator")
   knowledge_articles KnowledgeArticle[] @relation("KnowledgeCreator")
   process_templates  ProcessTemplate[] @relation("TemplateCreator")
+  ai_conversations   AIConversation[]
+  ai_generations     AIGeneration[]
 
   @@index([firm_id])
   @@index([email])
@@ -371,4 +375,75 @@ model Invitation {
 
   @@index([firm_id])
   @@map("invitations")
+}
+
+// ─────────────────────────────────────────
+// CONVERSAS IA (LEXASSISTENT)
+// ─────────────────────────────────────────
+model AIConversation {
+  id          String        @id @default(cuid())
+  firm_id     String
+  user_id     String
+  title       String        @default("Nova Conversa")
+  context_type String?      // "process" | "client" | "document" | null
+  context_id   String?      // ID da entidade relacionada
+  is_active   Boolean       @default(true)
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
+
+  messages    AIMessage[]
+
+  firm        Firm          @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [user_id], references: [id])
+
+  @@index([firm_id])
+  @@index([user_id])
+  @@index([is_active])
+  @@map("ai_conversations")
+}
+
+// ─────────────────────────────────────────
+// MENSAGENS IA
+// ─────────────────────────────────────────
+model AIMessage {
+  id              String          @id @default(cuid())
+  conversation_id String
+  role            String          // "user" | "assistant" | "system"
+  content         String
+  sources         String?         // JSON array de fontes/citações
+  knowledge_ids   String?         // JSON array de IDs de artigos da base de conhecimento usados
+  metadata        String?         // JSON com dados adicionais (tokens, tempo, etc.)
+  created_at      DateTime        @default(now())
+
+  conversation    AIConversation  @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id])
+  @@index([created_at])
+  @@map("ai_messages")
+}
+
+// ─────────────────────────────────────────
+// GERAÇÕES IA (DOCUMENTOS GERADOS)
+// ─────────────────────────────────────────
+model AIGeneration {
+  id              String   @id @default(cuid())
+  firm_id         String
+  user_id         String
+  generation_type String   // "document" | "contract" | "petition" | "legal_opinion" | "summary"
+  title           String
+  prompt          String   // O prompt usado
+  result          String   // O documento gerado
+  template_id     String?  // Se gerado a partir de um template
+  process_id      String?  // Se associado a um processo
+  metadata        String?  // JSON com dados adicionais
+  created_at      DateTime @default(now())
+
+  firm            Firm     @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [user_id], references: [id])
+
+  @@index([firm_id])
+  @@index([user_id])
+  @@index([generation_type])
+  @@index([created_at])
+  @@map("ai_generations")
 }

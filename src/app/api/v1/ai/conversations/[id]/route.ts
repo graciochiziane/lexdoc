@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
-// LEXDOC — AI Chat API (LexAssistent) com RAG + Memória
-// POST /api/v1/ai/chat — Enviar mensagem e receber resposta do assistente jurídico
-// GET  /api/v1/ai/chat — Listar conversas do utilizador
+// LEXDOC — Conversation Management API
+// GET    /api/v1/ai/conversations/[id] — Carregar conversa completa
+// POST   /api/v1/ai/conversations/[id] — Adicionar mensagem a conversa existente
+// DELETE /api/v1/ai/conversations/[id] — Soft-delete (desactivar) conversa
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -11,7 +12,6 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { searchKnowledgeArticles, type KnowledgeSearchResult } from '@/lib/rag-search';
-import { parsePagination, buildPaginationMeta, calcSkip } from '@/lib/pagination';
 
 process.env.TZ = 'Africa/Maputo';
 
@@ -37,7 +37,6 @@ REGRAS:
 // Helpers
 // ─────────────────────────────────────────
 
-/** Construir prompt de sistema com contexto RAG */
 function buildSystemPromptWithRAG(knowledgeArticles: KnowledgeSearchResult[]): string {
   if (knowledgeArticles.length === 0) return SYSTEM_PROMPT;
 
@@ -60,7 +59,6 @@ INSTRUÇÕES ADICIONAIS:
 - Se a base de conhecimento contiver informações contraditórias, prioriza a legislação vigente.`;
 }
 
-/** Serializar array de IDs para JSON string */
 function safeJsonStringify(data: unknown): string | null {
   if (!data) return null;
   try {
@@ -71,9 +69,12 @@ function safeJsonStringify(data: unknown): string | null {
 }
 
 // ─────────────────────────────────────────
-// POST — Enviar mensagem ao chat
+// GET — Carregar conversa completa com todas as mensagens
 // ─────────────────────────────────────────
-export async function POST(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     // ── Autenticação ──
     const authResult = authenticateRequest(request);
@@ -82,12 +83,112 @@ export async function POST(request: NextRequest) {
     const { payload } = authResult;
     const userId = payload.sub;
     const firmId = payload.firm_id;
+    const { id } = await params;
 
-    // ── Rate limiting: 20 pedidos por hora por utilizador ──
+    // ── Buscar conversa ──
+    const conversation = await db.aIConversation.findFirst({
+      where: {
+        id,
+        user_id: userId,
+        firm_id: firmId,
+        is_active: true,
+      },
+      select: {
+        id: true,
+        title: true,
+        context_type: true,
+        context_id: true,
+        is_active: true,
+        created_at: true,
+        updated_at: true,
+        messages: {
+          orderBy: { created_at: 'asc' },
+          select: {
+            id: true,
+            role: true,
+            content: true,
+            sources: true,
+            knowledge_ids: true,
+            created_at: true,
+          },
+        },
+      },
+    });
+
+    if (!conversation) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Conversa não encontrada ou inactiva.',
+          },
+        },
+        { status: 404 },
+      );
+    }
+
+    // ── Formatar mensagens com sources parseados ──
+    const formattedMessages = conversation.messages.map((msg) => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      sources: msg.sources ? JSON.parse(msg.sources) : null,
+      knowledge_ids: msg.knowledge_ids ? JSON.parse(msg.knowledge_ids) : null,
+      created_at: msg.created_at,
+    }));
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: conversation.id,
+        title: conversation.title,
+        context_type: conversation.context_type,
+        context_id: conversation.context_id,
+        is_active: conversation.is_active,
+        created_at: conversation.created_at,
+        updated_at: conversation.updated_at,
+        messages: formattedMessages,
+        message_count: formattedMessages.length,
+      },
+    });
+  } catch (error) {
+    console.error('[AI Conversations] Erro ao carregar conversa:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Erro interno ao carregar conversa.',
+        },
+      },
+      { status: 500 },
+    );
+  }
+}
+
+// ─────────────────────────────────────────
+// POST — Adicionar mensagem a conversa existente
+// ─────────────────────────────────────────
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    // ── Autenticação ──
+    const authResult = authenticateRequest(request);
+    if (!authResult.success) return authResult.response;
+
+    const { payload } = authResult;
+    const userId = payload.sub;
+    const firmId = payload.firm_id;
+    const { id } = await params;
+
+    // ── Rate limiting ──
     const rateLimit = checkRateLimit(
       `ai:chat:${userId}`,
       20,
-      60 * 60 * 1000, // 1 hora
+      60 * 60 * 1000,
     );
 
     if (!rateLimit.allowed) {
@@ -105,7 +206,7 @@ export async function POST(request: NextRequest) {
 
     // ── Validar body ──
     const body = await request.json().catch(() => null);
-    const { message, context, conversation_id, context_type, context_id } = body ?? {};
+    const { message, context } = body ?? {};
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json(
@@ -133,96 +234,64 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Construir mensagem do utilizador com contexto ──
+    // ── Verificar se a conversa existe ──
+    const conversation = await db.aIConversation.findFirst({
+      where: {
+        id,
+        user_id: userId,
+        firm_id: firmId,
+        is_active: true,
+      },
+    });
+
+    if (!conversation) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Conversa não encontrada ou inactiva.',
+          },
+        },
+        { status: 404 },
+      );
+    }
+
+    // ── Construir mensagem com contexto ──
     let userMessage = message.trim();
     if (context && typeof context === 'string' && context.trim().length > 0) {
       userMessage += `\n\n[Contexto adicional fornecido pelo utilizador]: ${context.trim()}`;
     }
 
-    // ── Gerir conversa existente ou criar nova ──
-    let conversationId = conversation_id;
-    let isNewConversation = false;
-
-    if (conversationId) {
-      // Verificar se a conversa existe e pertence ao utilizador
-      const existingConversation = await db.aIConversation.findFirst({
-        where: {
-          id: conversationId,
-          user_id: userId,
-          firm_id: firmId,
-          is_active: true,
-        },
-      });
-
-      if (!existingConversation) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: 'NOT_FOUND',
-              message: 'Conversa não encontrada ou inactiva.',
-            },
-          },
-          { status: 404 },
-        );
-      }
-    } else {
-      // Criar nova conversa
-      const title = message.trim().substring(0, 60) + (message.trim().length > 60 ? '...' : '');
-      const newConversation = await db.aIConversation.create({
-        data: {
-          firm_id: firmId,
-          user_id: userId,
-          title,
-          context_type: context_type || null,
-          context_id: context_id || null,
-        },
-      });
-      conversationId = newConversation.id;
-      isNewConversation = true;
-    }
-
     // ── Guardar mensagem do utilizador ──
     await db.aIMessage.create({
       data: {
-        conversation_id: conversationId,
+        conversation_id: id,
         role: 'user',
         content: userMessage,
       },
     });
 
-    // ── Carregar histórico de mensagens (últimas 10) ──
+    // ── Carregar histórico (últimas 10 mensagens) ──
     const historyMessages = await db.aIMessage.findMany({
-      where: {
-        conversation_id: conversationId,
-      },
+      where: { conversation_id: id },
       orderBy: { created_at: 'asc' },
       take: 10,
-      select: {
-        role: true,
-        content: true,
-      },
+      select: { role: true, content: true },
     });
 
     // ── RAG: Pesquisar base de conhecimento ──
     const knowledgeArticles = await searchKnowledgeArticles(firmId, message, 3);
 
-    // ── Construir prompt de sistema com contexto RAG ──
+    // ── Construir prompt ──
     const systemPrompt = buildSystemPromptWithRAG(knowledgeArticles);
 
-    // ── Montar array de mensagens para LLM ──
     const llmMessages = [
       { role: 'assistant' as const, content: systemPrompt },
+      ...historyMessages.map((msg) => ({ role: msg.role as 'user' | 'assistant', content: msg.content })),
     ];
 
-    // Adicionar histórico (excepto a última mensagem do utilizador, que já temos)
-    for (const msg of historyMessages) {
-      if (msg.role === 'user' || msg.role === 'assistant') {
-        llmMessages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
-      }
-    }
-
-    // ── Chamar LLM via z-ai-web-dev-sdk ──
+    // ── Chamar LLM ──
     const zai = await ZAI.create();
     const completion = await zai.chat.completions.create({
       messages: llmMessages as any,
@@ -232,23 +301,19 @@ export async function POST(request: NextRequest) {
     const aiMessageContent = completion?.choices?.[0]?.message?.content
       ?? 'Desculpe, não consegui processar a sua mensagem. Tente novamente.';
 
-    // ── Guardar resposta do assistente ──
+    // ── Guardar resposta ──
     const knowledgeIds = knowledgeArticles.map((a) => a.id);
     const sources = knowledgeArticles
       .filter((a) => a.source)
       .map((a) => a.source as string);
 
-    // Se não houver fontes dos artigos, adicionar fontes genéricas
     if (sources.length === 0) {
-      sources.push(
-        'Legislação moçambicana vigente',
-        'Código de Processo Civil de Moçambique',
-      );
+      sources.push('Legislação moçambicana vigente', 'Código de Processo Civil de Moçambique');
     }
 
     await db.aIMessage.create({
       data: {
-        conversation_id: conversationId,
+        conversation_id: id,
         role: 'assistant',
         content: aiMessageContent,
         sources: safeJsonStringify(sources),
@@ -260,30 +325,29 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // ── Registar na auditoria (sem conteúdo da mensagem — sem PII) ──
+    // ── Auditoria ──
     logAudit({
       firm_id: firmId,
       user_id: userId,
       action: 'AI_CHAT_QUERY',
       entity_type: 'ai_assistant',
-      entity_id: conversationId,
+      entity_id: id,
       metadata: {
         query_length: message.length,
         has_context: !!context,
         response_length: aiMessageContent.length,
         knowledge_articles_used: knowledgeArticles.length,
-        is_new_conversation: isNewConversation,
+        is_new_conversation: false,
       },
       ip_address: request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? null,
     });
 
-    // ── Resposta ──
     return NextResponse.json({
       success: true,
       data: {
         message: aiMessageContent,
         sources,
-        conversation_id: conversationId,
+        conversation_id: id,
         knowledge_articles_used: knowledgeArticles.map((a) => ({
           id: a.id,
           title: a.title,
@@ -293,13 +357,13 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[AI Chat] Erro ao processar mensagem:', error);
+    console.error('[AI Conversations] Erro ao adicionar mensagem:', error);
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: 'Erro interno ao processar a sua mensagem. Tente novamente.',
+          message: 'Erro interno ao processar a mensagem.',
         },
       },
       { status: 500 },
@@ -308,9 +372,12 @@ export async function POST(request: NextRequest) {
 }
 
 // ─────────────────────────────────────────
-// GET — Listar conversas do utilizador
+// DELETE — Soft-delete (desactivar) conversa
 // ─────────────────────────────────────────
-export async function GET(request: NextRequest) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     // ── Autenticação ──
     const authResult = authenticateRequest(request);
@@ -319,87 +386,66 @@ export async function GET(request: NextRequest) {
     const { payload } = authResult;
     const userId = payload.sub;
     const firmId = payload.firm_id;
+    const { id } = await params;
 
-    // ── Paginação ──
-    const { searchParams } = new URL(request.url);
-    const { page, limit } = parsePagination(searchParams);
-    const skip = calcSkip(page, limit);
-    const activeOnly = searchParams.get('active') !== 'false';
-
-    // ── Filtros ──
-    const where: Record<string, unknown> = {
-      user_id: userId,
-      firm_id: firmId,
-    };
-
-    if (activeOnly) {
-      where.is_active = true;
-    }
-
-    // ── Contar total ──
-    const total = await db.aIConversation.count({ where });
-
-    // ── Buscar conversas com última mensagem e contagem ──
-    const conversations = await db.aIConversation.findMany({
-      where,
-      orderBy: { updated_at: 'desc' },
-      skip,
-      take: limit,
-      select: {
-        id: true,
-        title: true,
-        context_type: true,
-        context_id: true,
+    // ── Verificar se a conversa existe e pertence ao utilizador ──
+    const conversation = await db.aIConversation.findFirst({
+      where: {
+        id,
+        user_id: userId,
+        firm_id: firmId,
         is_active: true,
-        created_at: true,
-        updated_at: true,
-        messages: {
-          orderBy: { created_at: 'desc' },
-          take: 1,
-          select: {
-            content: true,
-            created_at: true,
-            role: true,
-          },
-        },
-        _count: {
-          select: { messages: true },
-        },
       },
     });
 
-    // ── Formatar resposta ──
-    const formatted = conversations.map((conv) => ({
-      id: conv.id,
-      title: conv.title,
-      context_type: conv.context_type,
-      context_id: conv.context_id,
-      is_active: conv.is_active,
-      created_at: conv.created_at,
-      updated_at: conv.updated_at,
-      last_message: conv.messages[0]
-        ? {
-            content: conv.messages[0].content.substring(0, 150) + (conv.messages[0].content.length > 150 ? '...' : ''),
-            role: conv.messages[0].role,
-            created_at: conv.messages[0].created_at,
-          }
-        : null,
-      message_count: conv._count.messages,
-    }));
+    if (!conversation) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Conversa não encontrada ou já desactivada.',
+          },
+        },
+        { status: 404 },
+      );
+    }
+
+    // ── Soft-delete: marcar como inactiva ──
+    await db.aIConversation.update({
+      where: { id },
+      data: { is_active: false },
+    });
+
+    // ── Auditoria ──
+    logAudit({
+      firm_id: firmId,
+      user_id: userId,
+      action: 'AI_CONVERSATION_DELETED',
+      entity_type: 'ai_conversation',
+      entity_id: id,
+      metadata: {
+        conversation_title: conversation.title,
+        message_count: await db.aIMessage.count({ where: { conversation_id: id } }),
+      },
+      ip_address: request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? null,
+    });
 
     return NextResponse.json({
       success: true,
-      data: formatted,
-      meta: buildPaginationMeta(total, page, limit),
+      data: {
+        id,
+        message: 'Conversa desactivada com sucesso.',
+      },
     });
   } catch (error) {
-    console.error('[AI Chat] Erro ao listar conversas:', error);
+    console.error('[AI Conversations] Erro ao desactivar conversa:', error);
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: 'Erro interno ao listar conversas.',
+          message: 'Erro interno ao desactivar conversa.',
         },
       },
       { status: 500 },

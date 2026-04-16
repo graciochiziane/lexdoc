@@ -35,6 +35,7 @@ import {
   BookOpen,
   FileCode2,
   Settings2,
+  Bot,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Card, CardContent } from '@/components/ui/card';
@@ -69,6 +70,7 @@ import { TaskManager } from '@/components/dashboard/TaskManager';
 import { NotificationsCenter } from '@/components/dashboard/NotificationsCenter';
 import { KnowledgeView } from '@/components/dashboard/KnowledgeView';
 import { AIChatPanel } from '@/components/dashboard/AIChatPanel';
+import { AIHubView } from '@/components/dashboard/AIHubView';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { TemplatesView } from '@/components/dashboard/TemplatesView';
 import { WidgetSettings } from '@/components/dashboard/WidgetSettings';
@@ -78,6 +80,7 @@ import { WidgetSettings } from '@/components/dashboard/WidgetSettings';
 // ─────────────────────────────────────────
 type DashboardTab =
   | 'painel'
+  | 'ia'
   | 'tarefas'
   | 'processos'
   | 'modelos'
@@ -103,6 +106,7 @@ const NAV_ITEMS: Array<{
   roles?: string[];
 }> = [
   { id: 'painel', icon: LayoutDashboard, label: 'Painel' },
+  { id: 'ia', icon: Bot, label: 'Centro de IA' },
   { id: 'tarefas', icon: CheckSquare, label: 'Tarefas' },
   { id: 'processos', icon: Briefcase, label: 'Processos' },
   { id: 'modelos', icon: FileCode2, label: 'Modelos de Processo', roles: ['ADMIN', 'ADVOGADO'] },
@@ -123,6 +127,7 @@ const NAV_ITEMS: Array<{
 // ─────────────────────────────────────────
 const TAB_LABELS: Record<DashboardTab, string> = {
   painel: 'Painel de Controlo',
+  ia: 'Centro de Inteligência Artificial',
   tarefas: 'Minhas Tarefas',
   processos: 'Processos Jurídicos',
   modelos: 'Modelos de Processo',
@@ -280,6 +285,8 @@ export function DashboardView() {
     switch (activeTab) {
       case 'painel':
         return <DashboardHome />;
+      case 'ia':
+        return <AIHubView />;
       case 'tarefas':
         return <TaskManager />;
       case 'processos':

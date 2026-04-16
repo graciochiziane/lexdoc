@@ -935,9 +935,97 @@ export interface AIAnalysisResponse {
   full_analysis: string;
 }
 
+// ─────────────────────────────────────────
+// API de IA — Conversas (Enhanced Chat)
+// ─────────────────────────────────────────
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+  last_message?: string;
+}
+
+export interface ConversationMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  sources?: string[];
+  knowledge_articles_used?: Array<{ id: string; title: string; category: string }>;
+  created_at: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  context?: string;
+  messages: ConversationMessage[];
+}
+
+// ─────────────────────────────────────────
+// API de IA — Geração de Documentos
+// ─────────────────────────────────────────
+export interface GenerationRecord {
+  id: string;
+  title: string;
+  generation_type: string;
+  context: string;
+  result: string;
+  process_id?: string;
+  created_at: string;
+}
+
+// ─────────────────────────────────────────
+// API de IA — Extração de Prazos
+// ─────────────────────────────────────────
+export interface ExtractedDeadline {
+  title: string;
+  due_date: string;
+  description: string;
+  source_text: string;
+}
+
 export const aiApi = {
-  chat: (data: AIChatRequest) =>
-    apiFetch<AIChatResponse>('/ai/chat', { method: 'POST', body: JSON.stringify(data) }),
+  // Enhanced chat with RAG + memory
+  chat: (data: { message: string; context?: string; conversation_id?: string }) =>
+    apiFetch<{ message: string; sources: string[]; conversation_id: string; knowledge_articles_used?: Array<{ id: string; title: string; category: string }> }>('/ai/chat', { method: 'POST', body: JSON.stringify(data) }),
+
+  // List conversations
+  listConversations: (params?: string) =>
+    apiFetch<ConversationSummary[]>('/ai/chat' + (params ? `?${params}` : '')),
+
+  // Get conversation messages
+  getConversation: (id: string) =>
+    apiFetch<ConversationDetail>(`/ai/conversations/${id}`),
+
+  // Delete conversation
+  deleteConversation: (id: string) =>
+    apiFetch(`/ai/conversations/${id}`, { method: 'DELETE' }),
+
+  // Generate document
+  generate: (data: { type: string; title: string; context: string; process_id?: string; template_id?: string }) =>
+    apiFetch<{ id: string; title: string; result: string; generation_type: string }>('/ai/generate', { method: 'POST', body: JSON.stringify(data) }),
+
+  // List generations
+  listGenerations: (params?: string) =>
+    apiFetch<GenerationRecord[]>('/ai/generate/list' + (params ? `?${params}` : '')),
+
+  // Get generation
+  getGeneration: (id: string) =>
+    apiFetch<GenerationRecord>(`/ai/generate/${id}`),
+
+  // Delete generation
+  deleteGeneration: (id: string) =>
+    apiFetch(`/ai/generate/${id}`, { method: 'DELETE' }),
+
+  // Extract deadlines
+  extractDeadlines: (data: { text: string; process_id?: string }) =>
+    apiFetch<{ deadlines: ExtractedDeadline[] }>('/ai/extract-deadlines', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Analyze document (existing)
   analyze: (data: AIAnalyzeRequest) =>
     apiFetch<AIAnalysisResponse>('/ai/analyze', { method: 'POST', body: JSON.stringify(data) }),
 };
