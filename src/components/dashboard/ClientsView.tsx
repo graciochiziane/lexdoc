@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,6 +18,8 @@ import {
   Building2,
   User,
   Download,
+  Upload,
+  FileSpreadsheet,
   LayoutGrid,
   LayoutList,
   Mail,
@@ -54,7 +56,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { clientsApi, exportApi, type ClientRecord } from '@/lib/api-client';
+import { clientsApi, exportApi, importApi, type ClientRecord, type ImportResult } from '@/lib/api-client';
 import { NotesPanel } from '@/components/dashboard/NotesPanel';
 
 // ─────────────────────────────────────────
@@ -284,6 +286,34 @@ export function ClientsView() {
     }
   }, []);
 
+  // ── Import CSV ──
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const result = await importApi.clients(file);
+      if (result.success && result.data) {
+        setImportResult(result.data);
+        toast.success(`${result.data.created} clientes importados com sucesso!`);
+        queryClient.invalidateQueries({ queryKey: ['clients'] });
+      } else {
+        toast.error(result.error?.message || 'Erro ao importar ficheiro.');
+      }
+    } catch {
+      toast.error('Erro ao importar ficheiro.');
+    } finally {
+      setImporting(false);
+      if (e.target) e.target.value = '';
+    }
+  }, [queryClient]);
+
   // ── Handlers ──
   const handleSearch = useCallback((value: string) => {
     setSearch(value);
@@ -331,6 +361,15 @@ export function ClientsView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportDialogOpen(true)}
+            className="active:scale-[0.98] transition-all hover:border-emerald-300 dark:hover:border-emerald-700"
+          >
+            <Upload className="size-4" />
+            <span className="hidden sm:inline ml-2">Importar</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -696,6 +735,91 @@ export function ClientsView() {
               </AnimatePresence>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Import Dialog ── */}
+      <Dialog open={importDialogOpen} onOpenChange={(open) => { setImportDialogOpen(open); if (!open) setImportResult(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <div className="h-1 bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-600 rounded-t-lg" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center">
+                <FileSpreadsheet className="size-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              Importar Clientes (CSV)
+            </DialogTitle>
+            <DialogDescription>
+              Carregue um ficheiro CSV com os dados dos clientes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all duration-200 group"
+            >
+              {importing ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="size-10 text-emerald-500 animate-spin" />
+                  <p className="text-sm text-muted-foreground">A importar...</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                    <Upload className="size-7 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Clique para seleccionar ficheiro</p>
+                    <p className="text-xs text-muted-foreground mt-1">CSV até 5MB</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {importResult && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-2"
+              >
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="text-center p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30">
+                    <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{importResult.created}</p>
+                    <p className="text-[11px] text-muted-foreground">Criados</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30">
+                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{importResult.duplicates}</p>
+                    <p className="text-[11px] text-muted-foreground">Duplicados</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-red-50 dark:bg-red-950/30">
+                    <p className="text-lg font-bold text-red-600 dark:text-red-400">{importResult.errors}</p>
+                    <p className="text-[11px] text-muted-foreground">Erros</p>
+                  </div>
+                </div>
+                {importResult.parse_warnings?.length ? (
+                  <div className="text-xs text-muted-foreground space-y-0.5 max-h-24 overflow-y-auto">
+                    {importResult.parse_warnings.map((w, i) => (
+                      <p key={i}>⚠️ {w}</p>
+                    ))}
+                  </div>
+                ) : null}
+              </motion.div>
+            )}
+
+            <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground">
+              <p className="font-medium mb-1">Formato do CSV:</p>
+              <code className="block bg-background rounded px-2 py-1 font-mono text-[10px]">
+                full_name, email, phone, nif, address, type, notes
+              </code>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

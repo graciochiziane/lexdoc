@@ -270,8 +270,8 @@ export function LoginView() {
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* ── Left Panel — Branding (hidden on mobile) ── */}
       <div className="hidden md:flex md:w-[40%] relative overflow-hidden bg-gradient-to-br from-[#0f0f1e] via-[#1a1a2e] to-[#16213e] flex-col justify-between p-8 lg:p-12">
-        {/* Animated gradient overlay */}
-        <div className="absolute inset-0 opacity-30 animate-lexdoc-gradient-shift" />
+        {/* Animated gradient overlay (enhanced shimmer) */}
+        <div className="absolute inset-0 opacity-40 branding-panel-shimmer" />
 
         {/* Grid pattern overlay */}
         <div
@@ -505,7 +505,7 @@ export function LoginView() {
         </footer>
       </div>
 
-      {/* Keyframe styles for floating animations + shimmer button */}
+      {/* Keyframe styles for floating animations + shimmer button + panel glow */}
       <style jsx global>{`
         @keyframes lexdoc-float-1 {
           0%, 100% { transform: translateY(0) rotate(45deg); opacity: 0.6; }
@@ -543,6 +543,32 @@ export function LoginView() {
         .animate-lexdoc-gradient-shift {
           background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(6,78,59,0.15) 25%, rgba(22,33,62,0.1) 50%, rgba(16,185,129,0.12) 75%, rgba(6,78,59,0.08) 100%);
           background-size: 400% 400%;
+        }
+        /* Enhanced panel glow pulse for branding */
+        .branding-panel-glow::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 60%;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, oklch(0.696 0.17 162.48 / 40%), transparent);
+          animation: lexdoc-panel-shimmer 6s ease infinite;
+          background-size: 200% 100%;
+          pointer-events: none;
+        }
+        /* Decorative radial glow on panel */
+        .branding-radial-glow {
+          position: absolute;
+          bottom: 20%;
+          right: -10%;
+          width: 200px;
+          height: 200px;
+          border-radius: 50%;
+          background: radial-gradient(circle, oklch(0.696 0.17 162.48 / 6%), transparent 70%);
+          pointer-events: none;
+          animation: lexdoc-float-3 10s ease-in-out infinite;
         }
         /* Shimmer effect on submit buttons inside login form */
         .login-form-card button[type="submit"] {

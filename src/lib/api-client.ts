@@ -686,11 +686,42 @@ async function apiFetchBlob(endpoint: string): Promise<Blob> {
 }
 
 export const exportApi = {
-  clients: () => apiFetchBlob('/export/clients?format=csv'),
-  processes: () => apiFetchBlob('/export/processes?format=csv'),
+  clients: (ids?: string[]) => apiFetchBlob(`/export/clients?format=csv${ids?.length ? `&ids=${ids.join(',')}` : ''}`),
+  processes: (ids?: string[]) => apiFetchBlob(`/export/processes?format=csv${ids?.length ? `&ids=${ids.join(',')}` : ''}`),
   audit: () => apiFetchBlob('/export/audit?format=csv'),
   reportPdf: (type: 'firm_overview' | 'processes' | 'clients' | 'deadlines' = 'firm_overview') =>
     apiFetchBlob(`/export/report-pdf?type=${type}`),
+};
+
+// ─────────────────────────────────────────
+// API de Importação (CSV)
+// ─────────────────────────────────────────
+export interface ImportResult {
+  total: number;
+  created: number;
+  duplicates: number;
+  errors: number;
+  parse_warnings?: string[];
+  import_errors?: string[];
+}
+
+async function importCSV<T extends ImportResult>(endpoint: string, file: File): Promise<ApiResponse<T>> {
+  const token = useAuthStore.getState().accessToken;
+  if (!token) return { success: false, error: { code: 'UNAUTHORIZED', message: 'Não autenticado.' } };
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  return response.json();
+}
+
+export const importApi = {
+  clients: (file: File) => importCSV<ImportResult>('/import/clients', file),
 };
 
 // ─────────────────────────────────────────
@@ -909,4 +940,84 @@ export const aiApi = {
     apiFetch<AIChatResponse>('/ai/chat', { method: 'POST', body: JSON.stringify(data) }),
   analyze: (data: AIAnalyzeRequest) =>
     apiFetch<AIAnalysisResponse>('/ai/analyze', { method: 'POST', body: JSON.stringify(data) }),
+};
+
+// ─────────────────────────────────────────
+// API de Modelos de Processo (Templates)
+// ─────────────────────────────────────────
+export interface TemplateRecord {
+  id: string;
+  title: string;
+  description: string | null;
+  area: string;
+  default_priority: string;
+  checklist_items: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: {
+    id: string;
+    full_name: string;
+  };
+}
+
+export interface TemplateUseResult {
+  id: string;
+  process_number: string;
+  title: string;
+  description: string | null;
+  area: string;
+  status: string;
+  priority: string;
+  opened_at: string;
+  created_at: string;
+  client: { id: string; full_name: string };
+  deadlines_created: number;
+}
+
+export const templatesApi = {
+  list: (params?: string) =>
+    apiFetch<TemplateRecord[]>(`/templates${params ? `?${params}` : ''}`),
+  get: (id: string) =>
+    apiFetch<TemplateRecord>(`/templates/${id}`),
+  create: (data: {
+    title: string;
+    description?: string;
+    area: string;
+    default_priority?: string;
+    checklist_items?: Array<{ title: string; description?: string }>;
+  }) =>
+    apiFetch<TemplateRecord>('/templates', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: {
+    title?: string;
+    description?: string;
+    area?: string;
+    default_priority?: string;
+    checklist_items?: Array<{ title: string; description?: string }>;
+    is_active?: boolean;
+  }) =>
+    apiFetch<TemplateRecord>(`/templates/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    apiFetch<{ id: string; deleted: boolean }>(`/templates/${id}`, { method: 'DELETE' }),
+  use: (id: string, data: { client_id: string; process_number: string }) =>
+    apiFetch<TemplateUseResult>(`/templates/${id}/use`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
+// ─────────────────────────────────────────
+// API de Notas do Processo (Process Notes)
+// ─────────────────────────────────────────
+export interface ProcessNoteRecord {
+  id: string;
+  process_id: string;
+  content: string;
+  created_by: string;
+  created_by_name: string;
+  created_at: string;
+}
+
+export const processNotesApi = {
+  list: (processId: string) =>
+    apiFetch<ProcessNoteRecord[]>(`/processes/${processId}/notes`),
+  create: (processId: string, data: { content: string }) =>
+    apiFetch<ProcessNoteRecord>(`/processes/${processId}/notes`, { method: 'POST', body: JSON.stringify(data) }),
 };

@@ -773,3 +773,341 @@ button, a, input, [role='button'], [role='tab'], [role='option'] {
 .dark .processes-table-container tbody tr:nth-child(even):hover {
   background-color: oklch(0.556 0.16 162 / 8%);
 }
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Login Button Pulsing Glow
+   Emerald pulsing glow for the primary login button
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-btn-pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px oklch(0.696 0.17 162.48 / 30%), 0 0 20px oklch(0.696 0.17 162.48 / 15%); }
+  50% { box-shadow: 0 0 16px oklch(0.696 0.17 162.48 / 50%), 0 0 40px oklch(0.696 0.17 162.48 / 25%); }
+}
+
+.btn-pulse-glow {
+  animation: lexdoc-btn-pulse-glow 2.5s ease-in-out infinite;
+}
+
+.dark .btn-pulse-glow {
+  animation: lexdoc-btn-pulse-glow-dark 2.5s ease-in-out infinite;
+}
+
+@keyframes lexdoc-btn-pulse-glow-dark {
+  0%, 100% { box-shadow: 0 0 8px oklch(0.556 0.16 162 / 25%), 0 0 20px oklch(0.556 0.16 162 / 12%); }
+  50% { box-shadow: 0 0 16px oklch(0.556 0.16 162 / 40%), 0 0 40px oklch(0.556 0.16 162 / 20%); }
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Password Toggle Icon Animation
+   Smooth rotation transition for eye icon toggle
+   ─────────────────────────────────────────────── */
+.password-toggle-icon {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+}
+
+.password-toggle-icon:hover {
+  transform: scale(1.15);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Typing Animation (Breadcrumb)
+   Typewriter-style text reveal animation
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-typing-reveal {
+  from { width: 0; opacity: 0.5; }
+  to { width: 100%; opacity: 1; }
+}
+
+.typing-reveal {
+  overflow: hidden;
+  display: inline-block;
+  animation: lexdoc-typing-reveal 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Sidebar Glassmorphism Enhancement
+   Stronger glass effect for the sidebar panel
+   ─────────────────────────────────────────────── */
+.sidebar-glass {
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Active Nav Indicator (Enhanced)
+   Wider, more prominent animated sidebar indicator
+   ─────────────────────────────────────────────── */
+.sidebar-active-glow {
+  background: linear-gradient(180deg, oklch(0.696 0.17 162.48), oklch(0.556 0.16 162));
+  box-shadow: 0 0 8px oklch(0.696 0.17 162.48 / 40%),
+              0 0 20px oklch(0.696 0.17 162.48 / 15%);
+}
+
+.dark .sidebar-active-glow {
+  background: linear-gradient(180deg, oklch(0.556 0.16 162), oklch(0.45 0.14 162));
+  box-shadow: 0 0 8px oklch(0.556 0.16 162 / 35%),
+              0 0 20px oklch(0.556 0.16 162 / 12%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Sticky Table Header Gradient Border
+   Gradient bottom border for sticky table headers
+   ─────────────────────────────────────────────── */
+.sticky-header-gradient::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, oklch(0.696 0.17 162.48 / 40%), oklch(0.696 0.17 162.48 / 60%), oklch(0.696 0.17 162.48 / 40%), transparent);
+}
+
+.dark .sticky-header-gradient::after {
+  background: linear-gradient(90deg, transparent, oklch(0.556 0.16 162 / 30%), oklch(0.556 0.16 162 / 50%), oklch(0.556 0.16 162 / 30%), transparent);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Urgent Status Badge Pulse
+   Pulsing animation for overdue/urgent status badges
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-urgent-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(45.694 0.19 24.6 / 30%); }
+  50% { box-shadow: 0 0 0 4px oklch(45.694 0.19 24.6 / 15%); }
+}
+
+.urgent-badge-pulse {
+  animation: lexdoc-urgent-pulse 2s ease-in-out infinite;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Form Label Focus Transition
+   Label color transitions to emerald on focus-within
+   ─────────────────────────────────────────────── */
+.form-group-focus label {
+  transition: color 0.2s ease;
+}
+
+.form-group-focus:focus-within label {
+  color: oklch(0.556 0.16 162);
+}
+
+.dark .form-group-focus:focus-within label {
+  color: oklch(0.696 0.17 162.48);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Dialog Content Entrance Animation
+   Smooth slide-up + fade-in for dialog content
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dialog-animated-enter > div > div {
+  animation: lexdoc-dialog-enter 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Card Hover Border Reveal
+   Border transitions from subtle to visible on hover
+   ─────────────────────────────────────────────── */
+.card-border-reveal {
+  border: 1px solid transparent;
+  transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.card-border-reveal:hover {
+  border-color: oklch(0.696 0.17 162.48 / 30%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px oklch(0 0 0 / 5%), 0 1px 3px oklch(0 0 0 / 3%);
+}
+
+.dark .card-border-reveal:hover {
+  border-color: oklch(0.556 0.16 162 / 25%);
+  box-shadow: 0 4px 12px oklch(0 0 0 / 25%), 0 1px 3px oklch(0 0 0 / 15%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Enhanced Shimmer Loading (Card-level)
+   Card-level shimmer loading state with gradient animation
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-card-shimmer {
+  0% { background-position: -400% 0; }
+  100% { background-position: 400% 0; }
+}
+
+.shimmer-card {
+  background: linear-gradient(
+    90deg,
+    oklch(0.97 0.005 162 / 50%) 25%,
+    oklch(0.98 0 0) 37%,
+    oklch(0.97 0.005 162 / 50%) 63%,
+    oklch(0.98 0 0) 75%
+  );
+  background-size: 400% 100%;
+  animation: lexdoc-card-shimmer 2s ease-in-out infinite;
+  border-radius: inherit;
+}
+
+.dark .shimmer-card {
+  background: linear-gradient(
+    90deg,
+    oklch(0.22 0.005 162 / 50%) 25%,
+    oklch(0.2 0 0) 37%,
+    oklch(0.22 0.005 162 / 50%) 63%,
+    oklch(0.2 0 0) 75%
+  );
+  background-size: 400% 100%;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Row Hover Elevation
+   Subtle shadow lift on table row hover
+   ─────────────────────────────────────────────── */
+.row-hover-elevate {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.row-hover-elevate:hover {
+  box-shadow: 0 1px 3px oklch(0 0 0 / 6%);
+  transform: translateY(-1px);
+}
+
+.dark .row-hover-elevate:hover {
+  box-shadow: 0 1px 3px oklch(0 0 0 / 20%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Top Gradient Accent Line (Animated)
+   Animated rainbow-ish gradient line at top of page
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-top-line-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.top-accent-line-animated {
+  background: linear-gradient(90deg, #10b981, #059669, #0d9488, #06b6d4, #10b981);
+  background-size: 200% 100%;
+  animation: lexdoc-top-line-shift 4s ease infinite;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Enhanced Branding Panel Shimmer
+   Stronger animated gradient shimmer for login/register panel
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-panel-shimmer {
+  0% { background-position: 0% 0%; }
+  25% { background-position: 100% 0%; }
+  50% { background-position: 100% 100%; }
+  75% { background-position: 0% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+.branding-panel-shimmer {
+  background: linear-gradient(
+    135deg,
+    oklch(0.696 0.17 162.48 / 8%) 0%,
+    oklch(0.556 0.16 162 / 5%) 20%,
+    oklch(0.45 0.12 240 / 4%) 40%,
+    oklch(0.556 0.16 162 / 6%) 60%,
+    oklch(0.696 0.17 162.48 / 8%) 80%,
+    oklch(0.556 0.16 162 / 5%) 100%
+  );
+  background-size: 400% 400%;
+  animation: lexdoc-panel-shimmer 10s ease infinite;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Parallax Welcome Card Tilt
+   Subtle 3D tilt on hover for the welcome card
+   ─────────────────────────────────────────────── */
+.welcome-card-parallax {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transform-style: preserve-3d;
+}
+
+.welcome-card-parallax:hover {
+  transform: perspective(1000px) rotateX(1deg) rotateY(-1deg) translateY(-2px);
+  box-shadow: 0 20px 40px oklch(0.696 0.17 162.48 / 15%),
+              0 8px 16px oklch(0 0 0 / 8%);
+}
+
+.dark .welcome-card-parallax:hover {
+  box-shadow: 0 20px 40px oklch(0.696 0.17 162.48 / 20%),
+              0 8px 16px oklch(0 0 0 / 30%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Submit Button Hover Scale
+   Subtle scale-up on hover for dialog submit buttons
+   ─────────────────────────────────────────────── */
+.btn-submit-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-submit-hover:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 6px 20px oklch(0.696 0.17 162.48 / 25%);
+}
+
+.dark .btn-submit-hover:hover:not(:disabled) {
+  box-shadow: 0 6px 20px oklch(0.556 0.16 162 / 20%);
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Stagger Form Fields Animation
+   Staggered entrance animation for form groups
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-field-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-form-fields > *:nth-child(1) { animation: lexdoc-field-enter 0.35s ease 0.05s both; }
+.stagger-form-fields > *:nth-child(2) { animation: lexdoc-field-enter 0.35s ease 0.1s both; }
+.stagger-form-fields > *:nth-child(3) { animation: lexdoc-field-enter 0.35s ease 0.15s both; }
+.stagger-form-fields > *:nth-child(4) { animation: lexdoc-field-enter 0.35s ease 0.2s both; }
+.stagger-form-fields > *:nth-child(5) { animation: lexdoc-field-enter 0.35s ease 0.25s both; }
+.stagger-form-fields > *:nth-child(6) { animation: lexdoc-field-enter 0.35s ease 0.3s both; }
+.stagger-form-fields > *:nth-child(7) { animation: lexdoc-field-enter 0.35s ease 0.35s both; }
+.stagger-form-fields > *:nth-child(8) { animation: lexdoc-field-enter 0.35s ease 0.4s both; }
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Smoother Empty State Floating
+   Smoother, more organic floating animation
+   ─────────────────────────────────────────────── */
+@keyframes lexdoc-float-smooth {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  33% { transform: translateY(-8px) rotate(1deg); }
+  66% { transform: translateY(-4px) rotate(-0.5deg); }
+}
+
+.empty-float-smooth {
+  animation: lexdoc-float-smooth 4s ease-in-out infinite;
+}
+
+/* ───────────────────────────────────────────────
+   LEXDOC — Footer Gradient Text Enhancement
+   Gradient text for footer branding
+   ─────────────────────────────────────────────── */
+.footer-brand-gradient {
+  background: linear-gradient(135deg, oklch(0.696 0.17 162.48), oklch(0.556 0.16 162), oklch(0.65 0.18 165));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}

@@ -156,7 +156,7 @@ export function LoginForm({ onForgotPassword }: LoginFormProps) {
                   </FormControl>
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-emerald-500 password-toggle-icon"
                     onClick={() => setShowPassword(!showPassword)}
                     tabIndex={-1}
                     aria-label={showPassword ? 'Ocultar palavra-passe' : 'Mostrar palavra-passe'}
@@ -176,7 +176,7 @@ export function LoginForm({ onForgotPassword }: LoginFormProps) {
           {/* Botão de login */}
           <Button
             type="submit"
-            className="w-full bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-500 hover:from-emerald-600 hover:via-emerald-700 hover:to-teal-600 text-white border-0 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300"
+            className="w-full bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-500 hover:from-emerald-600 hover:via-emerald-700 hover:to-teal-600 text-white border-0 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 btn-pulse-glow"
             size="lg"
             disabled={isLoggingIn}
           >

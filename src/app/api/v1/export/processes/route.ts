@@ -47,8 +47,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const { searchParams } = new URL(request.url);
+    const idsParam = searchParams.get('ids');
+
+    let where: Record<string, unknown> = { firm_id: payload.firm_id };
+    if (idsParam) {
+      const ids = idsParam.split(',').map((s) => s.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        where.id = { in: ids };
+      }
+    }
+
     const processes = await db.legalProcess.findMany({
-      where: { firm_id: payload.firm_id },
+      where,
       orderBy: { created_at: 'desc' },
       select: {
         process_number: true,

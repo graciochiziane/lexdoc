@@ -180,8 +180,8 @@ export function RegisterView() {
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* ── Left Panel — Branding ── */}
       <div className="hidden md:flex md:w-[40%] relative overflow-hidden bg-gradient-to-br from-[#0f0f1e] via-[#1a1a2e] to-[#16213e] flex-col justify-between p-8 lg:p-12">
-        {/* Animated gradient overlay */}
-        <div className="absolute inset-0 opacity-30 animate-lexdoc-gradient-shift" />
+        {/* Animated gradient overlay (enhanced shimmer) */}
+        <div className="absolute inset-0 opacity-40 branding-panel-shimmer" />
 
         {/* Grid pattern overlay */}
         <div
@@ -334,7 +334,7 @@ export function RegisterView() {
                 <div className="px-6 sm:px-8 pt-1.5 pb-1">
                   <p className="text-[10px] text-muted-foreground">Preencha os campos abaixo para criar a sua conta</p>
                 </div>
-                <div className="p-6 sm:p-8 pt-2">
+                <div className="p-6 sm:p-8 pt-2 stagger-form-fields">
                   <RegisterForm />
                 </div>
               </div>

@@ -48,8 +48,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const { searchParams } = new URL(request.url);
+    const idsParam = searchParams.get('ids');
+
+    let where: Record<string, unknown> = { firm_id: payload.firm_id };
+    if (idsParam) {
+      const ids = idsParam.split(',').map((s) => s.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        where.id = { in: ids };
+      }
+    }
+
     const clients = await db.client.findMany({
-      where: { firm_id: payload.firm_id },
+      where,
       orderBy: { created_at: 'desc' },
       select: {
         full_name: true,

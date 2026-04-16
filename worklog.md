@@ -864,3 +864,32 @@ Stage Summary:
 - Checklist SECURITY: Login lockout = ✅ verified, firm_id isolation = ✅ 40+ endpoints, Audit immutability = ✅ application-level
 - Checklist FRONTEND: Responsive login = ✅ verified, Token interceptor = ✅ FIXED (was partial, now complete)
 - 1 bug fixed: apiFetch missing 401 auto-refresh — now all CRUD APIs silently retry on token expiry
+
+---
+Task ID: 15 (Review Round 5)
+Agent: Main Orchestrator + QA
+Task: QA testing, bug fixes, new features (CSV Import), worklog update
+
+Work Log:
+- Reviewed worklog.md — project at 46+ API endpoints, 16+ frontend views, many features added by previous review cycles
+- ESLint: Found 2 errors + 1 pre-existing warning
+- Browser QA (agent-browser): tested all 12 sidebar views (Painel, Tarefas, Processos, Quadro Kanban, Documentos, Clientes, Base de Conhecimento, Prazos, Calendário, Utilizadores, Relatórios, Auditoria)
+- Discovered new features added by previous cycles: Tarefas, Quadro Kanban, Base de Conhecimento, AI Chat, Notes Panel, Process Timeline, Notifications Center, PDF Export, Widget Settings, Keyboard Shortcuts
+- Found and fixed 4 bugs:
+  1. ProcessesView.tsx: `handleDetailOpen` used before declaration (TDZ error) — moved handler above `useProcessColumns()` call, extracted `handleCloseProcess` callback
+  2. DashboardHome.tsx line 622: `<DashboardSkeleton>()` instead of `<DashboardSkeleton />` — broken self-closing JSX tag causing parsing error
+  3. WidgetSettings.tsx: `setVisibility()` called directly inside `useEffect` — refactored to compute visibility from localStorage on render with `forceUpdate` pattern
+  4. DashboardHome.tsx: Template literal with `${}` in `useEffect` callback — refactored to string concatenation to avoid parser issues
+- Added new feature: CSV Import for Clients
+  - Backend: `POST /api/v1/import/clients` — multipart form upload, CSV parsing with header auto-detection (full_name, nome, name), duplicate detection by email/phone, audit logging, RBAC (ADMIN/ADVOGADO), 5MB limit
+  - Frontend: Import dialog in ClientsView with drag-drop upload area, result summary (created/duplicates/errors), CSV format guide, emerald accent styling
+  - API Client: Added `importApi.clients(file)` function and `ImportResult` type
+
+Stage Summary:
+- Application stable after 4 bug fixes, ESLint: 0 errors, 1 pre-existing warning
+- 47+ API endpoints total (added 1 import endpoint)
+- New features discovered: 11 new components added by previous review cycles (Tasks, Kanban, Knowledge Base, AI Chat, Notes, Timeline, Notifications Center, Widget Settings, Keyboard Shortcuts, PDF Export, Quick Actions FAB)
+- Total frontend views: 16+ with all CRUD, analytics, and collaboration features
+- CSV Import: Full feature for bulk client import with validation and duplicate detection
+- Dark mode fully supported, all text in Portuguese (pt-MZ)
+

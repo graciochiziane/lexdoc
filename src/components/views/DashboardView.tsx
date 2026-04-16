@@ -33,6 +33,8 @@ import {
   CheckSquare,
   Bell,
   BookOpen,
+  FileCode2,
+  Settings2,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Card, CardContent } from '@/components/ui/card';
@@ -68,6 +70,8 @@ import { NotificationsCenter } from '@/components/dashboard/NotificationsCenter'
 import { KnowledgeView } from '@/components/dashboard/KnowledgeView';
 import { AIChatPanel } from '@/components/dashboard/AIChatPanel';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { TemplatesView } from '@/components/dashboard/TemplatesView';
+import { WidgetSettings } from '@/components/dashboard/WidgetSettings';
 
 // ─────────────────────────────────────────
 // Tipos
@@ -76,6 +80,7 @@ type DashboardTab =
   | 'painel'
   | 'tarefas'
   | 'processos'
+  | 'modelos'
   | 'quadro'
   | 'documentos'
   | 'clientes'
@@ -100,6 +105,7 @@ const NAV_ITEMS: Array<{
   { id: 'painel', icon: LayoutDashboard, label: 'Painel' },
   { id: 'tarefas', icon: CheckSquare, label: 'Tarefas' },
   { id: 'processos', icon: Briefcase, label: 'Processos' },
+  { id: 'modelos', icon: FileCode2, label: 'Modelos de Processo', roles: ['ADMIN', 'ADVOGADO'] },
   { id: 'quadro', icon: Columns3, label: 'Quadro Kanban' },
   { id: 'documentos', icon: FileText, label: 'Documentos' },
   { id: 'clientes', icon: Users, label: 'Clientes' },
@@ -119,6 +125,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   painel: 'Painel de Controlo',
   tarefas: 'Minhas Tarefas',
   processos: 'Processos Jurídicos',
+  modelos: 'Modelos de Processo',
   quadro: 'Quadro Kanban',
   clientes: 'Gestão de Clientes',
   utilizadores: 'Gestão de Utilizadores',
@@ -218,6 +225,7 @@ export function DashboardView() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [firmSettingsOpen, setFirmSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [widgetSettingsOpen, setWidgetSettingsOpen] = useState(false);
 
   // ── Fechar sidebar mobile ao mudar de aba ──
   const handleTabChange = useCallback((tab: DashboardTab) => {
@@ -276,6 +284,8 @@ export function DashboardView() {
         return <TaskManager />;
       case 'processos':
         return <ProcessesView />;
+      case 'modelos':
+        return <TemplatesView />;
       case 'quadro':
         return <KanbanBoard />;
       case 'clientes':
@@ -305,8 +315,8 @@ export function DashboardView() {
 
   return (
     <div className="min-h-screen flex bg-muted/30">
-      {/* Thin emerald accent line at top */}
-      <div className="fixed top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-600 z-[60]" />
+      {/* Animated emerald gradient accent line at top */ }
+      <div className="fixed top-0 left-0 right-0 h-[2px] top-accent-line-animated z-[60]" />
 
       {/* Overlay mobile */}
       <AnimatePresence>
@@ -604,6 +614,19 @@ export function DashboardView() {
                 <Keyboard className="size-4" />
               </Button>
 
+              {/* Widget settings button — only on painel tab */}
+              {activeTab === 'painel' && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setWidgetSettingsOpen(true)}
+                  title="Personalizar Painel"
+                  className="active:scale-[0.95] hover:bg-violet-500/10"
+                >
+                  <Settings2 className="size-4" />
+                </Button>
+              )}
+
               {/* User avatar - opens profile dialog */}
               <Button
                 variant="ghost"
@@ -678,6 +701,9 @@ export function DashboardView() {
 
       {/* Keyboard Shortcuts Dialog */}
       <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+
+      {/* Widget Settings Dialog */}
+      <WidgetSettings open={widgetSettingsOpen} onOpenChange={setWidgetSettingsOpen} />
 
       {/* Onboarding Guide — shown on first login */}
       <OnboardingGuide />

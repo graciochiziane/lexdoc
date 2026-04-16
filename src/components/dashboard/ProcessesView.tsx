@@ -72,6 +72,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { processesApi, clientsApi, deadlinesApi, exportApi, type ProcessRecord, type ClientRecord, type DeadlineRecord } from '@/lib/api-client';
 import { NotesPanel } from '@/components/dashboard/NotesPanel';
+import { ProcessNotesPanel } from '@/components/dashboard/ProcessNotesPanel';
 import { ProcessTimeline } from '@/components/dashboard/ProcessTimeline';
 import { format, differenceInDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -488,13 +489,61 @@ export function ProcessesView() {
     }
   }, []);
 
-  // ── Column definitions ──
-  const columns = useProcessColumns(
-    handleDetailOpen,
-    (proc) => { setCloseProcess(proc); setCloseOpen(true); },
-  );
+  // ── Bulk selection state ──
+  const [selectedProcesses, setSelectedProcesses] = useState<ProcessRecord[]>([]);
 
-  // ── Handlers ──
+  const handleBulkSelectionChange = useCallback((rows: ProcessRecord[]) => {
+    setSelectedProcesses(rows);
+  }, []);
+
+  // ── Export CSV (bulk) ──
+  const [bulkExporting, setBulkExporting] = useState(false);
+  const handleBulkExport = useCallback(async () => {
+    setBulkExporting(true);
+    try {
+      const ids = selectedProcesses.map((p) => p.id);
+      const blob = await exportApi.processes(ids);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `processos_selecionados_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`${ids.length} processo(s) exportados!`);
+      setSelectedProcesses([]);
+    } catch {
+      toast.error('Erro ao exportar dados.');
+    } finally {
+      setBulkExporting(false);
+    }
+  }, [selectedProcesses]);
+
+  // ── Bulk close processes ──
+  const handleBulkClose = useCallback(async () => {
+    const active = selectedProcesses.filter((p) => p.status === 'ACTIVE');
+    for (const proc of active) {
+      await processesApi.close(proc.id);
+    }
+    toast.success(`${active.length} processo(s) encerrado(s)!`);
+    queryClient.invalidateQueries({ queryKey: ['processes'] });
+    setSelectedProcesses([]);
+  }, [selectedProcesses, queryClient]);
+
+  // ── Handlers (declared before columns to avoid TDZ) ──
+  const handleDetailOpen = useCallback((process: ProcessRecord) => {
+    setDetailProcess(process);
+    setDetailTab('info');
+    setDetailOpen(true);
+    setCopied(false);
+  }, []);
+
+  const handleCloseProcess = useCallback((proc: ProcessRecord) => {
+    setCloseProcess(proc);
+    setCloseOpen(true);
+  }, []);
+
   const handleSearch = useCallback((value: string) => {
     setSearch(value);
     setPage(1);
@@ -518,12 +567,11 @@ export function ProcessesView() {
     closeMutation.mutate(closeProcess.id);
   }, [closeProcess, closeMutation]);
 
-  const handleDetailOpen = useCallback((process: ProcessRecord) => {
-    setDetailProcess(process);
-    setDetailTab('info');
-    setDetailOpen(true);
-    setCopied(false);
-  }, []);
+  // ── Column definitions (after handlers to avoid TDZ) ──
+  const columns = useProcessColumns(
+    handleDetailOpen,
+    handleCloseProcess,
+  );
 
   const handleCopyNumber = useCallback(() => {
     if (!detailProcess) return;
@@ -653,6 +701,7 @@ export function ProcessesView() {
               enableExport={true}
               exportFilename={`processos_lexdoc_${new Date().toISOString().split('T')[0]}.csv`}
               enableRowSelection={true}
+              onSelectionChange={handleBulkSelectionChange}
               searchPlaceholder="Pesquisar na tabela..."
               emptyMessage="Nenhum processo encontrado"
               emptyDescription="Ajuste os filtros ou crie um novo processo jurídico."
@@ -663,6 +712,50 @@ export function ProcessesView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Floating Bulk Action Bar */}
+      <AnimatePresence>
+        {selectedProcesses.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-background/95 backdrop-blur-md border shadow-xl"
+          >
+            <Badge variant="outline" className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200">
+              {selectedProcesses.length} selecionado{selectedProcesses.length !== 1 ? 's' : ''}
+            </Badge>
+            <div className="w-px h-6 bg-border" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBulkExport}
+              disabled={bulkExporting}
+              className="text-xs gap-1.5 active:scale-[0.98] hover:border-emerald-300 dark:hover:border-emerald-700"
+            >
+              {bulkExporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+              Exportar CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBulkClose}
+              className="text-xs gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-[0.98] border-red-200 hover:border-red-300"
+            >
+              <Briefcase className="size-3.5" />
+              Fechar {selectedProcesses.filter((p) => p.status === 'ACTIVE').length > 0 ? `(${selectedProcesses.filter((p) => p.status === 'ACTIVE').length})` : ''}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedProcesses([])}
+              className="text-xs gap-1.5 text-muted-foreground"
+            >
+              <X className="size-3.5" />
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Paginação do servidor */}
       {meta && meta.pages > 1 && (
@@ -1128,7 +1221,7 @@ export function ProcessesView() {
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.2 }}
                     >
-                      <NotesPanel entityType="process" entityId={detailProcess.id} />
+                      <ProcessNotesPanel processId={detailProcess.id} processNumber={detailProcess.process_number} />
                     </motion.div>
                   )}
                   {detailTab === 'timeline' && (

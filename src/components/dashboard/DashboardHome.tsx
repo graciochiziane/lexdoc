@@ -60,6 +60,7 @@ import {
 import { statsApi, processesApi, deadlinesApi, firmApi, type DashboardStats, type ProcessRecord, profileApi } from '@/lib/api-client';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
+import { getWidgetVisibility } from '@/components/dashboard/WidgetSettings';
 import { differenceInDays, addDays } from 'date-fns';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -599,10 +600,21 @@ export function DashboardHome() {
     if (!stats) return;
     const activeProcesses = stats.active_processes ?? 0;
     const upcomingDeadlines = stats.upcoming_deadlines ?? 0;
+    const plural = (n: number) => n !== 1 ? 's' : '';
     setWelcomeMessage(
-      `Tem ${activeProcesses} processo${activeProcesses !== 1 ? 's' : ''} activo${activeProcesses !== 1 ? 's' : ''} e ${upcomingDeadlines} prazo${upcomingDeadlines !== 1 ? 's' : ''} próximo${upcomingDeadlines !== 1 ? 's' : ''}.`
+      'Tem ' + activeProcesses + ' processo' + plural(activeProcesses) + ' activo' + plural(activeProcesses) + ' e ' + upcomingDeadlines + ' prazo' + plural(upcomingDeadlines) + ' próximo' + plural(upcomingDeadlines) + '.'
     );
   }, [stats]);
+
+  // ── Widget visibility from localStorage ──
+  const [widgetVisible, setWidgetVisible] = useState<Record<string, boolean>>(() => getWidgetVisibility());
+
+  // Refresh widget visibility periodically (for WidgetSettings dialog changes)
+  useEffect(() => {
+    const handler = () => setWidgetVisible(getWidgetVisibility());
+    const interval = setInterval(handler, 500);
+    return () => clearInterval(interval);
+  }, []);
 
   // Show full-page skeleton while initial data loads
   if (statsLoading && !stats) {
@@ -616,6 +628,7 @@ export function DashboardHome() {
       <div className="absolute top-40 -left-32 w-80 h-80 rounded-full bg-cyan-500/[0.03] dark:bg-cyan-400/[0.03] blur-3xl pointer-events-none" />
       <div className="absolute bottom-20 right-10 w-64 h-64 rounded-full bg-amber-500/[0.02] dark:bg-amber-400/[0.02] blur-3xl pointer-events-none" />
       {/* Welcome Card */}
+      {widgetVisible.welcome !== false && (
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -657,9 +670,10 @@ export function DashboardHome() {
           </CardContent>
         </Card>
       </motion.div>
+      )}
 
       {/* Quick Stats Row - Animated Pills */}
-      {!statsLoading && stats && (
+      {!statsLoading && stats && widgetVisible.stats !== false && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -703,7 +717,7 @@ export function DashboardHome() {
       </div>
 
       {/* ── Urgência Alert Widget ── */}
-      {!statsLoading && stats && (
+      {!statsLoading && stats && widgetVisible.alerts !== false && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -779,6 +793,7 @@ export function DashboardHome() {
       )}
 
       {/* Cartões de estatísticas */}
+      {widgetVisible.stats !== false && (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statsLoading ? (
           Array.from({ length: 4 }).map((_, i) => <ShimmerStatCard key={i} />)
@@ -819,8 +834,10 @@ export function DashboardHome() {
           ))
         )}
       </div>
+      )}
 
       {/* ── Gráficos em grelha 2x2 + Feed de Actividade ── */}
+      {widgetVisible.charts !== false && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Gráficos — 2 colunas */}
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1076,12 +1093,16 @@ export function DashboardHome() {
         </div>
 
         {/* Feed de Actividade — 1 coluna lateral */}
+        {widgetVisible.activity !== false && (
         <div className="lg:col-span-1">
           <ActivityFeed />
         </div>
+        )}
       </div>
+      )}
 
       {/* ── Quick Process Overview + Team Activity ── */}
+      {widgetVisible.team !== false && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Quick Process Overview — Mini Table */}
         <Card className="lg:col-span-2 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 rounded-xl">
@@ -1154,6 +1175,7 @@ export function DashboardHome() {
         {/* Team Activity Summary */}
         <TeamActivityWidget />
       </div>
+      )}
 
       {/* Banner informativo com gradiente */}
       <Alert className="border-0 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 shadow-sm">
