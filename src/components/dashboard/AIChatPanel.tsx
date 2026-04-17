@@ -452,7 +452,7 @@ export function AIChatPanel() {
                   disabled={isLoading}
                   rows={1}
                   style={{ fieldSizing: 'fixed' }}
-                  className="resize-none rounded-xl border-border/60 bg-muted/30 pr-12 min-h-[42px] max-h-[120px] text-sm placeholder:text-muted-foreground/50 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-400/50"
+                  className="resize-none overflow-y-auto rounded-xl border-border/60 bg-muted/30 pr-12 min-h-[42px] max-h-[120px] text-sm placeholder:text-muted-foreground/50 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-400/50"
                 />
                 <Button
                   type="submit"

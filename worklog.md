@@ -1150,3 +1150,21 @@ Stage Summary:
 - Validação pós-LLM com anexo automático de disclaimer quando detecta contaminação
 - Auditoria com metadata de governança V2.0
 - 0 erros ESLint, 0 erros runtime
+
+---
+Task ID: chat-layout-fix
+Agent: Main Orchestrator
+Task: Fix chat textarea growing infinitely and pushing content up
+
+Work Log:
+- Diagnosed root cause: base Textarea component has `field-sizing-content` CSS property which auto-resizes to content, ignoring `rows` and competing with `max-h`
+- Fixed AIHubView.tsx (Centro de IA): Added `style={{ fieldSizing: 'fixed' }}` + `overflow-y-auto` + `max-h-[150px]` to chat textarea
+- Fixed AIChatPanel.tsx (floating chat): Added `style={{ fieldSizing: 'fixed' }}` + `overflow-y-auto` + `max-h-[120px]` to chat textarea
+- Removed nested ScrollArea from AIChatPanel.tsx messages container (was causing conflicting scroll contexts)
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+
+Stage Summary:
+- Root cause: `field-sizing-content` CSS property on base Textarea component makes textarea auto-grow infinitely
+- Fix: Inline style override `fieldSizing: 'fixed'` per instance + explicit `overflow-y-auto` and `max-h` constraints
+- Layout structure already correct: parent `overflow-hidden`, messages `flex-1 overflow-y-auto`, input `border-t` at bottom
+- 2 files modified with minimal Tailwind-only changes, no logic changes

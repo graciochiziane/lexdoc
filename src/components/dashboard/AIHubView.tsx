@@ -634,7 +634,8 @@ function AssistantChatTab() {
               placeholder="Escreva a sua pergunta..."
               disabled={isLoading}
               rows={2}
-              className="resize-none rounded-xl border-border/60 bg-muted/30 pr-14 min-h-[56px] max-h-[160px] text-sm placeholder:text-muted-foreground/50 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-400/50"
+              style={{ fieldSizing: 'fixed' }}
+              className="resize-none overflow-y-auto rounded-xl border-border/60 bg-muted/30 pr-14 min-h-[44px] max-h-[150px] text-sm placeholder:text-muted-foreground/50 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-400/50"
             />
             <Button
               type="submit"
