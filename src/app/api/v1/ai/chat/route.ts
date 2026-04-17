@@ -341,11 +341,7 @@ export async function GET(request: NextRequest) {
       created_at: conv.created_at,
       updated_at: conv.updated_at,
       last_message: conv.messages[0]
-        ? {
-            content: conv.messages[0].content.substring(0, 150) + (conv.messages[0].content.length > 150 ? '...' : ''),
-            role: conv.messages[0].role,
-            created_at: conv.messages[0].created_at,
-          }
+        ? conv.messages[0].content.substring(0, 150) + (conv.messages[0].content.length > 150 ? '...' : '')
         : null,
       message_count: conv._count.messages,
     }));

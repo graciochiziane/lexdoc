@@ -233,19 +233,27 @@ function ConversationSidebar({
                       {conv.title}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      {conv.last_message && typeof conv.last_message === 'object' ? (conv.last_message as { content: string }).content : (conv.last_message ?? `${conv.message_count} mensagens`)}
+                      {conv.last_message ?? `${conv.message_count} mensagens`}
                     </p>
                   </div>
-                  <button
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => {
                       e.stopPropagation();
                       onDelete(conv.id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 hover:text-red-500 transition-all shrink-0"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        onDelete(conv.id);
+                      }
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 hover:text-red-500 transition-all shrink-0 cursor-pointer"
                     title="Eliminar conversa"
                   >
                     <Trash2 className="size-3" />
-                  </button>
+                  </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground/60 mt-1">
                   {new Date(conv.updated_at).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short' })}

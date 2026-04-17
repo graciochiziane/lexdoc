@@ -1064,3 +1064,24 @@ Stage Summary:
 - Zero hallucination enforcement via LexDoc RAG primacy
 - Mozambican legal adaptations (STJ, OAM, IRPS, BR terminology)
 - All changes maintain backward compatibility with existing frontend
+
+---
+Task ID: 15
+Agent: Main Orchestrator
+Task: Fix runtime error in Centro de IA + nested button fix
+
+Work Log:
+- Analyzed runtime error: "Objects are not valid as a React child (found: object with keys {content, role, created_at})" at AIHubView.tsx:437:9
+- Root cause: API GET /api/v1/ai/chat returned last_message as an object {content, role, created_at} but frontend ConversationSummary type expected last_message?: string
+- Fix 1: Updated API to return last_message as plain string (content.substring(0,150)) matching the frontend type
+- Fix 2: Simplified ConversationSidebar rendering — removed unnecessary typeof check
+- Fix 3: Fixed nested <button> HTML validation error — changed inner delete button to <span role="button">
+- Verified via agent-browser: Centro de IA page loads correctly with all 4 tabs, conversation sidebar, chat interface
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+
+Stage Summary:
+- Runtime error fixed: API now returns last_message as string
+- Nested button accessibility issue fixed
+- Centro de IA fully functional with chat, document generation, deadline extraction, history tabs
+- Knowledge base has 0 articles indexed — LexAssistent operates on LLM general knowledge only
+- 7 test conversations, 14 messages, 0 document generations in database
