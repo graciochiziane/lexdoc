@@ -55,6 +55,19 @@ function generateSlug(name: string): string {
     .replace(/^-|-$/g, '');
 }
 
+/** Gerar slug único (adiciona sufixo numérico se necessário) */
+async function generateUniqueSlug(name: string): Promise<string> {
+  let slug = generateSlug(name);
+  let suffix = 0;
+  let exists = await db.firm.findUnique({ where: { slug } });
+  while (exists) {
+    suffix++;
+    slug = `${generateSlug(name)}-${suffix}`;
+    exists = await db.firm.findUnique({ where: { slug } });
+  }
+  return slug;
+}
+
 // ─────────────────────────────────────────
 // POST Handler
 // ─────────────────────────────────────────
@@ -121,7 +134,7 @@ export async function POST(request: NextRequest) {
     // ── Normalização ──
     const normalizedEmail = email.toLowerCase().trim();
     const userRole = role || 'ADVOGADO';
-    const slug = generateSlug(firm_name);
+    const slug = await generateUniqueSlug(firm_name);
 
     // ── Verificar se email já existe ──
     // Mensagem genérica — não vazar que o email existe
