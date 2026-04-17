@@ -18,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ScrollArea removed — using native overflow instead for chat messages
 import { Badge } from '@/components/ui/badge';
 import { aiApi } from '@/lib/api-client';
 import { MarkdownContent } from '@/components/shared/MarkdownRenderer';
@@ -303,8 +303,7 @@ export function AIChatPanel() {
               ref={scrollRef}
               className="flex-1 overflow-y-auto"
             >
-              <ScrollArea className="h-full">
-                <div className="flex flex-col min-h-full">
+                <div className="flex flex-col">
                   {/* Estado vazio — Prompts rápidos */}
                   {messages.length === 0 && !isLoading && (
                     <div className="flex flex-col items-center justify-center p-6 text-center flex-1">
@@ -439,7 +438,6 @@ export function AIChatPanel() {
                   {/* Ref para scroll */}
                   <div ref={messagesEndRef} />
                 </div>
-              </ScrollArea>
             </div>
 
             {/* ── Input area ── */}
@@ -453,6 +451,7 @@ export function AIChatPanel() {
                   placeholder="Escreva a sua pergunta..."
                   disabled={isLoading}
                   rows={1}
+                  style={{ fieldSizing: 'fixed' }}
                   className="resize-none rounded-xl border-border/60 bg-muted/30 pr-12 min-h-[42px] max-h-[120px] text-sm placeholder:text-muted-foreground/50 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-400/50"
                 />
                 <Button
