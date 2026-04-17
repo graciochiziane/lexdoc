@@ -694,7 +694,7 @@ button, a, input, [role='button'], [role='tab'], [role='option'] {
 }
 
 .sidebar-gradient-line {
-  position: relative;
+  /* Intentionally empty — position is set via Tailwind utilities */
 }
 
 .sidebar-gradient-line::after {

@@ -338,18 +338,19 @@ export function DashboardView() {
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
+      {/* Sidebar — always fixed, with a spacer div for desktop layout */}
       <aside
         className={`
-          fixed md:static inset-y-0 left-0 z-50
+          fixed inset-y-0 left-0 z-50 shrink-0
           ${sidebarCollapsed ? 'w-16' : 'w-64'}
           bg-[#0f0f1e] text-white
           flex flex-col
           transform transition-all duration-300 ease-in-out
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          ${sidebarOpen ? 'translate-x-0' : 'md:translate-x-0 -translate-x-full'}
           mt-[2px]
           sidebar-gradient-line
         `}
+        aria-hidden={!sidebarOpen ? true : undefined}
       >
         {/* Sidebar pattern overlay */}
         <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{
@@ -536,10 +537,17 @@ export function DashboardView() {
         </div>
       </aside>
 
+      {/* Desktop spacer — simulates sidebar width in flex flow on md+ */}
+      <div
+        className={`hidden md:block shrink-0 mt-[2px] transition-all duration-300 ${
+          sidebarCollapsed ? 'w-16' : 'w-64'
+        }`}
+      />
+
       {/* Área principal */}
-      <div className="flex-1 flex flex-col min-w-0 mt-[2px]">
+      <div className="flex-1 flex flex-col min-w-0 w-full mt-[2px]">
         {/* Cabeçalho */}
-        <header className="backdrop-blur-md bg-background/80 border-b px-4 sm:px-6 py-4 shadow-sm relative sticky top-[2px] z-30">
+        <header className="backdrop-blur-md bg-background/80 border-b px-3 sm:px-6 py-3 sm:py-4 shadow-sm relative sticky top-[2px] z-30">
           {/* Gradient shadow at bottom */}
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-200/50 dark:via-emerald-800/30 to-transparent" />
           <div className="flex items-center justify-between gap-3">
@@ -554,32 +562,29 @@ export function DashboardView() {
                 <Menu className="size-5" />
               </Button>
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg sm:text-xl font-bold tracking-tight">
-                    {TAB_LABELS[activeTab]}
-                  </h1>
-                </div>
+                <h1 className="text-base sm:text-lg font-bold tracking-tight truncate">
+                  {TAB_LABELS[activeTab]}
+                </h1>
                 {/* Breadcrumb */}
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 truncate">
                   LexDoc
                   {activeTab !== 'painel' && (
                     <>
-                      <ChevronRight className="inline size-3 mx-1 text-muted-foreground/50" />
+                      <ChevronRight className="inline size-2.5 sm:size-3 mx-0.5 sm:mx-1 text-muted-foreground/50" />
                       <span className="text-muted-foreground/80">{TAB_LABELS[activeTab]}</span>
                     </>
                   )}
                 </p>
               </div>
-              {/* Search bar - hidden on small mobile */}
-              <div className="hidden md:block ml-4">
-                <SearchBar onSelect={handleSearchSelect} />
-              </div>
             </div>
 
             {/* Right: notifications, theme, profile */}
-            <div className="flex items-center gap-1 shrink-0">
-              {/* Mobile search trigger */}
+            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+              {/* Search — compact icon on mobile, full bar on md+ */}
               <div className="md:hidden">
+                <SearchBar onSelect={handleSearchSelect} compact />
+              </div>
+              <div className="hidden md:block">
                 <SearchBar onSelect={handleSearchSelect} />
               </div>
 
@@ -610,34 +615,34 @@ export function DashboardView() {
                 </motion.div>
               )}
 
-              {/* Keyboard shortcuts button */}
+              {/* Keyboard shortcuts button — desktop only */}
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setShortcutsOpen(true)}
                 title="Atalhos de teclado (?)"
-                className="active:scale-[0.95] hover:bg-emerald-500/10"
+                className="hidden md:inline-flex active:scale-[0.95] hover:bg-emerald-500/10"
               >
                 <Keyboard className="size-4" />
               </Button>
 
-              {/* Widget settings button — only on painel tab */}
+              {/* Widget settings button — desktop only, only on painel tab */}
               {activeTab === 'painel' && (
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setWidgetSettingsOpen(true)}
                   title="Personalizar Painel"
-                  className="active:scale-[0.95] hover:bg-violet-500/10"
+                  className="hidden md:inline-flex active:scale-[0.95] hover:bg-violet-500/10"
                 >
                   <Settings2 className="size-4" />
                 </Button>
               )}
 
-              {/* User avatar - opens profile dialog */}
+              {/* User avatar — icon on mobile, full on sm+ */}
               <Button
                 variant="ghost"
-                className="hidden sm:flex items-center gap-2 px-2 hover:bg-accent rounded-lg"
+                className="flex items-center gap-2 px-1 sm:px-2 hover:bg-accent rounded-lg"
                 onClick={() => setProfileOpen(true)}
               >
                 <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
@@ -645,7 +650,7 @@ export function DashboardView() {
                     {user.full_name.charAt(0).toUpperCase()}
                   </span>
                 </div>
-                <div className="text-right">
+                <div className="hidden sm:block text-right">
                   <p className="text-sm font-medium leading-tight">{user.full_name}</p>
                   <p className="text-[10px] text-muted-foreground">{userRole}</p>
                 </div>
@@ -655,7 +660,7 @@ export function DashboardView() {
         </header>
 
         {/* Conteúdo */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -670,27 +675,27 @@ export function DashboardView() {
         </main>
 
         {/* Rodapé */}
-        <footer className="relative border-t bg-gradient-to-t from-muted/50 to-transparent px-4 sm:px-6 py-3 mt-auto">
+        <footer className="relative border-t bg-gradient-to-t from-muted/50 to-transparent px-3 sm:px-6 py-2 sm:py-3 mt-auto">
           {/* Emerald gradient line at top of footer */}
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/60 to-transparent" />
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-1.5 text-xs text-muted-foreground">
-            <p>
-              © 2026 <span className="font-semibold text-foreground/80">LexDoc</span> — Moçambique. Todos os direitos reservados.
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-muted-foreground">
+            <p className="text-[10px] sm:text-xs">
+              © 2026 <span className="font-semibold text-foreground/80">LexDoc</span> — Moçambique
             </p>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px]">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <FooterClock />
+              <span className="hidden sm:inline-flex items-center gap-1 text-[10px]">
                 Feito com <span className="text-red-500" aria-label="amor">❤️</span> em Moçambique
               </span>
-              <FooterClock />
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold">
+              <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold">
                 v1.0.0
               </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
+              <span className="inline-flex items-center gap-1">
+                <span className="relative flex h-1.5 w-1.5">
                   <span className="pulse-dot absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
                 </span>
-                Online
+                <span className="text-[10px]">Online</span>
               </span>
             </div>
           </div>

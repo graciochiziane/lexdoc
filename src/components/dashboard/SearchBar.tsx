@@ -37,6 +37,7 @@ import { searchApi, type SearchGroup } from '@/lib/api-client';
 // ─────────────────────────────────────────
 interface SearchBarProps {
   onSelect?: (type: string, id: string) => void;
+  compact?: boolean;
 }
 
 interface RecentSearch {
@@ -125,7 +126,7 @@ function formatRelativeTime(timestamp: number): string {
 // ─────────────────────────────────────────
 // Componente
 // ─────────────────────────────────────────
-export function SearchBar({ onSelect }: SearchBarProps) {
+export function SearchBar({ onSelect, compact = false }: SearchBarProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchGroup[]>([]);
@@ -221,15 +222,23 @@ export function SearchBar({ onSelect }: SearchBarProps) {
       {/* Botão/trigger da pesquisa */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-input bg-background text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-[0_0_12px_rgba(16,185,129,0.1)] w-full sm:w-64 lg:w-80"
+        className={compact
+          ? 'flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200'
+          : 'flex items-center gap-2 px-3 py-1.5 rounded-lg border border-input bg-background text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-[0_0_12px_rgba(16,185,129,0.1)] w-full sm:w-64 lg:w-80'
+        }
+        aria-label="Pesquisar"
       >
         <Search className="size-4 shrink-0" />
-        <span className="flex-1 text-left truncate">
-          Pesquisar...
-        </span>
-        <kbd className="hidden sm:inline-flex pointer-events-none items-center gap-0.5 rounded-md border border-border bg-muted/80 px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground shadow-sm tracking-wide">
-          <Command className="size-2.5" />K
-        </kbd>
+        {!compact && (
+          <>
+            <span className="flex-1 text-left truncate">
+              Pesquisar...
+            </span>
+            <kbd className="hidden sm:inline-flex pointer-events-none items-center gap-0.5 rounded-md border border-border bg-muted/80 px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground shadow-sm tracking-wide">
+              <Command className="size-2.5" />K
+            </kbd>
+          </>
+        )}
       </button>
 
       {/* Dialog de pesquisa */}

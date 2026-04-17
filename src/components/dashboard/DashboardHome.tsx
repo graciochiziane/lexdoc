@@ -645,24 +645,24 @@ export function DashboardHome() {
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full" />
           <div className="absolute -bottom-8 -right-20 w-32 h-32 bg-white/5 rounded-full" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/[0.03] rounded-full blur-2xl" />
-          <CardContent className="relative z-10 p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-emerald-100 text-sm flex items-center gap-1.5">
-                  <Sparkles className="size-3.5" />
+          <CardContent className="relative z-10 p-4 sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1 min-w-0">
+                <p className="text-emerald-100 text-xs sm:text-sm flex items-center gap-1.5">
+                  <Sparkles className="size-3 sm:size-3.5" />
                   {greeting}
                 </p>
-                <h2 className="text-xl sm:text-2xl font-bold">
+                <h2 className="text-lg sm:text-2xl font-bold truncate">
                   {user?.full_name ?? 'Utilizador'}!
                 </h2>
-                <p className="text-emerald-50/90 text-sm mt-1">
+                <p className="text-emerald-50/90 text-xs sm:text-sm mt-1 line-clamp-2">
                   {profileData?.data?.firm?.name && (
                     <>{profileData.data.firm.name} —{' '}</>
                   )}
                   {welcomeMessage || 'Bem-vindo ao LexDoc.'}
                 </p>
               </div>
-              <div className="hidden sm:flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-3 py-1.5">
+              <div className="hidden sm:flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-3 py-1.5 shrink-0">
                 <Zap className="size-4 text-amber-200" />
                 <span className="text-xs font-medium">Painel</span>
               </div>
@@ -678,13 +678,13 @@ export function DashboardHome() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
-          className="flex flex-wrap gap-3"
+          className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3"
         >
           {[
-            { icon: ListTodo, label: 'Hoje:', value: String(stats.upcoming_deadlines), unit: 'tarefas', iconColor: 'text-emerald-500', bgGlow: 'shadow-emerald-500/10' },
-            { icon: Calendar, label: 'Esta semana:', value: String(stats.upcoming_deadlines), unit: 'prazos', iconColor: 'text-amber-500', bgGlow: 'shadow-amber-500/10' },
-            { icon: Briefcase, label: 'Activos:', value: String(stats.active_processes), unit: 'processos', iconColor: 'text-cyan-500', bgGlow: 'shadow-cyan-500/10' },
-            { icon: FileText, label: 'Documentos:', value: String(stats.total_documents), unit: '', iconColor: 'text-purple-500', bgGlow: 'shadow-purple-500/10' },
+            { icon: ListTodo, label: 'Hoje', value: String(stats.upcoming_deadlines), unit: 'tarefas', iconColor: 'text-emerald-500', borderColor: 'border-emerald-200 dark:border-emerald-800/40' },
+            { icon: Calendar, label: 'Semana', value: String(stats.upcoming_deadlines), unit: 'prazos', iconColor: 'text-amber-500', borderColor: 'border-amber-200 dark:border-amber-800/40' },
+            { icon: Briefcase, label: 'Activos', value: String(stats.active_processes), unit: 'processos', iconColor: 'text-cyan-500', borderColor: 'border-cyan-200 dark:border-cyan-800/40' },
+            { icon: FileText, label: 'Docs', value: String(stats.total_documents), unit: '', iconColor: 'text-purple-500', borderColor: 'border-purple-200 dark:border-purple-800/40' },
           ].map((stat, idx) => (
             <motion.div
               key={stat.label}
@@ -692,12 +692,13 @@ export function DashboardHome() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.15 + idx * 0.06, duration: 0.3 }}
               whileHover={{ scale: 1.04, y: -1 }}
-              className="flex items-center gap-2 bg-background border rounded-full px-4 py-2 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 cursor-default"
+              className={`flex items-center gap-1.5 sm:gap-2 bg-background ${stat.borderColor} rounded-xl px-3 py-2 sm:py-2.5 sm:rounded-full shadow-sm hover:shadow-md transition-all duration-200 cursor-default`}
             >
-              <stat.icon className={`size-4 ${stat.iconColor}`} />
-              <span className="text-sm text-muted-foreground">{stat.label}</span>
-              <span className="text-sm font-bold [font-variant-numeric:tabular-nums]">{stat.value}</span>
-              {stat.unit && <span className="text-sm text-muted-foreground">{stat.unit}</span>}
+              <stat.icon className={`size-3.5 sm:size-4 ${stat.iconColor}`} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{stat.unit ? stat.unit : stat.label}</p>
+                <p className="text-sm sm:text-base font-bold [font-variant-numeric:tabular-nums] leading-tight">{stat.value}</p>
+              </div>
             </motion.div>
           ))}
         </motion.div>
@@ -705,14 +706,14 @@ export function DashboardHome() {
 
       {/* Cabeçalho com hora */}
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Painel de Controlo</h2>
-        <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
-          <span className="relative flex h-2.5 w-2.5">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Painel de Controlo</h2>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+          <span className="relative flex h-2 sm:h-2.5 w-2 sm:w-2.5">
             <span className="pulse-dot absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            <span className="relative inline-flex rounded-full h-2 sm:h-2.5 w-2 sm:w-2.5 bg-emerald-500" />
           </span>
-          <Clock className="size-3.5" />
-          {date} — {time}
+          <Clock className="size-3 sm:size-3.5" />
+          <span className="truncate">{date} — {time}</span>
         </p>
       </div>
 
@@ -722,72 +723,72 @@ export function DashboardHome() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.15 }}
-          className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3"
         >
           {/* Overdue — Red */}
           <motion.div
             whileHover={{ scale: 1.02, y: -1 }}
-            className="flex items-center gap-3 bg-gradient-to-r from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/10 border border-red-200 dark:border-red-800/30 rounded-xl p-4 cursor-pointer hover:shadow-md transition-all"
+            className="flex items-center gap-2.5 sm:gap-3 bg-gradient-to-r from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/10 border border-red-200 dark:border-red-800/30 rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all"
           >
-            <div className="relative">
+            <div className="relative shrink-0">
               <motion.div
                 animate={{ scale: [1, 1.15, 1] }}
                 transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center"
               >
-                <CircleAlert className="size-5 text-red-600 dark:text-red-400" />
+                <CircleAlert className="size-4 sm:size-5 text-red-600 dark:text-red-400" />
               </motion.div>
               {(deadlinesTimeline.filter(d => d.daysRemaining < 0).length ?? 0) > 0 && (
                 <motion.span
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
-                  className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+                  className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"
                 />
               )}
             </div>
-            <div className="min-w-0">
-              <p className="text-xl font-bold text-red-600 dark:text-red-400 [font-variant-numeric:tabular-nums]">
+            <div className="min-w-0 flex-1">
+              <p className="text-lg sm:text-xl font-bold text-red-600 dark:text-red-400 [font-variant-numeric:tabular-nums]">
                 {deadlinesTimeline.filter(d => d.daysRemaining < 0).length}
               </p>
-              <p className="text-xs text-red-600/80 dark:text-red-400/80">Prazos expirados</p>
+              <p className="text-[11px] sm:text-xs text-red-600/80 dark:text-red-400/80 truncate">Prazos expirados</p>
             </div>
-            <ChevronRight className="size-4 text-red-400/50 shrink-0 ml-auto" />
+            <ChevronRight className="size-4 text-red-400/50 shrink-0 ml-auto hidden sm:block" />
           </motion.div>
 
           {/* Due within 3 days — Amber */}
           <motion.div
             whileHover={{ scale: 1.02, y: -1 }}
-            className="flex items-center gap-3 bg-gradient-to-r from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl p-4 cursor-pointer hover:shadow-md transition-all"
+            className="flex items-center gap-2.5 sm:gap-3 bg-gradient-to-r from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all"
           >
-            <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
-              <AlertCircle className="size-5 text-amber-600 dark:text-amber-400" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+              <AlertCircle className="size-4 sm:size-5 text-amber-600 dark:text-amber-400" />
             </div>
-            <div className="min-w-0">
-              <p className="text-xl font-bold text-amber-600 dark:text-amber-400 [font-variant-numeric:tabular-nums]">
+            <div className="min-w-0 flex-1">
+              <p className="text-lg sm:text-xl font-bold text-amber-600 dark:text-amber-400 [font-variant-numeric:tabular-nums]">
                 {deadlinesTimeline.filter(d => d.daysRemaining >= 0 && d.daysRemaining <= 3).length}
               </p>
-              <p className="text-xs text-amber-600/80 dark:text-amber-400/80">Expiram em 3 dias</p>
+              <p className="text-[11px] sm:text-xs text-amber-600/80 dark:text-amber-400/80 truncate">Expiram em 3 dias</p>
             </div>
-            <ChevronRight className="size-4 text-amber-400/50 shrink-0 ml-auto" />
+            <ChevronRight className="size-4 text-amber-400/50 shrink-0 ml-auto hidden sm:block" />
           </motion.div>
 
           {/* Recently closed — Green */}
           <motion.div
             whileHover={{ scale: 1.02, y: -1 }}
-            className="flex items-center gap-3 bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/10 border border-emerald-200 dark:border-emerald-800/30 rounded-xl p-4 cursor-pointer hover:shadow-md transition-all"
+            className="flex items-center gap-2.5 sm:gap-3 bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/10 border border-emerald-200 dark:border-emerald-800/30 rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all"
           >
-            <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-              <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="size-4 sm:size-5 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <div className="min-w-0">
-              <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 [font-variant-numeric:tabular-nums]">
+            <div className="min-w-0 flex-1">
+              <p className="text-lg sm:text-xl font-bold text-emerald-600 dark:text-emerald-400 [font-variant-numeric:tabular-nums]">
                 {allProcesses.filter(p => p.status === 'CLOSED').slice(0, 5).length > 0
                   ? allProcesses.filter(p => p.status === 'CLOSED').length
                   : 0}
               </p>
-              <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">Processos encerrados</p>
+              <p className="text-[11px] sm:text-xs text-emerald-600/80 dark:text-emerald-400/80 truncate">Processos encerrados</p>
             </div>
-            <ChevronRight className="size-4 text-emerald-400/50 shrink-0 ml-auto" />
+            <ChevronRight className="size-4 text-emerald-400/50 shrink-0 ml-auto hidden sm:block" />
           </motion.div>
         </motion.div>
       )}

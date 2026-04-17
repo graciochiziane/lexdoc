@@ -233,7 +233,7 @@ function ConversationSidebar({
                       {conv.title}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      {conv.last_message ?? `${conv.message_count} mensagens`}
+                      {conv.last_message && typeof conv.last_message === 'object' ? (conv.last_message as { content: string }).content : (conv.last_message ?? `${conv.message_count} mensagens`)}
                     </p>
                   </div>
                   <button
