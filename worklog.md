@@ -1108,3 +1108,45 @@ Stage Summary:
 - Slug unique constraint bug fixed — prevents duplicate firm name registration failures
 - The deployment error shown in the screenshot is a Z.ai platform-level issue, not an application issue
 - The preview should be accessible through the Preview Panel
+
+---
+Task ID: 16 (Governança V2.0 Integration)
+Agent: Main Orchestrator
+Task: Integrar Prompt de Governança V2.0 no LexAssistent (hierarquia, mata-ilusão, zero confusão lusófana)
+
+Work Log:
+- Leu e analisou 3 ficheiros: lexassist-prompt.ts, rag-search.ts, chat/route.ts
+- Reescreveu completamente lexassist-prompt.ts (v1.0 → v2.0):
+  - Substituiu "9 Regras Absolutas" por "Sistema de Governança — Hierarquia de 4 Níveis" (N1: Lei MZ > N2: Filtro Geográfico > N3: Cronologia > N4: Silêncio Seguro)
+  - Adicionou "Protocolo Mata-Ilusão e Recursividade" — verificação obrigatória antes de citar crimes/penas sem fonte RAG
+  - Adicionou "Proibição de Fabricação" — proibição estrita de inventar artigos, decretos, hashes
+  - Adicionou "Formato de Resposta para Dúvidas Conflituosas" — duas visões neutras quando há conflito
+  - Adicionou "Zero Confusão Lusófona" — tabela de termos PT → MZ (freguesia→Localidade, concelho→Distrito, etc.)
+  - Adicionou `classifySourceReliability()` — emoji 🟢🟡🔴 para fiabilidade das fontes no prompt RAG
+  - Actualizou "Fluxo de Decisão Interno" de 6 → 10 passos (inclui verificação mata-ilusão, zero confusão lusófana)
+  - Actualizou versão: v1.0 → v2.0 em todas as referências
+  - Modo sem RAG agora activa Protocolo Mata-Ilusão em modo máximo (disclaimers obrigatórios)
+- Actualizou rag-search.ts com ranking de fontes:
+  - Adicionou `calculateSourceReliabilityBonus()` — bónus/penalização por tipo de fonte
+  - Alta fiabilidade: Boletim da República (+10), Órgãos legislativos (+8), Fontes .mz (+6), Instituições MZ (+5)
+  - Média fiabilidade: STJ/Tribunal (+2, com flag "verificar-mz")
+  - Baixa fiabilidade: DR sem Moçambique (-20), Portugal/.pt (-20), termos PT (-25)
+  - Score final integra bónus e penalização
+- Actualizou chat/route.ts com validação pós-LLM:
+  - Adicionou `PORTUGUESE_CONTAMINATION_TERMS` — array de 5 padrões regex para detectar termos PT
+  - Adicionou `detectPortugueseContamination()` — scan da resposta para termos contaminados
+  - Adicionou `buildGovernanceDisclaimer()` — gera aviso quando detecta contaminação
+  - Validação executada após cada resposta LLM; disclaimer anexado automaticamente
+  - Metadata de auditoria actualizada com: governance_v2, lusophone_contamination_detected, lusophone_terms_found
+- Testes: ESLint 0 errors, dev server 200, AI chat test com pergunta jurídica — formato IRAC correcto, menção ao "Boletim da República de Moçambique", Hash RAG presente
+
+Stage Summary:
+- LexAssistent actualizado de v1.0 para v2.0 com Governança completa
+- 3 ficheiros modificados: lexassist-prompt.ts, rag-search.ts, chat/route.ts
+- Sistema de hierarquia 4 níveis activo em todas as respostas
+- Protocolo Mata-Ilusão previne citação de crimes/penas sem fonte
+- Zero Confusão Lusófona detecta e alerta termos portugueses
+- RAG scoring com bónus/penalização por fiabilidade da fonte
+- Validação pós-LLM com anexo automático de disclaimer quando detecta contaminação
+- Auditoria com metadata de governança V2.0
+- 0 erros ESLint, 0 erros runtime

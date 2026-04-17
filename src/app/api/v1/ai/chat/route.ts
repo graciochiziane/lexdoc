@@ -27,6 +27,50 @@ function safeJsonStringify(data: unknown): string | null {
 }
 
 // ─────────────────────────────────────────
+// Governança V2.0 — Detecção de termos portugueses
+// ─────────────────────────────────────────
+
+/** Termos que indicam contaminação do sistema jurídico português/brasileiro */
+const PORTUGUESE_CONTAMINATION_TERMS: Array<{ term: string; correct: string }> = [
+  { term: /\bfreguesia\b/gi, correct: 'Localidade / Posto Administrativo' },
+  { term: /\bconcelho\b/gi, correct: 'Distrito' },
+  { term: /\bdiá rio da república\b(?!.*moçambique)/gi, correct: 'Boletim da República de Moçambique' },
+  { term: /(?<!moçambique|mozambique)\s+diá rio da república/gi, correct: 'Boletim da República de Moçambique' },
+  { term: /(?<!de moçambique|de mozambique)\bstj\b/gi, correct: 'Tribunal Supremo de Moçambique (STJ)' },
+];
+
+/** Detecta termos portugueses na resposta e retorna avisos */
+function detectPortugueseContamination(text: string): Array<{ found: string; correct: string }> {
+  const issues: Array<{ found: string; correct: string }> = [];
+  for (const { term, correct } of PORTUGUESE_CONTAMINATION_TERMS) {
+    const matches = text.match(term);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({ found: match, correct });
+      }
+    }
+  }
+  return issues;
+}
+
+/** Gera disclaimer de governança se detectar problemas na resposta */
+function buildGovernanceDisclaimer(contamination: Array<{ found: string; correct: string }>): string {
+  if (contamination.length === 0) return '';
+
+  const corrections = contamination
+    .map((c) => `"${c.found}" → "${c.correct}"`)
+    .join('; ');
+
+  return (
+    '\n\n---\n' +
+    '⚠️ **AVISO DE GOVERNANÇA V2.0 — Zero Confusão Lusófona**\n' +
+    'A seguinte resposta conterá termos que podem indicar contaminação do sistema jurídico português. ' +
+    'Correcções sugeridas: ' + corrections + '.\n' +
+    '**Recomenda-se validação por advogado inscrito na OAM.**'
+  );
+}
+
+// ─────────────────────────────────────────
 // POST — Enviar mensagem ao chat
 // ─────────────────────────────────────────
 export async function POST(request: NextRequest) {
@@ -192,8 +236,17 @@ export async function POST(request: NextRequest) {
       thinking: { type: 'disabled' },
     });
 
-    const aiMessageContent = completion?.choices?.[0]?.message?.content
+    let aiMessageContent = completion?.choices?.[0]?.message?.content
       ?? 'Desculpe, não consegui processar a sua mensagem. Tente novamente.';
+
+    // ── Governança V2.0: Validação pós-LLM (Zero Confusão Lusófana) ──
+    const contamination = detectPortugueseContamination(aiMessageContent);
+    const governanceDisclaimer = buildGovernanceDisclaimer(contamination);
+
+    // Se detectou contaminação, anexar disclaimer à resposta
+    if (governanceDisclaimer) {
+      aiMessageContent += governanceDisclaimer;
+    }
 
     // ── Guardar resposta do assistente ──
     const knowledgeIds = knowledgeArticles.map((a) => a.id);
@@ -236,6 +289,9 @@ export async function POST(request: NextRequest) {
         response_length: aiMessageContent.length,
         knowledge_articles_used: knowledgeArticles.length,
         is_new_conversation: isNewConversation,
+        governance_v2: true,
+        lusophone_contamination_detected: contamination.length > 0,
+        lusophone_terms_found: contamination.length > 0 ? contamination.map((c) => c.found) : undefined,
       },
       ip_address: request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? null,
     });

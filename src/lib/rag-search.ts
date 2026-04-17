@@ -60,7 +60,46 @@ function tokenizeQuery(query: string): string[] {
 // Scoring
 // ─────────────────────────────────────────
 
-/** Calcular pontuação de relevância para um artigo */
+/** Calcular bónus de fiabilidade da fonte (Governança V2.0) */
+function calculateSourceReliabilityBonus(source: string | null): { bonus: number; penalty: number; flag: string | null } {
+  if (!source) return { bonus: 0, penalty: 0, flag: null };
+
+  const src = source.toLowerCase();
+
+  // Alta fiabilidade — Fontes moçambicanas oficiais
+  if (src.includes('boletim da república') || src.includes('boletim da republica')) {
+    return { bonus: 10, penalty: 0, flag: 'boletim-mz' };
+  }
+  if (src.includes('assembleia da república') || src.includes('conselho de ministros')) {
+    return { bonus: 8, penalty: 0, flag: 'orgao-legislativo-mz' };
+  }
+  if (src.includes('.mz') || src.includes('moçambique') || src.includes('mozambique')) {
+    return { bonus: 6, penalty: 0, flag: 'fonte-mz' };
+  }
+  if (src.includes('irej') || src.includes('ctc') || src.includes('pgr') || src.includes('inss') || src.includes('oam')) {
+    return { bonus: 5, penalty: 0, flag: 'instituicao-mz' };
+  }
+
+  // Média fiabilidade
+  if (src.includes('stj') || src.includes('tribunal')) {
+    return { bonus: 2, penalty: 0, flag: 'verificar-mz' };
+  }
+
+  // Baixa fiabilidade — Possível contaminação lusófona
+  if (src.includes('diário da república') && !src.includes('moçambique')) {
+    return { bonus: 0, penalty: 20, flag: 'fonte-pt' };
+  }
+  if (src.includes('portugal') || src.includes('.pt')) {
+    return { bonus: 0, penalty: 20, flag: 'fonte-pt' };
+  }
+  if (src.includes('freguesia') || src.includes('concelho')) {
+    return { bonus: 0, penalty: 25, flag: 'erro-contexto-pt' };
+  }
+
+  return { bonus: 0, penalty: 0, flag: null };
+}
+
+/** Calcular pontuação de relevância para um artigo (V2.0 com ranking de fontes) */
 function calculateScore(
   title: string,
   content: string,
@@ -110,6 +149,11 @@ function calculateScore(
   if (isPinned) {
     score += 2;
   }
+
+  // Governança V2.0: Ranking de fiabilidade da fonte
+  const reliability = calculateSourceReliabilityBonus(source);
+  score += reliability.bonus;
+  score -= reliability.penalty;
 
   return score;
 }
