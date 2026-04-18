@@ -660,7 +660,7 @@ export function DashboardView() {
         </header>
 
         {/* Conteúdo */}
-        <main className="flex-1 p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 min-h-0 overflow-hidden p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -668,6 +668,7 @@ export function DashboardView() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
+              className={activeTab === 'ia' ? 'h-full flex flex-col' : ''}
             >
               {renderContent()}
             </motion.div>

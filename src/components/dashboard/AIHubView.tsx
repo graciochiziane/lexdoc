@@ -36,7 +36,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -125,6 +124,25 @@ const TYPE_LABELS: Record<string, string> = {
   resumo: 'Resumo Jurídico',
   personalizado: 'Personalizado',
 };
+
+// ─────────────────────────────────────────
+// Shared utility: strip markdown for preview text
+// ─────────────────────────────────────────
+function stripMarkdown(text: unknown): string {
+  if (text == null) return '';
+  const raw = typeof text === 'string' ? text : (typeof text === 'object' && text !== null && 'content' in text ? String((text as { content: unknown }).content) : String(text));
+  return raw
+    .replace(/\*\*\[QUEST[ÃA]O\]\*\*\s*/gi, '')
+    .replace(/\*\*/g, '')
+    .replace(/#{1,6}\s/g, '')
+    .replace(/```[\s\S]*?```/g, '[código]')
+    .replace(/`[^`]+`/g, (match) => match.slice(1, -1))
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/---/g, '')
+    .replace(/\n{2,}/g, ' ')
+    .replace(/\n/g, ' ')
+    .trim();
+}
 
 // ─────────────────────────────────────────
 // Typing Indicator
@@ -230,10 +248,10 @@ function ConversationSidebar({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className={`text-sm font-medium truncate ${activeId === conv.id ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground'}`}>
-                      {conv.title}
+                      {stripMarkdown(conv.title)}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      {conv.last_message ?? `${conv.message_count} mensagens`}
+                      {conv.last_message ? stripMarkdown(String(conv.last_message)) : `${conv.message_count} mensagens`}
                     </p>
                   </div>
                   <span
@@ -309,24 +327,40 @@ function AssistantChatTab() {
   const loadConversation = useCallback(async (id: string) => {
     setIsLoadingConv(true);
     setActiveConvId(id);
+    setError(null);
     try {
       const res = await aiApi.getConversation(id);
       if (res.success && res.data) {
-        const detail = res.data as unknown as { messages: ConversationMessage[]; context?: string; title?: string };
+        const detail = res.data as unknown as { messages: Array<Record<string, unknown>>; context?: string; title?: string; context_type?: string; context_id?: string };
         setConvContext(detail.context);
-        setMessages(
-          (detail.messages ?? []).map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            sources: m.sources,
-            knowledge_articles_used: m.knowledge_articles_used,
-            timestamp: new Date(m.created_at),
-          })),
-        );
+        const rawMessages = detail.messages ?? [];
+        if (rawMessages.length === 0) {
+          setMessages([]);
+        } else {
+          setMessages(
+            rawMessages.map((m) => {
+              // Safely extract sources — could be string[] or null
+              let sources: string[] | undefined;
+              if (Array.isArray(m.sources)) {
+                sources = m.sources.filter((s): s is string => typeof s === 'string');
+              }
+              return {
+                id: String(m.id ?? ''),
+                role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
+                content: String(m.content ?? ''),
+                sources,
+                knowledge_articles_used: undefined,
+                timestamp: new Date(String(m.created_at ?? Date.now())),
+              };
+            }),
+          );
+        }
+      } else {
+        setError(res.error?.message ?? 'Erro ao carregar conversa.');
       }
-    } catch {
-      // fail silently
+    } catch (err) {
+      console.error('[AIHub] loadConversation error:', err);
+      setError('Erro de conexão ao carregar a conversa.');
     } finally {
       setIsLoadingConv(false);
     }
@@ -424,7 +458,7 @@ function AssistantChatTab() {
   const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
 
   return (
-    <div className="flex h-[calc(100vh-14rem)] min-h-[500px] rounded-xl border bg-card shadow-sm overflow-hidden">
+    <div className="flex h-full min-h-[300px] rounded-xl border bg-card shadow-sm overflow-hidden">
       {/* Mobile conversation selector */}
       <div className="md:hidden p-3 border-b">
         <Button
@@ -1347,7 +1381,7 @@ export function AIHubView() {
   type TabId = (typeof tabs)[number]['id'];
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full gap-6">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -1376,37 +1410,43 @@ export function AIHubView() {
         </div>
       </motion.div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
-        <TabsList className="bg-muted/60 p-1 rounded-xl h-auto">
-          {tabs.map((tab) => (
-            <TabsTrigger
-              key={tab.id}
-              value={tab.id}
-              className="rounded-lg px-4 py-2.5 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
-            >
-              <tab.icon className="size-4 mr-2" />
-              <span className="hidden sm:inline">{tab.label}</span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {/* Tabs — custom implementation for reliable switching */}
+      <div role="tablist" className="flex bg-muted/60 p-1 rounded-xl h-auto w-fit">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-lg px-4 py-2.5 text-sm transition-all inline-flex items-center gap-2 ${
+              activeTab === tab.id
+                ? 'bg-background text-foreground shadow-sm font-medium'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            <tab.icon className="size-4" />
+            <span className="hidden sm:inline">{tab.label}</span>
+          </button>
+        ))}
+      </div>
 
+      <div className="flex-1 min-h-0">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.2 }}
-            className="mt-6"
-          >
-            {activeTab === 'chat' && <TabsContent value="chat" className="mt-0"><AssistantChatTab /></TabsContent>}
-            {activeTab === 'gerar' && <TabsContent value="gerar" className="mt-0"><GenerateDocumentTab /></TabsContent>}
-            {activeTab === 'extrair' && <TabsContent value="extrair" className="mt-0"><ExtractDeadlinesTab /></TabsContent>}
-            {activeTab === 'historico' && <TabsContent value="historico" className="mt-0"><HistoryTab /></TabsContent>}
-          </motion.div>
-        </AnimatePresence>
-      </Tabs>
+              transition={{ duration: 0.2 }}
+            className={activeTab === 'chat' ? 'h-full' : ''}
+            >
+              {activeTab === 'chat' && <AssistantChatTab />}
+              {activeTab === 'gerar' && <GenerateDocumentTab />}
+              {activeTab === 'extrair' && <ExtractDeadlinesTab />}
+              {activeTab === 'historico' && <HistoryTab />}
+            </motion.div>
+          </AnimatePresence>
+        </div>
     </div>
   );
 }

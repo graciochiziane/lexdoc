@@ -1168,3 +1168,71 @@ Stage Summary:
 - Fix: Inline style override `fieldSizing: 'fixed'` per instance + explicit `overflow-y-auto` and `max-h` constraints
 - Layout structure already correct: parent `overflow-hidden`, messages `flex-1 overflow-y-auto`, input `border-t` at bottom
 - 2 files modified with minimal Tailwind-only changes, no logic changes
+
+---
+Task ID: aihub-ux-fix
+Agent: Main Orchestrator
+Task: Fix object errors and UX issues in AI Hub chat page
+
+Work Log:
+- Analyzed screenshot via VLM (3 passes) to identify issues in Centro de IA page
+- Identified Bug 1: Right panel blank when conversation selected — loadConversation catch block swallowed errors silently, no user feedback
+- Identified Bug 2: Raw markdown (**[QUESTAO]**, ##, **, etc.) showing in sidebar subtitle previews as plain text
+- Identified Bug 3: knowledge_articles_used not populated from loaded conversations — GET API returns knowledge_ids (string[]) but frontend expects knowledge_articles_used (object[])
+- Fixed loadConversation: replaced silent catch with error state display, added safe type coercion for all message fields (String(), Array.isArray checks, type guards)
+- Added stripMarkdown utility: strips **[QUESTÃO]**, **bold**, ## headings, ```code blocks```, [links](url), ---, newlines from preview text
+- Applied stripMarkdown to both conv.title and conv.last_message in sidebar
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+- Dev server recompiled cleanly
+
+Stage Summary:
+- 3 bugs fixed in AIHubView.tsx only (no other files touched)
+- Right panel now shows error message if conversation load fails instead of blank
+- Sidebar previews now show clean plain text without raw markdown
+- Message loading uses safe type coercion to prevent [object Object] rendering from unexpected API data shapes
+
+---
+Task ID: 15 (Bug Fix — AI Center Page Errors)
+Agent: Main Orchestrator
+Task: Fix runtime errors on Centro de IA (AIHubView) page
+
+Work Log:
+- Identified 3 critical bugs in src/components/dashboard/AIHubView.tsx:
+  1. **stripMarkdown scope error**: Function was defined inside AssistantChatTab (line 309) as useCallback, but referenced in ConversationSidebar (lines 233, 236) — a separate component at module scope. This caused ReferenceError: stripMarkdown is not defined when rendering conversation previews in the sidebar.
+  2. **conv.last_message could be non-string**: API might return objects instead of strings for last_message, causing [object Object] to render as React children.
+  3. **Tab switching broken**: Radix Tabs with conditionally-rendered TabsContent inside AnimatePresence prevented tab switching — clicking other tabs (Gerar Documento, Extrair Prazos, Histórico) did nothing.
+- Fixed Bug 1: Moved stripMarkdown to module scope as a plain function (not useCallback), made it accept `unknown` type and safely coerce to string, handling objects with `content` property.
+- Fixed Bug 2: Added `String()` coercion on `conv.last_message` before passing to stripMarkdown.
+- Fixed Bug 3: Replaced Radix Tabs (Tabs/TabsList/TabsTrigger/TabsContent) with custom tab buttons using role="tab" and aria-selected, keeping AnimatePresence for smooth transitions. Removed unused Tabs imports.
+- Verified all fixes with agent-browser QA:
+  - Login → Dashboard → Centro de IA: page loads without errors
+  - All 4 tabs switch correctly (Assistente IA, Gerar Documento, Extrair Prazos, Histórico)
+  - Each tab shows correct content (chat interface, document generation form, deadline extraction form, history table)
+  - No runtime errors in dev log
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+
+Stage Summary:
+- 3 bugs fixed in AIHubView.tsx only
+- stripMarkdown now safely handles any input type (string, object, null, undefined)
+- Tab switching fully functional with custom implementation
+- Clean compilation, no new lint errors
+
+---
+Task ID: 15
+Agent: Main Orchestrator
+Task: Fix AI Hub chat layout — input field too high, can't see responses
+
+Work Log:
+- Analyzed user screenshot showing chat input field positioned incorrectly
+- Identified root cause: AssistantChatTab used `h-[calc(100vh-14rem)]` which didn't account for dashboard header (~4rem), AI Hub decorative header (~6.5rem), tabs (~2.75rem), main padding (~3rem), footer (~2.5rem), and accent line
+- Fixed DashboardView.tsx: Added `min-h-0 overflow-hidden` to main element for proper flex height constraint; Added conditional `className={activeTab === 'ia' ? 'h-full flex flex-col' : ''}` to motion.div wrapper so height passes through to children on IA tab
+- Fixed AIHubView.tsx main component: Changed from `space-y-6` to `flex flex-col h-full gap-6`; Changed tab content wrapper from `mt-6` to `flex-1 min-h-0`; Added `className={activeTab === 'chat' ? 'h-full' : ''}` on inner motion.div
+- Fixed AssistantChatTab: Changed from `h-[calc(100vh-14rem)] min-h-[500px]` to `h-full min-h-[300px]`
+- ESLint: 0 errors, 1 pre-existing warning (form.watch)
+
+Stage Summary:
+- Chat container now properly fills available space between dashboard header and footer
+- Input field positioned at bottom of chat area (standard chat UX)
+- Messages area scrollable with proper flex-1 layout
+- Height flows correctly through flex chain: main → motion.div → AIHubView → tab content → AssistantChatTab
+- Other tabs (Gerar Documento, Extrair Prazos, Histórico) unaffected — they use natural height

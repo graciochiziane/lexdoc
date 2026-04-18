@@ -26,6 +26,7 @@ export const metadata: Metadata = {
     "advocacia",
     "SaaS",
     "documentos",
+    "direito moçambicano",
   ],
   authors: [{ name: "LexDoc Team" }],
   icons: {
