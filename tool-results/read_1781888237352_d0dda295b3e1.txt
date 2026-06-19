@@ -1,0 +1,1112 @@
+     1→// ═══════════════════════════════════════════════════════════════
+     2→// LEXDOC — Cliente API para pedidos autenticados
+     3→// Reutiliza o token de auth.store.ts
+     4→// Inclui interceptor 401 com refresh token automático
+     5→// ═══════════════════════════════════════════════════════════════
+     6→
+     7→import { useAuthStore } from '@/stores/auth.store';
+     8→
+     9→// ─────────────────────────────────────────
+    10→// Tipos
+    11→// ─────────────────────────────────────────
+    12→interface ApiMeta {
+    13→  total: number;
+    14→  page: number;
+    15→  limit: number;
+    16→  pages: number;
+    17→}
+    18→
+    19→interface ApiError {
+    20→  code: string;
+    21→  message: string;
+    22→  details?: string[];
+    23→}
+    24→
+    25→export interface ApiResponse<T> {
+    26→  success: boolean;
+    27→  data?: T;
+    28→  meta?: ApiMeta;
+    29→  error?: ApiError;
+    30→}
+    31→
+    32→// ─────────────────────────────────────────
+    33→// Constantes
+    34→// ─────────────────────────────────────────
+    35→const API_BASE = '/api/v1';
+    36→
+    37→// ─────────────────────────────────────────
+    38→// Refresh token — queue para evitar race conditions
+    39→// ─────────────────────────────────────────
+    40→let apiRefreshPromise: Promise<boolean> | null = null;
+    41→
+    42→async function tryRefreshToken(): Promise<boolean> {
+    43→  const { refreshToken, clearAuth, setAuth } = useAuthStore.getState();
+    44→  if (!refreshToken) {
+    45→    clearAuth();
+    46→    return false;
+    47→  }
+    48→
+    49→  try {
+    50→    const response = await fetch(`${API_BASE}/auth/refresh`, {
+    51→      method: 'POST',
+    52→      headers: { 'Content-Type': 'application/json' },
+    53→      body: JSON.stringify({ refresh_token: refreshToken }),
+    54→    });
+    55→
+    56→    const data = await response.json();
+    57→
+    58→    if (data.success && data.data) {
+    59→      const { access_token, refresh_token, user } = data.data;
+    60→      setAuth(access_token, refresh_token, user);
+    61→      return true;
+    62→    } else {
+    63→      clearAuth();
+    64→      return false;
+    65→    }
+    66→  } catch {
+    67→    clearAuth();
+    68→    return false;
+    69→  }
+    70→}
+    71→
+    72→// ─────────────────────────────────────────
+    73→// Construir headers de autenticação
+    74→// ─────────────────────────────────────────
+    75→function getAuthHeaders(extra?: HeadersInit): HeadersInit {
+    76→  const { accessToken } = useAuthStore.getState();
+    77→  return {
+    78→    'Content-Type': 'application/json',
+    79→    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    80→    ...extra,
+    81→  };
+    82→}
+    83→
+    84→// ─────────────────────────────────────────
+    85→// Fetch genérico com headers + interceptor 401
+    86→// ─────────────────────────────────────────
+    87→async function apiFetch<T>(
+    88→  endpoint: string,
+    89→  options?: RequestInit,
+    90→): Promise<ApiResponse<T>> {
+    91→  const headers = getAuthHeaders();
+    92→  const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    93→
+    94→  // Se 401 — tentar refresh e repetir pedido
+    95→  if (response.status === 401) {
+    96→    if (!apiRefreshPromise) {
+    97→      apiRefreshPromise = tryRefreshToken().finally(() => {
+    98→        apiRefreshPromise = null;
+    99→      });
+   100→    }
+   101→
+   102→    const refreshed = await apiRefreshPromise;
+   103→    if (refreshed) {
+   104→      const retryHeaders = getAuthHeaders();
+   105→      const retryResponse = await fetch(`${API_BASE}${endpoint}`, { ...options, headers: retryHeaders });
+   106→      return await retryResponse.json() as ApiResponse<T>;
+   107→    }
+   108→  }
+   109→
+   110→  const data: ApiResponse<T> = await response.json();
+   111→  return data;
+   112→}
+   113→
+   114→// ─────────────────────────────────────────
+   115→// API de Utilizadores
+   116→// ─────────────────────────────────────────
+   117→interface UserRecord {
+   118→  id: string;
+   119→  email: string;
+   120→  full_name: string;
+   121→  role: string;
+   122→  is_active: boolean;
+   123→  last_login_at: string | null;
+   124→  created_at: string;
+   125→  updated_at: string;
+   126→}
+   127→
+   128→export const usersApi = {
+   129→  list: (params?: string) =>
+   130→    apiFetch<UserRecord[]>(`/users${params ? `?${params}` : ''}`),
+   131→  get: (id: string) =>
+   132→    apiFetch<UserRecord>(`/users/${id}`),
+   133→  create: (data: { full_name: string; email: string; password: string; role: string }) =>
+   134→    apiFetch<UserRecord>('/users', { method: 'POST', body: JSON.stringify(data) }),
+   135→  update: (id: string, data: { full_name?: string; email?: string; role?: string }) =>
+   136→    apiFetch<UserRecord>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+   137→  deactivate: (id: string) =>
+   138→    apiFetch<UserRecord>(`/users/${id}/deactivate`, { method: 'PATCH' }),
+   139→};
+   140→
+   141→// ─────────────────────────────────────────
+   142→// API de Clientes
+   143→// ─────────────────────────────────────────
+   144→export interface ClientRecord {
+   145→  id: string;
+   146→  full_name: string;
+   147→  email: string | null;
+   148→  phone: string | null;
+   149→  address: string | null;
+   150→  client_type: string;
+   151→  is_active: boolean;
+   152→  notes: string | null;
+   153→  created_at: string;
+   154→  updated_at: string;
+   155→}
+   156→
+   157→export const clientsApi = {
+   158→  list: (params?: string) =>
+   159→    apiFetch<ClientRecord[]>(`/clients${params ? `?${params}` : ''}`),
+   160→  get: (id: string) =>
+   161→    apiFetch<ClientRecord>(`/clients/${id}`),
+   162→  create: (data: {
+   163→    full_name: string;
+   164→    email?: string;
+   165→    phone?: string;
+   166→    address?: string;
+   167→    client_type: string;
+   168→    notes?: string;
+   169→  }) =>
+   170→    apiFetch<ClientRecord>('/clients', { method: 'POST', body: JSON.stringify(data) }),
+   171→  update: (
+   172→    id: string,
+   173→    data: {
+   174→      full_name?: string;
+   175→      email?: string;
+   176→      phone?: string;
+   177→      address?: string;
+   178→      client_type?: string;
+   179→      notes?: string;
+   180→    },
+   181→  ) =>
+   182→    apiFetch<ClientRecord>(`/clients/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+   183→};
+   184→
+   185→// ─────────────────────────────────────────
+   186→// API de Processos
+   187→// ─────────────────────────────────────────
+   188→export interface ProcessRecord {
+   189→  id: string;
+   190→  process_number: string;
+   191→  title: string;
+   192→  description: string | null;
+   193→  client_id: string;
+   194→  area: string;
+   195→  status: string;
+   196→  priority: string;
+   197→  court: string | null;
+   198→  judge: string | null;
+   199→  opposing_party: string | null;
+   200→  opened_at: string;
+   201→  closed_at: string | null;
+   202→  created_at: string;
+   203→  updated_at: string;
+   204→  client?: ClientRecord;
+   205→}
+   206→
+   207→export const processesApi = {
+   208→  list: (params?: string) =>
+   209→    apiFetch<ProcessRecord[]>(`/processes${params ? `?${params}` : ''}`),
+   210→  get: (id: string) =>
+   211→    apiFetch<ProcessRecord>(`/processes/${id}`),
+   212→  create: (data: {
+   213→    process_number: string;
+   214→    title: string;
+   215→    description?: string;
+   216→    client_id: string;
+   217→    area: string;
+   218→    priority: string;
+   219→    court?: string;
+   220→    judge?: string;
+   221→    opposing_party?: string;
+   222→  }) =>
+   223→    apiFetch<ProcessRecord>('/processes', { method: 'POST', body: JSON.stringify(data) }),
+   224→  update: (
+   225→    id: string,
+   226→    data: {
+   227→      title?: string;
+   228→      description?: string;
+   229→      area?: string;
+   230→      status?: string;
+   231→      priority?: string;
+   232→      court?: string;
+   233→      judge?: string;
+   234→      opposing_party?: string;
+   235→    },
+   236→  ) =>
+   237→    apiFetch<ProcessRecord>(`/processes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+   238→  close: (id: string) =>
+   239→    apiFetch<ProcessRecord>(`/processes/${id}/close`, { method: 'PATCH' }),
+   240→  updateStatus: (id: string, status: string) =>
+   241→    apiFetch<ProcessRecord>(`/processes/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+   242→  timeline: (id: string) =>
+   243→    apiFetch<TimelineEntry[]>(`/processes/${id}/timeline`),
+   244→};
+   245→
+   246→// ─────────────────────────────────────────
+   247→// API de Estatísticas
+   248→// ─────────────────────────────────────────
+   249→export interface DashboardStats {
+   250→  total_processes: number;
+   251→  active_processes: number;
+   252→  total_clients: number;
+   253→  total_documents: number;
+   254→  upcoming_deadlines: number;
+   255→  recent_processes: ProcessRecord[];
+   256→  upcoming_deadlines_list: Array<{
+   257→    id: string;
+   258→    title: string;
+   259→    due_date: string;
+   260→    process_title: string;
+   261→    process_id: string;
+   262→  }>;
+   263→}
+   264→
+   265→export const statsApi = {
+   266→  dashboard: () => apiFetch<DashboardStats>('/stats/dashboard'),
+   267→};
+   268→
+   269→// ─────────────────────────────────────────
+   270→// API de Auditoria
+   271→// ─────────────────────────────────────────
+   272→interface AuditLogRecord {
+   273→  id: string;
+   274→  user_id: string | null;
+   275→  action: string;
+   276→  entity_type: string;
+   277→  entity_id: string | null;
+   278→  old_values: string | null;
+   279→  new_values: string | null;
+   280→  ip_address: string | null;
+   281→  created_at: string;
+   282→  user_name: string;
+   283→}
+   284→
+   285→export const auditApi = {
+   286→  logs: (params?: string) =>
+   287→    apiFetch<AuditLogRecord[]>(`/audit/logs${params ? `?${params}` : ''}`),
+   288→};
+   289→
+   290→// ─────────────────────────────────────────
+   291→// API de Prazos
+   292→// ─────────────────────────────────────────
+   293→
+   294→interface CalendarDeadlineItem {
+   295→  id: string;
+   296→  title: string;
+   297→  due_date: string;
+   298→  status: string;
+   299→  process_id: string;
+   300→  process_title: string;
+   301→  process_number: string;
+   302→}
+   303→
+   304→export interface CalendarDeadlinesData {
+   305→  year: number;
+   306→  month: number;
+   307→  start_date: string;
+   308→  end_date: string;
+   309→  deadlines_by_date: Record<string, CalendarDeadlineItem[]>;
+   310→  total: number;
+   311→}
+   312→
+   313→export interface DeadlineRecord {
+   314→  id: string;
+   315→  process_id: string;
+   316→  title: string;
+   317→  description: string | null;
+   318→  due_date: string;
+   319→  reminder_at: string | null;
+   320→  status: string;
+   321→  source: string;
+   322→  ai_extracted: boolean;
+   323→  created_at: string;
+   324→  updated_at: string;
+   325→  process?: {
+   326→    id: string;
+   327→    process_number: string;
+   328→    title: string;
+   329→  };
+   330→}
+   331→
+   332→export const deadlinesApi = {
+   333→  list: (params?: string) =>
+   334→    apiFetch<DeadlineRecord[]>(`/deadlines${params ? `?${params}` : ''}`),
+   335→  get: (id: string) =>
+   336→    apiFetch<DeadlineRecord>(`/deadlines/${id}`),
+   337→  create: (data: {
+   338→    title: string;
+   339→    due_date: string;
+   340→    description?: string;
+   341→    process_id: string;
+   342→    reminder_at?: string;
+   343→  }) =>
+   344→    apiFetch<DeadlineRecord>('/deadlines', { method: 'POST', body: JSON.stringify(data) }),
+   345→  update: (
+   346→    id: string,
+   347→    data: {
+   348→      title?: string;
+   349→      due_date?: string;
+   350→      description?: string;
+   351→      process_id?: string;
+   352→      reminder_at?: string;
+   353→      status?: string;
+   354→    },
+   355→  ) =>
+   356→    apiFetch<DeadlineRecord>(`/deadlines/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+   357→  byProcess: (processId: string, params?: string) =>
+   358→    apiFetch<DeadlineRecord[]>(`/processes/${processId}/deadlines${params ? `?${params}` : ''}`),
+   359→  calendar: (params: string) =>
+   360→    apiFetch<CalendarDeadlinesData>(`/deadlines/calendar?${params}`),
+   361→};
+   362→
+   363→// ─────────────────────────────────────────
+   364→// API de Documentos
+   365→// ─────────────────────────────────────────
+   366→interface DocumentRecord {
+   367→  id: string;
+   368→  firm_id: string;
+   369→  process_id: string | null;
+   370→  created_by_id: string;
+   371→  updated_by_id: string | null;
+   372→  title: string;
+   373→  description: string | null;
+   374→  file_key: string;
+   375→  file_name: string;
+   376→  file_size: number;
+   377→  mime_type: string;
+   378→  version: number;
+   379→  parent_id: string | null;
+   380→  status: string;
+   381→  is_confidential: boolean;
+   382→  tags: string;
+   383→  ai_summary: string | null;
+   384→  ai_processed_at: string | null;
+   385→  created_at: string;
+   386→  updated_at: string;
+   387→  process?: {
+   388→    id: string;
+   389→    process_number: string;
+   390→    title: string;
+   391→  };
+   392→}
+   393→
+   394→export const documentsApi = {
+   395→  list: (params?: string) =>
+   396→    apiFetch<DocumentRecord[]>(`/documents${params ? `?${params}` : ''}`),
+   397→  get: (id: string) =>
+   398→    apiFetch<DocumentRecord>(`/documents/${id}`),
+   399→  create: (data: {
+   400→    title: string;
+   401→    description?: string;
+   402→    process_id?: string;
+   403→    file_name: string;
+   404→    mime_type: string;
+   405→    file_size: number;
+   406→    tags?: string;
+   407→    is_confidential?: boolean;
+   408→  }) =>
+   409→    apiFetch<DocumentRecord>('/documents', { method: 'POST', body: JSON.stringify(data) }),
+   410→  update: (
+   411→    id: string,
+   412→    data: {
+   413→      title?: string;
+   414→      description?: string;
+   415→      process_id?: string;
+   416→      file_name?: string;
+   417→      mime_type?: string;
+   418→      file_size?: number;
+   419→      tags?: string;
+   420→      is_confidential?: boolean;
+   421→      status?: string;
+   422→    },
+   423→  ) =>
+   424→    apiFetch<DocumentRecord>(`/documents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+   425→  remove: (id: string) =>
+   426→    apiFetch<DocumentRecord>(`/documents/${id}`, { method: 'DELETE' }),
+   427→};
+   428→
+   429→// ─────────────────────────────────────────
+   430→// API de Pesquisa Global
+   431→// ─────────────────────────────────────────
+   432→export interface SearchResultItem {
+   433→  id: string;
+   434→  title: string;
+   435→  subtitle?: string;
+   436→  type: string;
+   437→  created_at: string;
+   438→}
+   439→
+   440→export interface SearchGroup {
+   441→  type: string;
+   442→  label: string;
+   443→  count: number;
+   444→  items: SearchResultItem[];
+   445→}
+   446→
+   447→export interface SearchResponse {
+   448→  query: string;
+   449→  type: string;
+   450→  results: SearchGroup[];
+   451→  total: number;
+   452→  meta: ApiMeta;
+   453→}
+   454→
+   455→export const searchApi = {
+   456→  global: (params: string) =>
+   457→    apiFetch<SearchResponse>(`/search?${params}`),
+   458→};
+   459→
+   460→// ─────────────────────────────────────────
+   461→// API de Notificações
+   462→// ─────────────────────────────────────────
+   463→export interface NotificationItem {
+   464→  id: string;
+   465→  action: string;
+   466→  entity_type: string;
+   467→  entity_id: string | null;
+   468→  user_name: string;
+   469→  user_id: string | null;
+   470→  created_at: string;
+   471→  metadata: Record<string, unknown> | null;
+   472→}
+   473→
+   474→export interface NotificationsData {
+   475→  notifications: NotificationItem[];
+   476→  meta: ApiMeta;
+   477→}
+   478→
+   479→export const notificationsApi = {
+   480→  list: (params?: string) =>
+   481→    apiFetch<NotificationsData>(`/notifications${params ? `?${params}` : ''}`),
+   482→  unreadCount: () =>
+   483→    apiFetch<{ count: number }>('/notifications?unread-count'),
+   484→};
+   485→
+   486→// ─────────────────────────────────────────
+   487→// API de Perfil do Utilizador
+   488→// ─────────────────────────────────────────
+   489→export interface ProfileData {
+   490→  id: string;
+   491→  email: string;
+   492→  full_name: string;
+   493→  role: string;
+   494→  phone: string | null;
+   495→  is_active: boolean;
+   496→  email_verified: boolean;
+   497→  last_login_at: string | null;
+   498→  created_at: string;
+   499→  updated_at: string;
+   500→  member_since: string;
+   501→  firm: {
+   502→    id: string;
+   503→    name: string;
+   504→    plan: string;
+   505→  };
+   506→}
+   507→
+   508→export const profileApi = {
+   509→  get: () => apiFetch<ProfileData>('/profile'),
+   510→  update: (data: { full_name?: string; phone?: string }) =>
+   511→    apiFetch<ProfileData>('/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+   512→  changePassword: (data: { current_password: string; new_password: string; confirm_password: string }) =>
+   513→    apiFetch<{ message: string }>('/profile/password', { method: 'PATCH', body: JSON.stringify(data) }),
+   514→};
+   515→
+   516→// ─────────────────────────────────────────
+   517→// API de Relatórios
+   518→// ─────────────────────────────────────────
+   519→export interface ReportOverviewData {
+   520→  firm: {
+   521→    name: string;
+   522→    plan: string;
+   523→    member_count: number;
+   524→    created_at: string;
+   525→    age_days: number;
+   526→  };
+   527→  processes: {
+   528→    total: number;
+   529→    active: number;
+   530→    suspended: number;
+   531→    closed: number;
+   532→    by_area: Record<string, number>;
+   533→    by_priority: Record<string, number>;
+   534→    avg_per_month: number;
+   535→    this_month: number;
+   536→    last_month: number;
+   537→  };
+   538→  clients: {
+   539→    total: number;
+   540→    by_type: Record<string, number>;
+   541→    new_this_month: number;
+   542→  };
+   543→  documents: {
+   544→    total: number;
+   545→    by_status: Record<string, number>;
+   546→    total_size_bytes: number;
+   547→    confidential_count: number;
+   548→  };
+   549→  deadlines: {
+   550→    total: number;
+   551→    overdue: number;
+   552→    completed: number;
+   553→    upcoming_7d: number;
+   554→    upcoming_30d: number;
+   555→  };
+   556→  activity: {
+   557→    total_audit_entries: number;
+   558→    most_active_users: Array<{ name: string; actions_count: number }>;
+   559→    recent_actions_by_type: Record<string, number>;
+   560→  };
+   561→}
+   562→
+   563→export const reportsApi = {
+   564→  overview: () => apiFetch<ReportOverviewData>('/reports/overview'),
+   565→};
+   566→
+   567→// ─────────────────────────────────────────
+   568→// API de Configurações do Escritório
+   569→// ─────────────────────────────────────────
+   570→export interface FirmSettings {
+   571→  id: string;
+   572→  name: string;
+   573→  slug: string;
+   574→  nif: string | null;
+   575→  oam_number: string | null;
+   576→  is_active: boolean;
+   577→  plan: string;
+   578→  created_at: string;
+   579→  member_count: number;
+   580→}
+   581→
+   582→interface FirmMember {
+   583→  id: string;
+   584→  email: string;
+   585→  full_name: string;
+   586→  role: string;
+   587→  is_active: boolean;
+   588→  last_login_at: string | null;
+   589→  created_at: string;
+   590→}
+   591→
+   592→export const firmApi = {
+   593→  settings: {
+   594→    get: () => apiFetch<FirmSettings>('/firm/settings'),
+   595→    update: (data: { name?: string; nif?: string; oam_number?: string }) =>
+   596→      apiFetch<FirmSettings>('/firm/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+   597→  },
+   598→  members: (params?: string) =>
+   599→    apiFetch<FirmMember[]>(`/firm/members${params ? `?${params}` : ''}`),
+   600→};
+   601→
+   602→// ─────────────────────────────────────────
+   603→// API de Convites
+   604→// ─────────────────────────────────────────
+   605→export interface InvitationRecord {
+   606→  id: string;
+   607→  email: string;
+   608→  role: string;
+   609→  created_at: string;
+   610→  expires_at: string;
+   611→  accepted_at: string | null;
+   612→  status: string;
+   613→}
+   614→
+   615→export interface CreateInvitationData {
+   616→  email: string;
+   617→  role: string;
+   618→  full_name?: string;
+   619→}
+   620→
+   621→export interface InvitationResult {
+   622→  id: string;
+   623→  email: string;
+   624→  role: string;
+   625→  token: string;
+   626→  expires_at: string;
+   627→  created_at: string;
+   628→}
+   629→
+   630→export interface ValidateInvitationData {
+   631→  firm_name: string;
+   632→  email: string;
+   633→  role: string;
+   634→  expires_at: string;
+   635→}
+   636→
+   637→export const invitationsApi = {
+   638→  create: (data: CreateInvitationData) =>
+   639→    apiFetch<InvitationResult>('/invitations', { method: 'POST', body: JSON.stringify(data) }),
+   640→  list: (params?: string) =>
+   641→    apiFetch<InvitationRecord[]>(`/invitations${params ? `?${params}` : ''}`),
+   642→  validate: (token: string) =>
+   643→    apiFetch<ValidateInvitationData>(`/invitations/${token}`),
+   644→  accept: (token: string, data: { full_name: string; password: string; password_confirmation: string }) =>
+   645→    apiFetch<{ access_token: string; refresh_token: string; user: { id: string; email: string; role: string; firm_id: string; full_name: string } }>(
+   646→      `/invitations/${token}/accept`,
+   647→      { method: 'POST', body: JSON.stringify(data) },
+   648→    ),
+   649→  revoke: (token: string) =>
+   650→    apiFetch<{ message: string }>(`/invitations/${token}`, { method: 'DELETE' }),
+   651→};
+   652→
+   653→// ─────────────────────────────────────────
+   654→// API de Exportação CSV
+   655→// ─────────────────────────────────────────
+   656→async function apiFetchBlob(endpoint: string): Promise<Blob> {
+   657→  const { accessToken } = useAuthStore.getState();
+   658→  const headers: HeadersInit = {
+   659→    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+   660→  };
+   661→
+   662→  let response = await fetch(`${API_BASE}${endpoint}`, { headers });
+   663→
+   664→  // Se 401 — tentar refresh e repetir pedido
+   665→  if (response.status === 401) {
+   666→    if (!apiRefreshPromise) {
+   667→      apiRefreshPromise = tryRefreshToken().finally(() => {
+   668→        apiRefreshPromise = null;
+   669→      });
+   670→    }
+   671→
+   672→    const refreshed = await apiRefreshPromise;
+   673→    if (refreshed) {
+   674→      const { accessToken: newToken } = useAuthStore.getState();
+   675→      const retryHeaders: HeadersInit = {
+   676→        ...(newToken ? { Authorization: `Bearer ${newToken}` } : {}),
+   677→      };
+   678→      response = await fetch(`${API_BASE}${endpoint}`, { headers: retryHeaders });
+   679→    }
+   680→  }
+   681→
+   682→  if (!response.ok) {
+   683→    throw new Error('Erro ao exportar dados.');
+   684→  }
+   685→  return response.blob();
+   686→}
+   687→
+   688→export const exportApi = {
+   689→  clients: (ids?: string[]) => apiFetchBlob(`/export/clients?format=csv${ids?.length ? `&ids=${ids.join(',')}` : ''}`),
+   690→  processes: (ids?: string[]) => apiFetchBlob(`/export/processes?format=csv${ids?.length ? `&ids=${ids.join(',')}` : ''}`),
+   691→  audit: () => apiFetchBlob('/export/audit?format=csv'),
+   692→  reportPdf: (type: 'firm_overview' | 'processes' | 'clients' | 'deadlines' = 'firm_overview') =>
+   693→    apiFetchBlob(`/export/report-pdf?type=${type}`),
+   694→};
+   695→
+   696→// ─────────────────────────────────────────
+   697→// API de Importação (CSV)
+   698→// ─────────────────────────────────────────
+   699→export interface ImportResult {
+   700→  total: number;
+   701→  created: number;
+   702→  duplicates: number;
+   703→  errors: number;
+   704→  parse_warnings?: string[];
+   705→  import_errors?: string[];
+   706→}
+   707→
+   708→async function importCSV<T extends ImportResult>(endpoint: string, file: File): Promise<ApiResponse<T>> {
+   709→  const token = useAuthStore.getState().accessToken;
+   710→  if (!token) return { success: false, error: { code: 'UNAUTHORIZED', message: 'Não autenticado.' } };
+   711→
+   712→  const formData = new FormData();
+   713→  formData.append('file', file);
+   714→
+   715→  const response = await fetch(`${API_BASE}${endpoint}`, {
+   716→    method: 'POST',
+   717→    headers: { Authorization: `Bearer ${token}` },
+   718→    body: formData,
+   719→  });
+   720→  return response.json();
+   721→}
+   722→
+   723→export const importApi = {
+   724→  clients: (file: File) => importCSV<ImportResult>('/import/clients', file),
+   725→};
+   726→
+   727→// ─────────────────────────────────────────
+   728→// API de Autenticação (pública)
+   729→// ─────────────────────────────────────────
+   730→
+   731→// Fetch sem autenticação para endpoints públicos
+   732→async function publicApiFetch<T>(
+   733→  endpoint: string,
+   734→  options?: RequestInit,
+   735→): Promise<ApiResponse<T>> {
+   736→  const headers: HeadersInit = {
+   737→    'Content-Type': 'application/json',
+   738→  };
+   739→
+   740→  const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+   741→  const data: ApiResponse<T> = await response.json();
+   742→  return data;
+   743→}
+   744→
+   745→export const authApi = {
+   746→  forgotPassword: (email: string) =>
+   747→    publicApiFetch<{ message: string; reset_link?: string }>(
+   748→      '/auth/forgot-password',
+   749→      { method: 'POST', body: JSON.stringify({ email }) },
+   750→    ),
+   751→  resetPassword: (token: string, new_password: string, confirm_password: string) =>
+   752→    publicApiFetch<{ message: string }>(
+   753→      '/auth/reset-password',
+   754→      { method: 'POST', body: JSON.stringify({ token, new_password, confirm_password }) },
+   755→    ),
+   756→};
+   757→
+   758→// ─────────────────────────────────────────
+   759→// API de Actividade Recente
+   760→// ─────────────────────────────────────────
+   761→export interface ActivityItem {
+   762→  id: string;
+   763→  action: string;
+   764→  entity_type: string;
+   765→  entity_id: string | null;
+   766→  user_name: string;
+   767→  user_id: string | null;
+   768→  description: string;
+   769→  created_at: string;
+   770→}
+   771→
+   772→interface ActivityRecentData {
+   773→  activities: ActivityItem[];
+   774→  total: number;
+   775→}
+   776→
+   777→export const activityApi = {
+   778→  recent: (limit?: number) =>
+   779→    apiFetch<ActivityRecentData>(`/activity/recent${limit ? `?limit=${limit}` : ''}`),
+   780→};
+   781→
+   782→// ─────────────────────────────────────────
+   783→// API de Notas
+   784→// ─────────────────────────────────────────
+   785→export interface NoteItem {
+   786→  id: string;
+   787→  firm_id: string;
+   788→  entity_type: string;
+   789→  entity_id: string | null;
+   790→  content: string;
+   791→  is_pinned: boolean;
+   792→  is_completed: boolean;
+   793→  priority: string;
+   794→  due_date: string | null;
+   795→  created_by_id: string;
+   796→  created_at: string;
+   797→  updated_at: string;
+   798→  user_name?: string;
+   799→}
+   800→
+   801→export const notesApi = {
+   802→  list: (entityType: string, entityId?: string | null, page?: number, limit?: number) =>
+   803→    apiFetch<NoteItem[]>(
+   804→      `/notes?entity_type=${entityType}${entityId ? `&entity_id=${entityId}` : ''}${page ? `&page=${page}` : ''}${limit ? `&limit=${limit}` : ''}`,
+   805→    ),
+   806→  create: (data: {
+   807→    entity_type: string;
+   808→    entity_id?: string | null;
+   809→    content: string;
+   810→    is_pinned?: boolean;
+   811→    is_completed?: boolean;
+   812→    priority?: string;
+   813→    due_date?: string | null;
+   814→  }) =>
+   815→    apiFetch<NoteItem>('/notes', { method: 'POST', body: JSON.stringify(data) }),
+   816→  update: (id: string, data: {
+   817→    content?: string;
+   818→    is_pinned?: boolean;
+   819→    is_completed?: boolean;
+   820→    priority?: string;
+   821→    due_date?: string | null;
+   822→  }) =>
+   823→    apiFetch<NoteItem>(`/notes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+   824→  remove: (id: string) =>
+   825→    apiFetch<{ id: string; deleted: boolean }>(`/notes/${id}`, { method: 'DELETE' }),
+   826→};
+   827→
+   828→// ─────────────────────────────────────────
+   829→// API de Timeline do Processo
+   830→// ─────────────────────────────────────────
+   831→export interface TimelineEntry {
+   832→  id: string;
+   833→  type: 'audit' | 'deadline' | 'note';
+   834→  action: string;
+   835→  description: string;
+   836→  user_name: string;
+   837→  user_id: string | null;
+   838→  created_at: string;
+   839→  details?: Record<string, unknown>;
+   840→}
+   841→
+   842→// ─────────────────────────────────────────
+   843→// API de Base de Conhecimento Jurídico
+   844→// ─────────────────────────────────────────
+   845→export interface KnowledgeArticle {
+   846→  id: string;
+   847→  title: string;
+   848→  content: string;
+   849→  category: string;
+   850→  source: string | null;
+   851→  tags: string;
+   852→  is_pinned: boolean;
+   853→  view_count: number;
+   854→  created_at: string;
+   855→  updated_at: string;
+   856→  created_by: {
+   857→    id: string;
+   858→    full_name: string;
+   859→  };
+   860→}
+   861→
+   862→export interface KnowledgeStats {
+   863→  total_articles: number;
+   864→  pinned_articles: number;
+   865→  total_views: number;
+   866→  by_category: Record<string, number>;
+   867→  recent_articles: Array<{
+   868→    id: string;
+   869→    title: string;
+   870→    category: string;
+   871→    view_count: number;
+   872→    created_at: string;
+   873→    created_by: { full_name: string };
+   874→  }>;
+   875→  most_viewed: Array<{
+   876→    id: string;
+   877→    title: string;
+   878→    category: string;
+   879→    view_count: number;
+   880→  }>;
+   881→}
+   882→
+   883→export const knowledgeApi = {
+   884→  list: (params?: string) =>
+   885→    apiFetch<KnowledgeArticle[]>(`/knowledge${params ? `?${params}` : ''}`),
+   886→  get: (id: string) =>
+   887→    apiFetch<KnowledgeArticle>(`/knowledge/${id}`),
+   888→  create: (data: {
+   889→    title: string;
+   890→    content: string;
+   891→    category: string;
+   892→    source?: string;
+   893→    tags?: string;
+   894→    is_pinned?: boolean;
+   895→  }) =>
+   896→    apiFetch<KnowledgeArticle>('/knowledge', { method: 'POST', body: JSON.stringify(data) }),
+   897→  update: (id: string, data: {
+   898→    title?: string;
+   899→    content?: string;
+   900→    category?: string;
+   901→    source?: string;
+   902→    tags?: string;
+   903→    is_pinned?: boolean;
+   904→  }) =>
+   905→    apiFetch<KnowledgeArticle>(`/knowledge/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+   906→  remove: (id: string) =>
+   907→    apiFetch<{ id: string; deleted: boolean }>(`/knowledge/${id}`, { method: 'DELETE' }),
+   908→  stats: () =>
+   909→    apiFetch<KnowledgeStats>('/knowledge/stats'),
+   910→};
+   911→
+   912→// ─────────────────────────────────────────
+   913→// API de IA — LexAssistent (Chat + Análise)
+   914→// ─────────────────────────────────────────
+   915→export interface AIChatRequest {
+   916→  message: string;
+   917→  context?: string;
+   918→}
+   919→
+   920→export interface AIChatResponse {
+   921→  message: string;
+   922→  sources?: string[];
+   923→}
+   924→
+   925→export interface AIAnalyzeRequest {
+   926→  text: string;
+   927→  type: 'contract' | 'petition' | 'legal_opinion' | 'general';
+   928→}
+   929→
+   930→export interface AIAnalysisResponse {
+   931→  summary: string;
+   932→  key_points: string[];
+   933→  risks: string[];
+   934→  recommendations: string[];
+   935→  full_analysis: string;
+   936→}
+   937→
+   938→// ─────────────────────────────────────────
+   939→// API de IA — Conversas (Enhanced Chat)
+   940→// ─────────────────────────────────────────
+   941→export interface ConversationSummary {
+   942→  id: string;
+   943→  title: string;
+   944→  created_at: string;
+   945→  updated_at: string;
+   946→  message_count: number;
+   947→  last_message?: string;
+   948→}
+   949→
+   950→export interface ConversationMessage {
+   951→  id: string;
+   952→  role: 'user' | 'assistant';
+   953→  content: string;
+   954→  sources?: string[];
+   955→  knowledge_articles_used?: Array<{ id: string; title: string; category: string }>;
+   956→  created_at: string;
+   957→}
+   958→
+   959→export interface ConversationDetail {
+   960→  id: string;
+   961→  title: string;
+   962→  created_at: string;
+   963→  updated_at: string;
+   964→  context?: string;
+   965→  messages: ConversationMessage[];
+   966→}
+   967→
+   968→// ─────────────────────────────────────────
+   969→// API de IA — Geração de Documentos
+   970→// ─────────────────────────────────────────
+   971→export interface GenerationRecord {
+   972→  id: string;
+   973→  title: string;
+   974→  generation_type: string;
+   975→  context: string;
+   976→  result: string;
+   977→  process_id?: string;
+   978→  created_at: string;
+   979→}
+   980→
+   981→// ─────────────────────────────────────────
+   982→// API de IA — Extração de Prazos
+   983→// ─────────────────────────────────────────
+   984→export interface ExtractedDeadline {
+   985→  title: string;
+   986→  due_date: string;
+   987→  description: string;
+   988→  source_text: string;
+   989→}
+   990→
+   991→export const aiApi = {
+   992→  // Enhanced chat with RAG + memory
+   993→  chat: (data: { message: string; context?: string; conversation_id?: string }) =>
+   994→    apiFetch<{ message: string; sources: string[]; conversation_id: string; knowledge_articles_used?: Array<{ id: string; title: string; category: string }> }>('/ai/chat', { method: 'POST', body: JSON.stringify(data) }),
+   995→
+   996→  // List conversations
+   997→  listConversations: (params?: string) =>
+   998→    apiFetch<ConversationSummary[]>('/ai/chat' + (params ? `?${params}` : '')),
+   999→
+  1000→  // Get conversation messages
+  1001→  getConversation: (id: string) =>
+  1002→    apiFetch<ConversationDetail>(`/ai/conversations/${id}`),
+  1003→
+  1004→  // Delete conversation
+  1005→  deleteConversation: (id: string) =>
+  1006→    apiFetch(`/ai/conversations/${id}`, { method: 'DELETE' }),
+  1007→
+  1008→  // Generate document
+  1009→  generate: (data: { type: string; title: string; context: string; process_id?: string; template_id?: string }) =>
+  1010→    apiFetch<{ id: string; title: string; result: string; generation_type: string }>('/ai/generate', { method: 'POST', body: JSON.stringify(data) }),
+  1011→
+  1012→  // List generations
+  1013→  listGenerations: (params?: string) =>
+  1014→    apiFetch<GenerationRecord[]>('/ai/generate/list' + (params ? `?${params}` : '')),
+  1015→
+  1016→  // Get generation
+  1017→  getGeneration: (id: string) =>
+  1018→    apiFetch<GenerationRecord>(`/ai/generate/${id}`),
+  1019→
+  1020→  // Delete generation
+  1021→  deleteGeneration: (id: string) =>
+  1022→    apiFetch(`/ai/generate/${id}`, { method: 'DELETE' }),
+  1023→
+  1024→  // Extract deadlines
+  1025→  extractDeadlines: (data: { text: string; process_id?: string }) =>
+  1026→    apiFetch<{ deadlines: ExtractedDeadline[] }>('/ai/extract-deadlines', { method: 'POST', body: JSON.stringify(data) }),
+  1027→
+  1028→  // Analyze document (existing)
+  1029→  analyze: (data: AIAnalyzeRequest) =>
+  1030→    apiFetch<AIAnalysisResponse>('/ai/analyze', { method: 'POST', body: JSON.stringify(data) }),
+  1031→};
+  1032→
+  1033→// ─────────────────────────────────────────
+  1034→// API de Modelos de Processo (Templates)
+  1035→// ─────────────────────────────────────────
+  1036→export interface TemplateRecord {
+  1037→  id: string;
+  1038→  title: string;
+  1039→  description: string | null;
+  1040→  area: string;
+  1041→  default_priority: string;
+  1042→  checklist_items: string;
+  1043→  is_active: boolean;
+  1044→  created_at: string;
+  1045→  updated_at: string;
+  1046→  created_by: {
+  1047→    id: string;
+  1048→    full_name: string;
+  1049→  };
+  1050→}
+  1051→
+  1052→export interface TemplateUseResult {
+  1053→  id: string;
+  1054→  process_number: string;
+  1055→  title: string;
+  1056→  description: string | null;
+  1057→  area: string;
+  1058→  status: string;
+  1059→  priority: string;
+  1060→  opened_at: string;
+  1061→  created_at: string;
+  1062→  client: { id: string; full_name: string };
+  1063→  deadlines_created: number;
+  1064→}
+  1065→
+  1066→export const templatesApi = {
+  1067→  list: (params?: string) =>
+  1068→    apiFetch<TemplateRecord[]>(`/templates${params ? `?${params}` : ''}`),
+  1069→  get: (id: string) =>
+  1070→    apiFetch<TemplateRecord>(`/templates/${id}`),
+  1071→  create: (data: {
+  1072→    title: string;
+  1073→    description?: string;
+  1074→    area: string;
+  1075→    default_priority?: string;
+  1076→    checklist_items?: Array<{ title: string; description?: string }>;
+  1077→  }) =>
+  1078→    apiFetch<TemplateRecord>('/templates', { method: 'POST', body: JSON.stringify(data) }),
+  1079→  update: (id: string, data: {
+  1080→    title?: string;
+  1081→    description?: string;
+  1082→    area?: string;
+  1083→    default_priority?: string;
+  1084→    checklist_items?: Array<{ title: string; description?: string }>;
+  1085→    is_active?: boolean;
+  1086→  }) =>
+  1087→    apiFetch<TemplateRecord>(`/templates/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  1088→  remove: (id: string) =>
+  1089→    apiFetch<{ id: string; deleted: boolean }>(`/templates/${id}`, { method: 'DELETE' }),
+  1090→  use: (id: string, data: { client_id: string; process_number: string }) =>
+  1091→    apiFetch<TemplateUseResult>(`/templates/${id}/use`, { method: 'POST', body: JSON.stringify(data) }),
+  1092→};
+  1093→
+  1094→// ─────────────────────────────────────────
+  1095→// API de Notas do Processo (Process Notes)
+  1096→// ─────────────────────────────────────────
+  1097→export interface ProcessNoteRecord {
+  1098→  id: string;
+  1099→  process_id: string;
+  1100→  content: string;
+  1101→  created_by: string;
+  1102→  created_by_name: string;
+  1103→  created_at: string;
+  1104→}
+  1105→
+  1106→export const processNotesApi = {
+  1107→  list: (processId: string) =>
+  1108→    apiFetch<ProcessNoteRecord[]>(`/processes/${processId}/notes`),
+  1109→  create: (processId: string, data: { content: string }) =>
+  1110→    apiFetch<ProcessNoteRecord>(`/processes/${processId}/notes`, { method: 'POST', body: JSON.stringify(data) }),
+  1111→};
+  1112→
