@@ -1347,7 +1347,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO users (id, firm_id, email, password_hash, full_name, role, is_active, email_verified) VALUES
   ('660e8400-e29b-41d4-a716-446655440001'::UUID,
    '550e8400-e29b-41d4-a716-446655440000'::UUID,
-   'admin@lexdoc.co.mz',
+   'graciochiziane@gmail.com',
    '$2a$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJptJ/op0lSsvqNu6GK',
    'Administrador LexDoc',
    'ADMIN',
