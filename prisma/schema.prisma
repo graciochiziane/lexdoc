@@ -1,15 +1,18 @@
-// ═══════════════════════════════════════════════════════════════
-// LEXDOC — Schema da Base de Dados
-// Plataforma SaaS de Gestão Documental Jurídica — Moçambique
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// LEXDOC — Schema para Supabase (PostgreSQL)
+// PARA ACTIVAR: renomear este ficheiro para schema.prisma e apagar o actual
+// Depois: DATABASE_URL=postgresql://postgres... no .env
+// E executar: bun run db:push
+// ═══════════════════════════════════════════════════════════════════════════
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Conexão directa para migrations
 }
 
 // ─────────────────────────────────────────
@@ -19,8 +22,8 @@ model Firm {
   id          String   @id @default(cuid())
   name        String
   slug        String   @unique
-  nif         String?  // NIF do escritório (dado sensível — PII)
-  oam_number  String?  // Número de registo na OAM
+  nif         String?
+  oam_number  String?
   is_active   Boolean  @default(true)
   plan        String   @default("STARTER")
   created_at  DateTime @default(now())
@@ -50,16 +53,14 @@ model User {
   password_hash     String
   full_name         String
   role              String    @default("CLIENT")
-  bi_number         String?   // BI — dado PII — armazenar com cuidado
+  bi_number         String?
   phone             String?
   is_active         Boolean   @default(true)
   email_verified    Boolean   @default(false)
   failed_login_count Int      @default(0)
   locked_until      DateTime?
-
-  // MFA — preparado para implementação futura
   mfa_enabled       Boolean   @default(false)
-  mfa_secret        String?   // Encriptado em repouso
+  mfa_secret        String?
 
   created_at        DateTime  @default(now())
   updated_at        DateTime  @updatedAt
@@ -88,8 +89,8 @@ model User {
 model RefreshToken {
   id          String   @id @default(cuid())
   user_id     String
-  token_hash  String   @unique  // Armazenamos o hash, nunca o token em texto limpo
-  device_info String?           // User-agent para auditoria
+  token_hash  String   @unique
+  device_info String?
   ip_address  String?
   expires_at  DateTime
   revoked_at  DateTime?
@@ -107,16 +108,16 @@ model RefreshToken {
 // ─────────────────────────────────────────
 model AuditLog {
   id           String      @id @default(cuid())
-  firm_id      String?     // Null para eventos de sistema (ex: tentativas de login falhadas)
-  user_id      String?     // Null se o utilizador não estava autenticado
-  action       String      // Ex: "LOGIN_SUCCESS", "LOGIN_FAILED"
-  entity_type  String      // Ex: "Document", "User", "LegalProcess"
-  entity_id    String?     // ID da entidade afectada
-  old_values   String?     // Estado anterior (JSON serializado) — para updates
-  new_values   String?     // Estado novo (JSON serializado) — para creates/updates
+  firm_id      String?
+  user_id      String?
+  action       String
+  entity_type  String
+  entity_id    String?
+  old_values   String?     @db.Text
+  new_values   String?     @db.Text
   ip_address   String?
   user_agent   String?
-  metadata     String?     // Dados adicionais contextuais (JSON serializado)
+  metadata     String?     @db.Text
   created_at   DateTime    @default(now())
 
   firm         Firm?       @relation(fields: [firm_id], references: [id])
@@ -135,16 +136,16 @@ model AuditLog {
 model Client {
   id           String   @id @default(cuid())
   firm_id      String
-  user_id      String?  // Se o cliente tiver conta na plataforma
+  user_id      String?
   full_name    String
   email        String?
   phone        String?
-  bi_number    String?  // PII — protegido
-  nif          String?  // PII — protegido
+  bi_number    String?
+  nif          String?
   address      String?
   client_type  String   @default("INDIVIDUAL")
   is_active    Boolean  @default(true)
-  notes        String?
+  notes        String?  @db.Text
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
@@ -162,15 +163,15 @@ model LegalProcess {
   id              String         @id @default(cuid())
   firm_id         String
   client_id       String
-  process_number  String         // Número do processo (ex: 123/2026)
+  process_number  String
   title           String
-  description     String?
-  area            String         // Área jurídica
+  description     String?        @db.Text
+  area            String
   status          String         @default("ACTIVE")
   priority        String         @default("MEDIUM")
-  court           String?        // Tribunal competente
-  judge           String?        // Juiz responsável
-  opposing_party  String?        // Parte contrária
+  court           String?
+  judge           String?
+  opposing_party  String?
   opened_at       DateTime       @default(now())
   closed_at       DateTime?
   created_at      DateTime       @default(now())
@@ -190,13 +191,13 @@ model LegalProcess {
 }
 
 // ─────────────────────────────────────────
-// ATRIBUIÇÃO DE PROCESSOS A ADVOGADOS
+// ATRIBUIÇÃO DE PROCESSOS
 // ─────────────────────────────────────────
 model ProcessAssignment {
   id          String       @id @default(cuid())
   process_id  String
   user_id     String
-  role        String       // Ex: "Lead", "Assistant", "Reviewer"
+  role        String
   assigned_at DateTime     @default(now())
 
   process     LegalProcess @relation(fields: [process_id], references: [id], onDelete: Cascade)
@@ -216,17 +217,17 @@ model Document {
   created_by_id   String
   updated_by_id   String?
   title           String
-  description     String?
-  file_key        String          // Chave do ficheiro
-  file_name       String          // Nome original do ficheiro
-  file_size       Int             // Tamanho em bytes
-  mime_type       String          // Ex: application/pdf
+  description     String?         @db.Text
+  file_key        String
+  file_name       String
+  file_size       Int
+  mime_type       String
   version         Int             @default(1)
-  parent_id       String?         // Para versões — aponta para documento pai
+  parent_id       String?
   status          String          @default("DRAFT")
   is_confidential Boolean         @default(false)
-  tags            String          // JSON serializado de array
-  ai_summary      String?         // Resumo gerado por IA
+  tags            String?         @db.Text
+  ai_summary      String?         @db.Text
   ai_processed_at DateTime?
   created_at      DateTime        @default(now())
   updated_at      DateTime        @updatedAt
@@ -250,12 +251,12 @@ model Deadline {
   id           String       @id @default(cuid())
   process_id   String
   title        String
-  description  String?
+  description  String?      @db.Text
   due_date     DateTime
-  reminder_at  DateTime?    // Data de lembrete
+  reminder_at  DateTime?
   status       String       @default("PENDING")
   source       String       @default("MANUAL")
-  ai_extracted Boolean      @default(false)  // Extraído pela IA?
+  ai_extracted Boolean      @default(false)
   created_at   DateTime     @default(now())
   updated_at   DateTime     @updatedAt
 
@@ -272,12 +273,12 @@ model Deadline {
 model Note {
   id            String    @id @default(cuid())
   firm_id       String
-  entity_type   String    // "process" | "client" | "deadline" | "general"
+  entity_type   String
   entity_id     String?
-  content       String
+  content       String    @db.Text
   is_pinned     Boolean   @default(false)
   is_completed  Boolean   @default(false)
-  priority      String    @default("low")    // "low" | "medium" | "high" | "urgent"
+  priority      String    @default("low")
   due_date      DateTime?
   created_by_id String
   created_at    DateTime  @default(now())
@@ -299,10 +300,10 @@ model KnowledgeArticle {
   id            String   @id @default(cuid())
   firm_id       String
   title         String
-  content       String   // Rich text content
+  content       String   @db.Text
   category      String   @default("OUTRO")
-  source        String?  // Legal reference (e.g., "Lei nº 5/2019")
-  tags          String   // JSON array string
+  source        String?
+  tags          String?  @db.Text
   is_pinned     Boolean  @default(false)
   view_count    Int      @default(0)
   created_by_id String
@@ -319,16 +320,16 @@ model KnowledgeArticle {
 }
 
 // ─────────────────────────────────────────
-// MODELOS DE PROCESSO (TEMPLATES)
+// MODELOS DE PROCESSO
 // ─────────────────────────────────────────
 model ProcessTemplate {
   id              String   @id @default(cuid())
   firm_id         String
   title           String
-  description     String?
-  area            String   // Área jurídica
+  description     String?  @db.Text
+  area            String
   default_priority String  @default("MEDIUM")
-  checklist_items String   // JSON array of {title, description}
+  checklist_items  String   @db.Text
   is_active       Boolean  @default(true)
   created_by_id   String
   created_at      DateTime @default(now())
@@ -343,12 +344,12 @@ model ProcessTemplate {
 }
 
 // ─────────────────────────────────────────
-// NOTAS DO PROCESSO (PROCESS NOTES)
+// NOTAS DO PROCESSO
 // ─────────────────────────────────────────
 model ProcessNote {
   id          String   @id @default(cuid())
   process_id  String
-  content     String
+  content     String   @db.Text
   created_by  String
   created_at  DateTime @default(now())
 
@@ -359,13 +360,13 @@ model ProcessNote {
 }
 
 // ─────────────────────────────────────────
-// CONVITES DE UTILIZADORES
+// CONVITES
 // ─────────────────────────────────────────
 model Invitation {
   id          String     @id @default(cuid())
   firm_id     String
   email       String
-  role        String     // UserRole
+  role        String
   token_hash  String     @unique
   expires_at  DateTime
   accepted_at DateTime?
@@ -378,15 +379,15 @@ model Invitation {
 }
 
 // ─────────────────────────────────────────
-// CONVERSAS IA (LEXASSISTENT)
+// CONVERSAS IA
 // ─────────────────────────────────────────
 model AIConversation {
-  id          String        @id @default(cuid())
-  firm_id     String
-  user_id     String
-  title       String        @default("Nova Conversa")
-  context_type String?      // "process" | "client" | "document" | null
-  context_id   String?      // ID da entidade relacionada
+  id           String        @id @default(cuid())
+  firm_id      String
+  user_id      String
+  title        String        @default("Nova Conversa")
+  context_type String?
+  context_id   String?
   is_active   Boolean       @default(true)
   created_at  DateTime      @default(now())
   updated_at  DateTime      @updatedAt
@@ -408,11 +409,11 @@ model AIConversation {
 model AIMessage {
   id              String          @id @default(cuid())
   conversation_id String
-  role            String          // "user" | "assistant" | "system"
-  content         String
-  sources         String?         // JSON array de fontes/citações
-  knowledge_ids   String?         // JSON array de IDs de artigos da base de conhecimento usados
-  metadata        String?         // JSON com dados adicionais (tokens, tempo, etc.)
+  role            String
+  content         String          @db.Text
+  sources         String?         @db.Text
+  knowledge_ids   String?         @db.Text
+  metadata        String?         @db.Text
   created_at      DateTime        @default(now())
 
   conversation    AIConversation  @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
@@ -423,19 +424,19 @@ model AIMessage {
 }
 
 // ─────────────────────────────────────────
-// GERAÇÕES IA (DOCUMENTOS GERADOS)
+// GERAÇÕES IA
 // ─────────────────────────────────────────
 model AIGeneration {
   id              String   @id @default(cuid())
   firm_id         String
   user_id         String
-  generation_type String   // "document" | "contract" | "petition" | "legal_opinion" | "summary"
+  generation_type String
   title           String
-  prompt          String   // O prompt usado
-  result          String   // O documento gerado
-  template_id     String?  // Se gerado a partir de um template
-  process_id      String?  // Se associado a um processo
-  metadata        String?  // JSON com dados adicionais
+  prompt          String   @db.Text
+  result          String   @db.Text
+  template_id     String?
+  process_id      String?
+  metadata        String?  @db.Text
   created_at      DateTime @default(now())
 
   firm            Firm     @relation(fields: [firm_id], references: [id], onDelete: Cascade)
