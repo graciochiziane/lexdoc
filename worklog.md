@@ -1260,3 +1260,38 @@ Stage Summary:
 - Document sections: Visao Geral, Stack Tecnologico, Arquitectura, BD Schema (17 models), API Endpoints (48+), Modulos de Biblioteca (13), Componentes Frontend (79+), Sistema IA LexAssistent v2.0, Autenticacao e Seguranca, Estado do Cliente, Layout e Navegacao, Configuracao e Deploy
 - QA: All 9 critical checks passed (metadata, fonts, no blank pages, no overflow, table centering, full-bleed cover)
 - Cron job created for ongoing development review (every 15 min)
+
+---
+Task ID: sql-v3-rewrite
+Agent: Main Orchestrator
+Task: Rewrite Supabase SQL v3 based on Supabase AI analysis feedback
+
+Work Log:
+- Analisou feedback completo da Supabase AI sobre o SQL v2 (7 pontos críticos identificados)
+- Leu schema Prisma actual (17 models) e auth.ts (JWT payload: sub, email, role, firm_id)
+- Identificou todas as tabelas sem firm_id: refresh_tokens, process_assignments, deadlines, process_notes, ai_messages
+- Reescreveu SQL completo v3 em supabase-setup.sql (~900 linhas) corrigindo todos os pontos
+
+Correcções implementadas:
+1. UUID nativo em vez de TEXT para todos os IDs (resolves gen_random_uuid() type mismatch)
+2. RLS explícito por tabela (sem loop genérico que falhava em tabelas sem firm_id)
+3. firm_id denormalizado em 5 tabelas (refresh_tokens, process_assignments, deadlines, process_notes, ai_messages)
+4. FORCE ROW LEVEL SECURITY activado em todas as 17 tabelas
+5. 9 triggers de integridade cross-firm (impedem referência entre firms)
+6. search_path fixo em todas as funções SECURITY DEFINER
+7. Triggers updated_at explícitos (não loop dinâmico)
+8. Permissões diferenciadas por role (ADMIN/LAWYER/ASSISTANT/CLIENT) com tabela de permissões
+9. CHECK constraints em enums (status, role, priority, etc.)
+10. JSONB em vez de TEXT para arrays/objetos
+11. Índices parciais optimizados
+12. Sem REVOKE ALL ON SCHEMA public (compatível com Supabase)
+13. Schema lexdoc_auth separado para funções RLS
+14. Cleanup agendado com pg_cron documentado
+15. is_confidential protegido por RLS (só ADMIN/LAWYER)
+16. Verificação final com queries de validação
+
+Stage Summary:
+- SQL v3 gravado em /home/z/my-project/supabase-setup.sql
+- 17 tabelas, 17 RLS enable + force, ~50 políticas RLS, 9 triggers cross-firm, 10 updated_at triggers
+- Pronto para executar no Supabase SQL Editor
+- Nota: Prisma schema precisa ser actualizado (cuid() → uuid()) ao migrar para Supabase
