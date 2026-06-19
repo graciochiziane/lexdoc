@@ -1,0 +1,642 @@
+     1→// ═══════════════════════════════════════════════════════════════
+     2→// LEXDOC — Galeria de Modelos de Processo (Templates)
+     3→// CRUD com galeria de cards, filtro por área, usar modelo
+     4→// ═══════════════════════════════════════════════════════════════
+     5→
+     6→'use client';
+     7→
+     8→import { useState, useCallback } from 'react';
+     9→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+    10→import { toast } from 'sonner';
+    11→import { motion, AnimatePresence } from 'framer-motion';
+    12→import {
+    13→  Plus,
+    14→  Search,
+    15→  FileCode2,
+    16→  Loader2,
+    17→  Pencil,
+    18→  Trash2,
+    19→  Copy,
+    20→  CheckSquare,
+    21→  Sparkles,
+    22→  ListChecks,
+    23→  X,
+    24→} from 'lucide-react';
+    25→import { Card, CardContent } from '@/components/ui/card';
+    26→import { Button } from '@/components/ui/button';
+    27→import { Input } from '@/components/ui/input';
+    28→import { Badge } from '@/components/ui/badge';
+    29→import { Label } from '@/components/ui/label';
+    30→import { Skeleton } from '@/components/ui/skeleton';
+    31→import { Textarea } from '@/components/ui/textarea';
+    32→import { Separator } from '@/components/ui/separator';
+    33→import {
+    34→  Dialog,
+    35→  DialogContent,
+    36→  DialogDescription,
+    37→  DialogFooter,
+    38→  DialogHeader,
+    39→  DialogTitle,
+    40→} from '@/components/ui/dialog';
+    41→import {
+    42→  AlertDialog,
+    43→  AlertDialogAction,
+    44→  AlertDialogCancel,
+    45→  AlertDialogContent,
+    46→  AlertDialogDescription,
+    47→  AlertDialogFooter,
+    48→  AlertDialogHeader,
+    49→  AlertDialogTitle,
+    50→} from '@/components/ui/alert-dialog';
+    51→import {
+    52→  Select,
+    53→  SelectContent,
+    54→  SelectItem,
+    55→  SelectTrigger,
+    56→  SelectValue,
+    57→} from '@/components/ui/select';
+    58→import { templatesApi, clientsApi, type TemplateRecord, type ClientRecord } from '@/lib/api-client';
+    59→import { format } from 'date-fns';
+    60→import { pt } from 'date-fns/locale';
+    61→
+    62→// ─────────────────────────────────────────
+    63→// Constants
+    64→// ─────────────────────────────────────────
+    65→const AREA_LABELS: Record<string, string> = {
+    66→  CIVIL: 'Civil',
+    67→  PENAL: 'Penal',
+    68→  COMERCIAL: 'Comercial',
+    69→  TRABALHO: 'Trabalho',
+    70→  FAMILIA: 'Família',
+    71→  FISCAL: 'Fiscal',
+    72→  ADMINISTRATIVO: 'Administrativo',
+    73→  CONSTITUCIONAL: 'Constitucional',
+    74→  OUTRO: 'Outro',
+    75→};
+    76→
+    77→const AREA_COLORS: Record<string, string> = {
+    78→  CIVIL: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200',
+    79→  PENAL: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-red-200',
+    80→  COMERCIAL: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200',
+    81→  TRABALHO: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-400 border-cyan-200',
+    82→  FAMILIA: 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-400 border-pink-200',
+    83→  FISCAL: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 border-orange-200',
+    84→  ADMINISTRATIVO: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200',
+    85→  CONSTITUCIONAL: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 border-purple-200',
+    86→  OUTRO: 'bg-muted text-muted-foreground border-border',
+    87→};
+    88→
+    89→const PRIORITY_LABELS: Record<string, string> = {
+    90→  LOW: 'Baixa',
+    91→  MEDIUM: 'Média',
+    92→  HIGH: 'Alta',
+    93→  URGENT: 'Urgente',
+    94→};
+    95→
+    96→const AREAS = Object.keys(AREA_LABELS);
+    97→const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+    98→
+    99→const EMPTY_TEMPLATE_FORM = {
+   100→  title: '',
+   101→  description: '',
+   102→  area: 'CIVIL',
+   103→  default_priority: 'MEDIUM',
+   104→  checklist_items: [{ title: '', description: '' }],
+   105→};
+   106→
+   107→// ─────────────────────────────────────────
+   108→// Component
+   109→// ─────────────────────────────────────────
+   110→export function TemplatesView() {
+   111→  const queryClient = useQueryClient();
+   112→  const [search, setSearch] = useState('');
+   113→  const [areaFilter, setAreaFilter] = useState('all');
+   114→  const [createOpen, setCreateOpen] = useState(false);
+   115→  const [editOpen, setEditOpen] = useState(false);
+   116→  const [useOpen, setUseOpen] = useState(false);
+   117→  const [deleteOpen, setDeleteOpen] = useState(false);
+   118→  const [selectedTemplate, setSelectedTemplate] = useState<TemplateRecord | null>(null);
+   119→  const [createForm, setCreateForm] = useState(EMPTY_TEMPLATE_FORM);
+   120→  const [editForm, setEditForm] = useState(EMPTY_TEMPLATE_FORM);
+   121→  const [useForm, setUseForm] = useState({ client_id: '', process_number: '' });
+   122→
+   123→  // ── Query: templates ──
+   124→  const params = new URLSearchParams();
+   125→  if (search) params.set('search', search);
+   126→  if (areaFilter !== 'all') params.set('area', areaFilter);
+   127→
+   128→  const { data, isLoading } = useQuery({
+   129→    queryKey: ['templates', search, areaFilter],
+   130→    queryFn: () => templatesApi.list(params.toString()),
+   131→    staleTime: 30 * 1000,
+   132→  });
+   133→
+   134→  const templates: TemplateRecord[] = data?.data ?? [];
+   135→
+   136→  // ── Query: clients for use form ──
+   137→  const { data: clientsData } = useQuery({
+   138→    queryKey: ['clients', 'template-use'],
+   139→    queryFn: () => clientsApi.list('limit=100'),
+   140→    staleTime: 60 * 1000,
+   141→  });
+   142→  const clientList: ClientRecord[] = clientsData?.data ?? [];
+   143→
+   144→  // ── Mutation: create ──
+   145→  const createMutation = useMutation({
+   146→    mutationFn: templatesApi.create,
+   147→    onSuccess: () => {
+   148→      toast.success('Modelo criado com sucesso!');
+   149→      queryClient.invalidateQueries({ queryKey: ['templates'] });
+   150→      setCreateOpen(false);
+   151→      setCreateForm(EMPTY_TEMPLATE_FORM);
+   152→    },
+   153→    onError: () => toast.error('Erro ao criar modelo.'),
+   154→  });
+   155→
+   156→  // ── Mutation: update ──
+   157→  const updateMutation = useMutation({
+   158→    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof templatesApi.update>[1] }) =>
+   159→      templatesApi.update(id, data),
+   160→    onSuccess: () => {
+   161→      toast.success('Modelo actualizado!');
+   162→      queryClient.invalidateQueries({ queryKey: ['templates'] });
+   163→      setEditOpen(false);
+   164→      setSelectedTemplate(null);
+   165→    },
+   166→    onError: () => toast.error('Erro ao actualizar modelo.'),
+   167→  });
+   168→
+   169→  // ── Mutation: delete ──
+   170→  const deleteMutation = useMutation({
+   171→    mutationFn: templatesApi.remove,
+   172→    onSuccess: () => {
+   173→      toast.success('Modelo removido.');
+   174→      queryClient.invalidateQueries({ queryKey: ['templates'] });
+   175→      setDeleteOpen(false);
+   176→      setSelectedTemplate(null);
+   177→    },
+   178→    onError: () => toast.error('Erro ao remover modelo.'),
+   179→  });
+   180→
+   181→  // ── Mutation: use template ──
+   182→  const useMutation2 = useMutation({
+   183→    mutationFn: ({ id, data }: { id: string; data: { client_id: string; process_number: string } }) =>
+   184→      templatesApi.use(id, data),
+   185→    onSuccess: () => {
+   186→      toast.success('Processo criado a partir do modelo!');
+   187→      queryClient.invalidateQueries({ queryKey: ['processes'] });
+   188→      setUseOpen(false);
+   189→      setUseForm({ client_id: '', process_number: '' });
+   190→      setSelectedTemplate(null);
+   191→    },
+   192→    onError: () => toast.error('Erro ao criar processo.'),
+   193→  });
+   194→
+   195→  // ── Checklist helpers ──
+   196→  const addChecklistItem = (setter: typeof setCreateForm, form: typeof createForm) => {
+   197→    setter({ ...form, checklist_items: [...form.checklist_items, { title: '', description: '' }] });
+   198→  };
+   199→
+   200→  const removeChecklistItem = (setter: typeof setCreateForm, form: typeof createForm, index: number) => {
+   201→    setter({ ...form, checklist_items: form.checklist_items.filter((_, i) => i !== index) });
+   202→  };
+   203→
+   204→  const updateChecklistItem = (setter: typeof setCreateForm, form: typeof createForm, index: number, field: 'title' | 'description', value: string) => {
+   205→    const updated = [...form.checklist_items];
+   206→    updated[index] = { ...updated[index], [field]: value };
+   207→    setter({ ...form, checklist_items: updated });
+   208→  };
+   209→
+   210→  // ── Handlers ──
+   211→  const handleCreate = useCallback(() => {
+   212→    if (!createForm.title) { toast.error('Título é obrigatório.'); return; }
+   213→    const items = createForm.checklist_items.filter((i) => i.title.trim());
+   214→    createMutation.mutate({
+   215→      title: createForm.title,
+   216→      description: createForm.description || undefined,
+   217→      area: createForm.area,
+   218→      default_priority: createForm.default_priority,
+   219→      checklist_items: items,
+   220→    });
+   221→  }, [createForm, createMutation]);
+   222→
+   223→  const handleEditOpen = useCallback((template: TemplateRecord) => {
+   224→    setSelectedTemplate(template);
+   225→    let items: Array<{ title: string; description: string }> = [];
+   226→    try { items = JSON.parse(template.checklist_items); } catch { items = []; }
+   227→    setEditForm({
+   228→      title: template.title,
+   229→      description: template.description || '',
+   230→      area: template.area,
+   231→      default_priority: template.default_priority,
+   232→      checklist_items: items.length > 0 ? items : [{ title: '', description: '' }],
+   233→    });
+   234→    setEditOpen(true);
+   235→  }, []);
+   236→
+   237→  const handleEdit = useCallback(() => {
+   238→    if (!selectedTemplate || !editForm.title) return;
+   239→    const items = editForm.checklist_items.filter((i) => i.title.trim());
+   240→    updateMutation.mutate({
+   241→      id: selectedTemplate.id,
+   242→      data: {
+   243→        title: editForm.title,
+   244→        description: editForm.description || undefined,
+   245→        area: editForm.area,
+   246→        default_priority: editForm.default_priority,
+   247→        checklist_items: items,
+   248→      },
+   249→    });
+   250→  }, [selectedTemplate, editForm, updateMutation]);
+   251→
+   252→  const handleUseOpen = useCallback((template: TemplateRecord) => {
+   253→    setSelectedTemplate(template);
+   254→    setUseForm({ client_id: '', process_number: '' });
+   255→    setUseOpen(true);
+   256→  }, []);
+   257→
+   258→  const handleUse = useCallback(() => {
+   259→    if (!selectedTemplate || !useForm.client_id || !useForm.process_number) {
+   260→      toast.error('Preencha todos os campos.');
+   261→      return;
+   262→    }
+   263→    useMutation2.mutate({
+   264→      id: selectedTemplate.id,
+   265→      data: useForm,
+   266→    });
+   267→  }, [selectedTemplate, useForm, useMutation2]);
+   268→
+   269→  // Parse checklist count helper
+   270→  const getChecklistCount = (items: string): number => {
+   271→    try { return JSON.parse(items).filter((i: { title: string }) => i.title.trim()).length; }
+   272→    catch { return 0; }
+   273→  };
+   274→
+   275→  return (
+   276→    <div className="space-y-6">
+   277→      {/* Header */}
+   278→      <div className="flex items-center justify-between">
+   279→        <div>
+   280→          <h2 className="text-2xl font-bold tracking-tight">Modelos de Processo</h2>
+   281→          <p className="text-sm text-muted-foreground mt-1">
+   282→            {templates.length} modelo{templates.length !== 1 ? 's' : ''} disponível{templates.length !== 1 ? 'is' : ''}
+   283→          </p>
+   284→        </div>
+   285→        <Button
+   286→          onClick={() => { setCreateForm(EMPTY_TEMPLATE_FORM); setCreateOpen(true); }}
+   287→          className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md active:scale-[0.98] transition-all"
+   288→        >
+   289→          <Plus className="size-4" />
+   290→          Novo Modelo
+   291→        </Button>
+   292→      </div>
+   293→
+   294→      {/* Filters */}
+   295→      <div className="flex flex-col sm:flex-row gap-3">
+   296→        <div className="relative flex-1 max-w-sm">
+   297→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   298→          <Input
+   299→            placeholder="Pesquisar modelo..."
+   300→            value={search}
+   301→            onChange={(e) => setSearch(e.target.value)}
+   302→            className="pl-9"
+   303→          />
+   304→        </div>
+   305→        <Select value={areaFilter} onValueChange={setAreaFilter}>
+   306→          <SelectTrigger className="w-[170px] h-9 text-xs">
+   307→            <SelectValue placeholder="Todas as áreas" />
+   308→          </SelectTrigger>
+   309→          <SelectContent>
+   310→            <SelectItem value="all">Todas as áreas</SelectItem>
+   311→            {AREAS.map((area) => (
+   312→              <SelectItem key={area} value={area}>{AREA_LABELS[area]}</SelectItem>
+   313→            ))}
+   314→          </SelectContent>
+   315→        </Select>
+   316→      </div>
+   317→
+   318→      {/* Template Grid */}
+   319→      {isLoading ? (
+   320→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   321→          {Array.from({ length: 6 }).map((_, i) => (
+   322→            <Card key={i} className="rounded-xl"><CardContent className="p-5 space-y-3">
+   323→              <Skeleton className="h-5 w-3/4" />
+   324→              <Skeleton className="h-4 w-1/2" />
+   325→              <Skeleton className="h-16 w-full" />
+   326→            </CardContent></Card>
+   327→          ))}
+   328→        </div>
+   329→      ) : templates.length === 0 ? (
+   330→        <motion.div
+   331→          initial={{ opacity: 0, y: 12 }}
+   332→          animate={{ opacity: 1, y: 0 }}
+   333→          className="flex flex-col items-center justify-center py-16 text-center"
+   334→        >
+   335→          <motion.div
+   336→            animate={{ y: [0, -6, 0] }}
+   337→            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+   338→            className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-950/60 dark:to-emerald-900/30 flex items-center justify-center mb-4"
+   339→          >
+   340→            <FileCode2 className="size-10 text-emerald-500" />
+   341→          </motion.div>
+   342→          <p className="text-sm font-medium">Nenhum modelo encontrado</p>
+   343→          <p className="text-xs text-muted-foreground mt-1">Crie o seu primeiro modelo de processo.</p>
+   344→        </motion.div>
+   345→      ) : (
+   346→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   347→          <AnimatePresence>
+   348→            {templates.map((template, idx) => {
+   349→              const count = getChecklistCount(template.checklist_items);
+   350→              return (
+   351→                <motion.div
+   352→                  key={template.id}
+   353→                  initial={{ opacity: 0, y: 12 }}
+   354→                  animate={{ opacity: 1, y: 0 }}
+   355→                  transition={{ delay: idx * 0.04 }}
+   356→                  whileHover={{ scale: 1.01, y: -2 }}
+   357→                  className="group"
+   358→                >
+   359→                  <Card className="hover:shadow-lg transition-all duration-200 rounded-xl overflow-hidden">
+   360→                    <div className="bg-gradient-to-r from-emerald-600 to-teal-500 h-1.5" />
+   361→                    <CardContent className="p-5 space-y-3">
+   362→                      <div className="flex items-start justify-between gap-2">
+   363→                        <div className="min-w-0 flex-1">
+   364→                          <h3 className="font-semibold text-sm truncate">{template.title}</h3>
+   365→                          <p className="text-xs text-muted-foreground mt-0.5">
+   366→                            {template.created_by.full_name}
+   367→                          </p>
+   368→                        </div>
+   369→                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+   370→                          <Button variant="ghost" size="icon" className="size-7" onClick={() => handleEditOpen(template)}>
+   371→                            <Pencil className="size-3" />
+   372→                          </Button>
+   373→                          <Button variant="ghost" size="icon" className="size-7 text-red-500 hover:text-red-600" onClick={() => { setSelectedTemplate(template); setDeleteOpen(true); }}>
+   374→                            <Trash2 className="size-3" />
+   375→                          </Button>
+   376→                        </div>
+   377→                      </div>
+   378→
+   379→                      {template.description && (
+   380→                        <p className="text-xs text-muted-foreground line-clamp-2">{template.description}</p>
+   381→                      )}
+   382→
+   383→                      <div className="flex flex-wrap gap-1.5">
+   384→                        <Badge variant="outline" className={`text-[10px] rounded-full ${AREA_COLORS[template.area] ?? ''}`}>
+   385→                          {AREA_LABELS[template.area] ?? template.area}
+   386→                        </Badge>
+   387→                        <Badge variant="outline" className="text-[10px] rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200">
+   388→                          {PRIORITY_LABELS[template.default_priority] ?? template.default_priority}
+   389→                        </Badge>
+   390→                        {count > 0 && (
+   391→                          <Badge variant="outline" className="text-[10px] rounded-full bg-cyan-50 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-400 border-cyan-200">
+   392→                            <ListChecks className="size-2.5 mr-0.5" />
+   393→                            {count} {count === 1 ? 'item' : 'itens'}
+   394→                          </Badge>
+   395→                        )}
+   396→                      </div>
+   397→
+   398→                      <div className="pt-2">
+   399→                        <Button
+   400→                          size="sm"
+   401→                          className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-xs active:scale-[0.98]"
+   402→                          onClick={() => handleUseOpen(template)}
+   403→                        >
+   404→                          <Copy className="size-3 mr-1.5" />
+   405→                          Usar Modelo
+   406→                        </Button>
+   407→                      </div>
+   408→
+   409→                      <p className="text-[10px] text-muted-foreground/60 text-right">
+   410→                        {format(new Date(template.created_at), "dd MMM yyyy", { locale: pt })}
+   411→                      </p>
+   412→                    </CardContent>
+   413→                  </Card>
+   414→                </motion.div>
+   415→              );
+   416→            })}
+   417→          </AnimatePresence>
+   418→        </div>
+   419→      )}
+   420→
+   421→      {/* ── Dialog: Create Template ── */}
+   422→      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+   423→        <DialogContent className="sm:max-w-lg max-w-[95vw] max-h-[90vh] overflow-y-auto">
+   424→          <div className="bg-gradient-to-r from-emerald-600 to-teal-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+   425→            <DialogTitle className="flex items-center gap-2 text-white">
+   426→              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+   427→                <FileCode2 className="size-5" />
+   428→              </div>
+   429→              <div>
+   430→                <p className="text-lg">Novo Modelo de Processo</p>
+   431→                <DialogDescription className="text-white/80 mt-0.5">Crie um modelo reutilizável.</DialogDescription>
+   432→              </div>
+   433→            </DialogTitle>
+   434→          </div>
+   435→          <div className="grid gap-4 py-2">
+   436→            <div className="grid gap-2">
+   437→              <Label>Título *</Label>
+   438→              <Input placeholder="Nome do modelo" value={createForm.title} onChange={(e) => setCreateForm((f) => ({ ...f, title: e.target.value }))} />
+   439→            </div>
+   440→            <div className="grid gap-2">
+   441→              <Label>Descrição</Label>
+   442→              <Textarea placeholder="Descrição do modelo..." value={createForm.description} onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))} rows={2} />
+   443→            </div>
+   444→            <div className="grid grid-cols-2 gap-4">
+   445→              <div className="grid gap-2">
+   446→                <Label>Área Jurídica</Label>
+   447→                <Select value={createForm.area} onValueChange={(v) => setCreateForm((f) => ({ ...f, area: v }))}>
+   448→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   449→                  <SelectContent>{AREAS.map((a) => <SelectItem key={a} value={a}>{AREA_LABELS[a]}</SelectItem>)}</SelectContent>
+   450→                </Select>
+   451→              </div>
+   452→              <div className="grid gap-2">
+   453→                <Label>Prioridade Padrão</Label>
+   454→                <Select value={createForm.default_priority} onValueChange={(v) => setCreateForm((f) => ({ ...f, default_priority: v }))}>
+   455→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   456→                  <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>)}</SelectContent>
+   457→                </Select>
+   458→              </div>
+   459→            </div>
+   460→
+   461→            <Separator />
+   462→            <div>
+   463→              <div className="flex items-center justify-between mb-3">
+   464→                <Label className="text-sm font-medium flex items-center gap-1.5">
+   465→                  <CheckSquare className="size-3.5" /> Lista de Verificação
+   466→                </Label>
+   467→                <Button variant="outline" size="sm" className="text-xs" onClick={() => addChecklistItem(setCreateForm, createForm)}>
+   468→                  <Plus className="size-3 mr-1" /> Adicionar
+   469→                </Button>
+   470→              </div>
+   471→              <div className="space-y-2">
+   472→                {createForm.checklist_items.map((item, idx) => (
+   473→                  <div key={idx} className="flex items-start gap-2 p-2 rounded-lg bg-muted/50">
+   474→                    <div className="flex-1 space-y-1.5">
+   475→                      <Input placeholder="Título do item" className="h-8 text-xs" value={item.title} onChange={(e) => updateChecklistItem(setCreateForm, createForm, idx, 'title', e.target.value)} />
+   476→                      <Input placeholder="Descrição (opcional)" className="h-7 text-[11px]" value={item.description} onChange={(e) => updateChecklistItem(setCreateForm, createForm, idx, 'description', e.target.value)} />
+   477→                    </div>
+   478→                    <Button variant="ghost" size="icon" className="size-7 text-red-500 shrink-0 mt-1" onClick={() => removeChecklistItem(setCreateForm, createForm, idx)}>
+   479→                      <X className="size-3.5" />
+   480→                    </Button>
+   481→                  </div>
+   482→                ))}
+   483→              </div>
+   484→            </div>
+   485→          </div>
+   486→          <DialogFooter>
+   487→            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
+   488→            <Button onClick={handleCreate} disabled={createMutation.isPending} className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white">
+   489→              {createMutation.isPending && <Loader2 className="size-4 animate-spin" />}
+   490→              Criar Modelo
+   491→            </Button>
+   492→          </DialogFooter>
+   493→        </DialogContent>
+   494→      </Dialog>
+   495→
+   496→      {/* ── Dialog: Edit Template ── */}
+   497→      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+   498→        <DialogContent className="sm:max-w-lg max-w-[95vw] max-h-[90vh] overflow-y-auto">
+   499→          <div className="bg-gradient-to-r from-amber-500 to-orange-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+   500→            <DialogTitle className="flex items-center gap-2 text-white">
+   501→              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+   502→                <Pencil className="size-5" />
+   503→              </div>
+   504→              <div>
+   505→                <p className="text-lg">Editar Modelo</p>
+   506→                <DialogDescription className="text-white/80 mt-0.5">Modifique o modelo de processo.</DialogDescription>
+   507→              </div>
+   508→            </DialogTitle>
+   509→          </div>
+   510→          <div className="grid gap-4 py-2">
+   511→            <div className="grid gap-2">
+   512→              <Label>Título *</Label>
+   513→              <Input value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} />
+   514→            </div>
+   515→            <div className="grid gap-2">
+   516→              <Label>Descrição</Label>
+   517→              <Textarea value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} rows={2} />
+   518→            </div>
+   519→            <div className="grid grid-cols-2 gap-4">
+   520→              <div className="grid gap-2">
+   521→                <Label>Área</Label>
+   522→                <Select value={editForm.area} onValueChange={(v) => setEditForm((f) => ({ ...f, area: v }))}>
+   523→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   524→                  <SelectContent>{AREAS.map((a) => <SelectItem key={a} value={a}>{AREA_LABELS[a]}</SelectItem>)}</SelectContent>
+   525→                </Select>
+   526→              </div>
+   527→              <div className="grid gap-2">
+   528→                <Label>Prioridade</Label>
+   529→                <Select value={editForm.default_priority} onValueChange={(v) => setEditForm((f) => ({ ...f, default_priority: v }))}>
+   530→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   531→                  <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>)}</SelectContent>
+   532→                </Select>
+   533→              </div>
+   534→            </div>
+   535→            <Separator />
+   536→            <div>
+   537→              <div className="flex items-center justify-between mb-3">
+   538→                <Label className="text-sm font-medium flex items-center gap-1.5"><CheckSquare className="size-3.5" /> Lista de Verificação</Label>
+   539→                <Button variant="outline" size="sm" className="text-xs" onClick={() => addChecklistItem(setEditForm, editForm)}>
+   540→                  <Plus className="size-3 mr-1" /> Adicionar
+   541→                </Button>
+   542→              </div>
+   543→              <div className="space-y-2">
+   544→                {editForm.checklist_items.map((item, idx) => (
+   545→                  <div key={idx} className="flex items-start gap-2 p-2 rounded-lg bg-muted/50">
+   546→                    <div className="flex-1 space-y-1.5">
+   547→                      <Input placeholder="Título do item" className="h-8 text-xs" value={item.title} onChange={(e) => updateChecklistItem(setEditForm, editForm, idx, 'title', e.target.value)} />
+   548→                      <Input placeholder="Descrição (opcional)" className="h-7 text-[11px]" value={item.description} onChange={(e) => updateChecklistItem(setEditForm, editForm, idx, 'description', e.target.value)} />
+   549→                    </div>
+   550→                    <Button variant="ghost" size="icon" className="size-7 text-red-500 shrink-0 mt-1" onClick={() => removeChecklistItem(setEditForm, editForm, idx)}>
+   551→                      <X className="size-3.5" />
+   552→                    </Button>
+   553→                  </div>
+   554→                ))}
+   555→              </div>
+   556→            </div>
+   557→          </div>
+   558→          <DialogFooter>
+   559→            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
+   560→            <Button onClick={handleEdit} disabled={updateMutation.isPending} className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+   561→              {updateMutation.isPending && <Loader2 className="size-4 animate-spin" />}
+   562→              Guardar
+   563→            </Button>
+   564→          </DialogFooter>
+   565→        </DialogContent>
+   566→      </Dialog>
+   567→
+   568→      {/* ── Dialog: Use Template ── */}
+   569→      <Dialog open={useOpen} onOpenChange={setUseOpen}>
+   570→        <DialogContent className="sm:max-w-md max-w-[95vw]">
+   571→          <div className="bg-gradient-to-r from-emerald-600 to-teal-500 -mx-6 -mt-6 px-6 pt-6 pb-5 rounded-t-lg">
+   572→            <DialogTitle className="flex items-center gap-2 text-white">
+   573→              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+   574→                <Sparkles className="size-5" />
+   575→              </div>
+   576→              <div>
+   577→                <p className="text-lg">Usar Modelo</p>
+   578→                <DialogDescription className="text-white/80 mt-0.5">Crie um processo a partir do modelo.</DialogDescription>
+   579→              </div>
+   580→            </DialogTitle>
+   581→          </div>
+   582→          {selectedTemplate && (
+   583→            <div className="space-y-4 py-2">
+   584→              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
+   585→                <FileCode2 className="size-4 text-emerald-500 shrink-0" />
+   586→                <div className="min-w-0">
+   587→                  <p className="text-sm font-medium truncate">{selectedTemplate.title}</p>
+   588→                  <p className="text-xs text-muted-foreground">{AREA_LABELS[selectedTemplate.area]} • {PRIORITY_LABELS[selectedTemplate.default_priority]}</p>
+   589→                </div>
+   590→              </div>
+   591→              <div className="grid gap-2">
+   592→                <Label>Nº Processo *</Label>
+   593→                <Input placeholder="Ex: 123/2026" value={useForm.process_number} onChange={(e) => setUseForm((f) => ({ ...f, process_number: e.target.value }))} />
+   594→              </div>
+   595→              <div className="grid gap-2">
+   596→                <Label>Cliente *</Label>
+   597→                <Select value={useForm.client_id} onValueChange={(v) => setUseForm((f) => ({ ...f, client_id: v }))}>
+   598→                  <SelectTrigger><SelectValue placeholder="Seleccionar cliente" /></SelectTrigger>
+   599→                  <SelectContent>
+   600→                    {clientList.map((c) => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
+   601→                  </SelectContent>
+   602→                </Select>
+   603→              </div>
+   604→              {getChecklistCount(selectedTemplate.checklist_items) > 0 && (
+   605→                <p className="text-xs text-muted-foreground flex items-center gap-1">
+   606→                  <CheckSquare className="size-3" />
+   607→                  {getChecklistCount(selectedTemplate.checklist_items)} item(ns) da lista de verificação serão criados como prazos.
+   608→                </p>
+   609→              )}
+   610→            </div>
+   611→          )}
+   612→          <DialogFooter>
+   613→            <Button variant="outline" onClick={() => setUseOpen(false)}>Cancelar</Button>
+   614→            <Button onClick={handleUse} disabled={useMutation2.isPending} className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white">
+   615→              {useMutation2.isPending && <Loader2 className="size-4 animate-spin" />}
+   616→              Criar Processo
+   617→            </Button>
+   618→          </DialogFooter>
+   619→        </DialogContent>
+   620→      </Dialog>
+   621→
+   622→      {/* ── Alert: Delete Template ── */}
+   623→      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+   624→        <AlertDialogContent>
+   625→          <AlertDialogHeader>
+   626→            <AlertDialogTitle>Eliminar Modelo</AlertDialogTitle>
+   627→            <AlertDialogDescription>
+   628→              Tem certeza que deseja eliminar o modelo &quot;{selectedTemplate?.title}&quot;? Esta acção não pode ser desfeita.
+   629→            </AlertDialogDescription>
+   630→          </AlertDialogHeader>
+   631→          <AlertDialogFooter>
+   632→            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+   633→            <AlertDialogAction onClick={() => selectedTemplate && deleteMutation.mutate(selectedTemplate.id)} className="bg-red-600 hover:bg-red-700">
+   634→              Eliminar
+   635→            </AlertDialogAction>
+   636→          </AlertDialogFooter>
+   637→        </AlertDialogContent>
+   638→      </AlertDialog>
+   639→    </div>
+   640→  );
+   641→}
+   642→

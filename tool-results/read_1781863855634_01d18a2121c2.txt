@@ -1,0 +1,647 @@
+     1→// ═══════════════════════════════════════════════════════════════
+     2→// LEXDOC — Gestor de Tarefas Pessoais
+     3→// Lista de tarefas com prioridades, prazos, filtros e ordenação
+     4→// entity_type='general' para tarefas pessoais do utilizador
+     5→// ═══════════════════════════════════════════════════════════════
+     6→
+     7→'use client';
+     8→
+     9→import { useState, useMemo, useCallback, useEffect } from 'react';
+    10→import { motion, AnimatePresence } from 'framer-motion';
+    11→import {
+    12→  Plus,
+    13→  CheckSquare,
+    14→  Circle,
+    15→  Trash2,
+    16→  Pin,
+    17→  PinOff,
+    18→  AlertCircle,
+    19→  Clock,
+    20→  Filter,
+    21→  SortAsc,
+    22→  Sparkles,
+    23→  ChevronDown,
+    24→  CalendarDays,
+    25→  Flag,
+    26→} from 'lucide-react';
+    27→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+    28→import { toast } from 'sonner';
+    29→import { Button } from '@/components/ui/button';
+    30→import { Input } from '@/components/ui/input';
+    31→import { Badge } from '@/components/ui/badge';
+    32→import { Card, CardContent } from '@/components/ui/card';
+    33→import { Skeleton } from '@/components/ui/skeleton';
+    34→import { notesApi, type NoteItem } from '@/lib/api-client';
+    35→
+    36→// ─────────────────────────────────────────
+    37→// Constantes
+    38→// ─────────────────────────────────────────
+    39→type FilterTab = 'all' | 'active' | 'completed';
+    40→type SortOption = 'priority' | 'date' | 'pinned';
+    41→
+    42→const PRIORITY_CONFIG: Record<string, {
+    43→  label: string;
+    44→  color: string;
+    45→  borderColor: string;
+    46→  bgColor: string;
+    47→  textColor: string;
+    48→  sortWeight: number;
+    49→}> = {
+    50→  urgent: {
+    51→    label: 'Urgente',
+    52→    color: 'text-red-600 dark:text-red-400',
+    53→    borderColor: 'border-l-red-500',
+    54→    bgColor: 'bg-red-100 dark:bg-red-900/30',
+    55→    textColor: 'text-red-700 dark:text-red-300',
+    56→    sortWeight: 4,
+    57→  },
+    58→  high: {
+    59→    label: 'Alta',
+    60→    color: 'text-red-600 dark:text-red-400',
+    61→    borderColor: 'border-l-red-500',
+    62→    bgColor: 'bg-red-100 dark:bg-red-900/30',
+    63→    textColor: 'text-red-700 dark:text-red-300',
+    64→    sortWeight: 3,
+    65→  },
+    66→  medium: {
+    67→    label: 'Média',
+    68→    color: 'text-amber-600 dark:text-amber-400',
+    69→    borderColor: 'border-l-amber-500',
+    70→    bgColor: 'bg-amber-100 dark:bg-amber-900/30',
+    71→    textColor: 'text-amber-700 dark:text-amber-300',
+    72→    sortWeight: 2,
+    73→  },
+    74→  low: {
+    75→    label: 'Baixa',
+    76→    color: 'text-emerald-600 dark:text-emerald-400',
+    77→    borderColor: 'border-l-emerald-500',
+    78→    bgColor: 'bg-emerald-100 dark:bg-emerald-900/30',
+    79→    textColor: 'text-emerald-700 dark:text-emerald-300',
+    80→    sortWeight: 1,
+    81→  },
+    82→};
+    83→
+    84→const FILTER_TABS: Array<{ id: FilterTab; label: string }> = [
+    85→  { id: 'all', label: 'Todas' },
+    86→  { id: 'active', label: 'Activas' },
+    87→  { id: 'completed', label: 'Concluídas' },
+    88→];
+    89→
+    90→const SORT_OPTIONS: Array<{ id: SortOption; label: string }> = [
+    91→  { id: 'priority', label: 'Prioridade' },
+    92→  { id: 'date', label: 'Data' },
+    93→  { id: 'pinned', label: 'Fixadas' },
+    94→];
+    95→
+    96→// ─────────────────────────────────────────
+    97→// Helpers
+    98→// ─────────────────────────────────────────
+    99→function isOverdue(dueDate: string | null): boolean {
+   100→  if (!dueDate) return false;
+   101→  const due = new Date(dueDate);
+   102→  const today = new Date();
+   103→  today.setHours(0, 0, 0, 0);
+   104→  return due < today;
+   105→}
+   106→
+   107→function isDueSoon(dueDate: string | null): boolean {
+   108→  if (!dueDate) return false;
+   109→  const due = new Date(dueDate);
+   110→  const now = new Date();
+   111→  const threeDays = new Date();
+   112→  threeDays.setDate(threeDays.getDate() + 3);
+   113→  threeDays.setHours(23, 59, 59, 999);
+   114→  return due >= now && due <= threeDays;
+   115→}
+   116→
+   117→function formatDate(dateStr: string | null): string {
+   118→  if (!dateStr) return '';
+   119→  const date = new Date(dateStr);
+   120→  return date.toLocaleDateString('pt-MZ', {
+   121→    day: '2-digit',
+   122→    month: 'short',
+   123→    year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+   124→  });
+   125→}
+   126→
+   127→// ─────────────────────────────────────────
+   128→// Componente
+   129→// ─────────────────────────────────────────
+   130→export function TaskManager() {
+   131→  const queryClient = useQueryClient();
+   132→  const [filter, setFilter] = useState<FilterTab>('all');
+   133→  const [sortBy, setSortBy] = useState<SortOption>('priority');
+   134→  const [showNewTask, setShowNewTask] = useState(false);
+   135→  const [newContent, setNewContent] = useState('');
+   136→  const [newPriority, setNewPriority] = useState('low');
+   137→  const [newDueDate, setNewDueDate] = useState('');
+   138→  const [showPriorityPicker, setShowPriorityPicker] = useState(false);
+   139→
+   140→  // ── Query: buscar tarefas ──
+   141→  const { data: tasks = [], isLoading } = useQuery({
+   142→    queryKey: ['tasks', 'general'],
+   143→    queryFn: async () => {
+   144→      const res = await notesApi.list('general', null, 1, 100);
+   145→      if (res.success && res.data) return res.data;
+   146→      return [];
+   147→    },
+   148→    staleTime: 30000,
+   149→  });
+   150→
+   151→  // ── Mutation: criar tarefa ──
+   152→  const createMutation = useMutation({
+   153→    mutationFn: (data: { content: string; priority: string; due_date: string | null }) =>
+   154→      notesApi.create({
+   155→        entity_type: 'general',
+   156→        content: data.content,
+   157→        priority: data.priority,
+   158→        due_date: data.due_date,
+   159→        is_pinned: false,
+   160→      }),
+   161→    onSuccess: () => {
+   162→      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+   163→      setNewContent('');
+   164→      setNewPriority('low');
+   165→      setNewDueDate('');
+   166→      setShowNewTask(false);
+   167→      toast.success('Tarefa criada com sucesso!');
+   168→    },
+   169→    onError: () => {
+   170→      toast.error('Erro ao criar tarefa.');
+   171→    },
+   172→  });
+   173→
+   174→  // ── Mutation: toggle completar ──
+   175→  const toggleMutation = useMutation({
+   176→    mutationFn: (task: NoteItem) =>
+   177→      notesApi.update(task.id, { is_completed: !task.is_completed }),
+   178→    onSuccess: () => {
+   179→      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+   180→    },
+   181→    onError: () => {
+   182→      toast.error('Erro ao actualizar tarefa.');
+   183→    },
+   184→  });
+   185→
+   186→  // ── Mutation: fixar ──
+   187→  const pinMutation = useMutation({
+   188→    mutationFn: (task: NoteItem) =>
+   189→      notesApi.update(task.id, { is_pinned: !task.is_pinned }),
+   190→    onSuccess: () => {
+   191→      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+   192→    },
+   193→    onError: () => {
+   194→      toast.error('Erro ao fixar tarefa.');
+   195→    },
+   196→  });
+   197→
+   198→  // ── Mutation: eliminar ──
+   199→  const deleteMutation = useMutation({
+   200→    mutationFn: (id: string) => notesApi.remove(id),
+   201→    onSuccess: () => {
+   202→      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+   203→      toast.success('Tarefa eliminada.');
+   204→    },
+   205→    onError: () => {
+   206→      toast.error('Erro ao eliminar tarefa.');
+   207→    },
+   208→  });
+   209→
+   210→  // ── Handlers ──
+   211→  const handleCreate = useCallback(() => {
+   212→    if (!newContent.trim()) return;
+   213→    createMutation.mutate({
+   214→      content: newContent.trim(),
+   215→      priority: newPriority,
+   216→      due_date: newDueDate || null,
+   217→    });
+   218→  }, [newContent, newPriority, newDueDate, createMutation]);
+   219→
+   220→  // ── Keyboard shortcut: N for new task ──
+   221→  useEffect(() => {
+   222→    function handleGlobalKey(e: KeyboardEvent) {
+   223→      if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName) && !(e.target as HTMLElement).isContentEditable) {
+   224→        e.preventDefault();
+   225→        setShowNewTask(true);
+   226→      }
+   227→    }
+   228→    window.addEventListener('keydown', handleGlobalKey);
+   229→    return () => window.removeEventListener('keydown', handleGlobalKey);
+   230→  }, []);
+   231→
+   232→  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+   233→    if (e.key === 'Enter' && !e.shiftKey) {
+   234→      e.preventDefault();
+   235→      handleCreate();
+   236→    }
+   237→  }, [handleCreate]);
+   238→
+   239→  // ── Contagens ──
+   240→  const activeCount = tasks.filter((t) => !t.is_completed).length;
+   241→  const completedCount = tasks.filter((t) => t.is_completed).length;
+   242→  const totalCount = tasks.length;
+   243→  const completionPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+   244→
+   245→  // ── Filtrar e ordenar ──
+   246→  const filteredTasks = useMemo(() => {
+   247→    let filtered = [...tasks];
+   248→
+   249→    // Filtro
+   250→    if (filter === 'active') {
+   251→      filtered = filtered.filter((t) => !t.is_completed);
+   252→    } else if (filter === 'completed') {
+   253→      filtered = filtered.filter((t) => t.is_completed);
+   254→    }
+   255→
+   256→    // Ordenação
+   257→    filtered.sort((a, b) => {
+   258→      // Pinned sempre no topo
+   259→      if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+   260→
+   261→      // Completed sempre no fundo (dentro de cada grupo)
+   262→      if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
+   263→
+   264→      if (sortBy === 'priority') {
+   265→        const pa = PRIORITY_CONFIG[a.priority]?.sortWeight ?? 0;
+   266→        const pb = PRIORITY_CONFIG[b.priority]?.sortWeight ?? 0;
+   267→        return pb - pa;
+   268→      } else if (sortBy === 'date') {
+   269→        // Com data primeiro (mais cedo primeiro), depois sem data
+   270→        if (a.due_date && b.due_date) return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+   271→        if (a.due_date) return -1;
+   272→        if (b.due_date) return 1;
+   273→        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+   274→      }
+   275→      // 'pinned' - já ordenado por is_pinned acima
+   276→      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+   277→    });
+   278→
+   279→    return filtered;
+   280→  }, [tasks, filter, sortBy]);
+   281→
+   282→  const currentPriorityConfig = PRIORITY_CONFIG[newPriority] ?? PRIORITY_CONFIG.low;
+   283→
+   284→  return (
+   285→    <div className="space-y-6">
+   286→      {/* Cabeçalho com estatísticas */}
+   287→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   288→        <div>
+   289→          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   290→            <CheckSquare className="size-6 text-emerald-600 dark:text-emerald-400" />
+   291→            Minhas Tarefas
+   292→          </h2>
+   293→          <p className="text-sm text-muted-foreground mt-1">
+   294→            Gerir tarefas pessoais e acompanhar prazos
+   295→          </p>
+   296→        </div>
+   297→        <div className="flex items-center gap-2">
+   298→          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shadow-sm">
+   299→            {activeCount} activa{activeCount !== 1 ? 's' : ''}
+   300→          </Badge>
+   301→          {completedCount > 0 && (
+   302→            <Badge variant="outline" className="text-muted-foreground">
+   303→              {completedCount} concluída{completedCount !== 1 ? 's' : ''}
+   304→            </Badge>
+   305→          )}
+   306→        </div>
+   307→      </div>
+   308→
+   309→      {/* Progress bar */}
+   310→      {totalCount > 0 && (
+   311→        <div className="space-y-1.5">
+   312→          <div className="flex items-center justify-between text-xs text-muted-foreground">
+   313→            <span>Progresso geral</span>
+   314→            <span className="font-medium [font-variant-numeric:tabular-nums]">{completionPct}%</span>
+   315→          </div>
+   316→          <div className="h-2 rounded-full bg-muted overflow-hidden">
+   317→            <motion.div
+   318→              initial={{ width: 0 }}
+   319→              animate={{ width: `${completionPct}%` }}
+   320→              transition={{ duration: 0.6, ease: 'easeOut' }}
+   321→              className={`h-full rounded-full ${completionPct === 100 ? 'bg-emerald-500' : completionPct >= 50 ? 'bg-emerald-400' : 'bg-amber-400'}`}
+   322→            />
+   323→          </div>
+   324→        </div>
+   325→      )}
+   326→
+   327→      {/* Barra de acções */}
+   328→      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+   329→        {/* Filtros */}
+   330→        <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
+   331→          {FILTER_TABS.map((tab) => (
+   332→            <button
+   333→              key={tab.id}
+   334→              onClick={() => setFilter(tab.id)}
+   335→              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-150 active:scale-[0.97] ${
+   336→                filter === tab.id
+   337→                  ? 'bg-background text-foreground shadow-sm'
+   338→                  : 'text-muted-foreground hover:text-foreground'
+   339→              }`}
+   340→            >
+   341→              {tab.label}
+   342→            </button>
+   343→          ))}
+   344→        </div>
+   345→
+   346→        {/* Ordenação */}
+   347→        <div className="flex items-center gap-1.5">
+   348→          <SortAsc className="size-4 text-muted-foreground" />
+   349→          <select
+   350→            value={sortBy}
+   351→            onChange={(e) => setSortBy(e.target.value as SortOption)}
+   352→            className="text-sm bg-transparent border-0 focus:ring-0 p-1.5 rounded-md hover:bg-muted/50 cursor-pointer text-foreground"
+   353→          >
+   354→            {SORT_OPTIONS.map((opt) => (
+   355→              <option key={opt.id} value={opt.id}>{opt.label}</option>
+   356→            ))}
+   357→          </select>
+   358→        </div>
+   359→
+   360→        {/* Botão nova tarefa */}
+   361→        <Button
+   362→          onClick={() => setShowNewTask((prev) => !prev)}
+   363→          className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm active:scale-[0.98] transition-transform ml-auto"
+   364→        >
+   365→          <Plus className="size-4 mr-1.5" />
+   366→          Nova tarefa
+   367→          <kbd className="hidden sm:inline-flex ml-1.5 items-center gap-0.5 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">N</kbd>
+   368→        </Button>
+   369→      </div>
+   370→
+   371→      {/* Formulário nova tarefa */}
+   372→      <AnimatePresence>
+   373→        {showNewTask && (
+   374→          <motion.div
+   375→            initial={{ opacity: 0, height: 0, y: -8 }}
+   376→            animate={{ opacity: 1, height: 'auto', y: 0 }}
+   377→            exit={{ opacity: 0, height: 0, y: -8 }}
+   378→            transition={{ duration: 0.2 }}
+   379→            className="overflow-hidden"
+   380→          >
+   381→            <Card className="border-emerald-200 dark:border-emerald-800/50 shadow-sm">
+   382→              <CardContent className="p-4 space-y-3">
+   383→                {/* Input principal */}
+   384→                <div className="flex items-center gap-2">
+   385→                  <Circle className="size-5 text-muted-foreground shrink-0" />
+   386→                  <Input
+   387→                    value={newContent}
+   388→                    onChange={(e) => setNewContent(e.target.value)}
+   389→                    onKeyDown={handleKeyDown}
+   390→                    placeholder="Adicionar tarefa..."
+   391→                    className="border-0 focus-visible:ring-0 text-base bg-transparent"
+   392→                    autoFocus
+   393→                  />
+   394→                </div>
+   395→
+   396→                {/* Opções */}
+   397→                <div className="flex flex-wrap items-center gap-3 pl-7">
+   398→                  {/* Selector de prioridade */}
+   399→                  <div className="relative">
+   400→                    <button
+   401→                      onClick={() => setShowPriorityPicker(!showPriorityPicker)}
+   402→                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${currentPriorityConfig.bgColor} ${currentPriorityConfig.textColor}`}
+   403→                    >
+   404→                      <Flag className="size-3" />
+   405→                      {currentPriorityConfig.label}
+   406→                      <ChevronDown className="size-3" />
+   407→                    </button>
+   408→                    <AnimatePresence>
+   409→                      {showPriorityPicker && (
+   410→                        <motion.div
+   411→                          initial={{ opacity: 0, scale: 0.95 }}
+   412→                          animate={{ opacity: 1, scale: 1 }}
+   413→                          exit={{ opacity: 0, scale: 0.95 }}
+   414→                          className="absolute left-0 top-full mt-1 w-32 bg-popover border rounded-lg shadow-lg z-10 py-1 overflow-hidden"
+   415→                        >
+   416→                          {Object.entries(PRIORITY_CONFIG).map(([key, cfg]) => (
+   417→                            <button
+   418→                              key={key}
+   419→                              onClick={() => {
+   420→                                setNewPriority(key);
+   421→                                setShowPriorityPicker(false);
+   422→                              }}
+   423→                              className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium hover:bg-accent transition-colors ${newPriority === key ? 'bg-accent' : ''}`}
+   424→                            >
+   425→                              <div className={`w-2 h-2 rounded-full ${cfg.color.replace('text-', 'bg-')}`} />
+   426→                              {cfg.label}
+   427→                            </button>
+   428→                          ))}
+   429→                        </motion.div>
+   430→                      )}
+   431→                    </AnimatePresence>
+   432→                  </div>
+   433→
+   434→                  {/* Data de vencimento */}
+   435→                  <div className="flex items-center gap-1.5">
+   436→                    <CalendarDays className="size-3.5 text-muted-foreground" />
+   437→                    <Input
+   438→                      type="date"
+   439→                      value={newDueDate}
+   440→                      onChange={(e) => setNewDueDate(e.target.value)}
+   441→                      className="w-36 h-7 text-xs border-0 focus-visible:ring-0 bg-transparent"
+   442→                    />
+   443→                  </div>
+   444→
+   445→                  {/* Acções */}
+   446→                  <div className="flex items-center gap-1.5 ml-auto">
+   447→                    <Button
+   448→                      variant="ghost"
+   449→                      size="sm"
+   450→                      className="h-7 text-xs"
+   451→                      onClick={() => {
+   452→                        setShowNewTask(false);
+   453→                        setNewContent('');
+   454→                        setNewPriority('low');
+   455→                        setNewDueDate('');
+   456→                      }}
+   457→                    >
+   458→                      Cancelar
+   459→                    </Button>
+   460→                    <Button
+   461→                      size="sm"
+   462→                      className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white active:scale-[0.98]"
+   463→                      onClick={handleCreate}
+   464→                      disabled={!newContent.trim() || createMutation.isPending}
+   465→                    >
+   466→                      {createMutation.isPending ? 'A criar...' : 'Criar'}
+   467→                    </Button>
+   468→                  </div>
+   469→                </div>
+   470→              </CardContent>
+   471→            </Card>
+   472→          </motion.div>
+   473→        )}
+   474→      </AnimatePresence>
+   475→
+   476→      {/* Lista de tarefas */}
+   477→      <div className="space-y-2">
+   478→        {isLoading ? (
+   479→          // Skeleton loader
+   480→          <div className="space-y-3">
+   481→            {Array.from({ length: 4 }).map((_, i) => (
+   482→              <Card key={i} className="overflow-hidden">
+   483→                <CardContent className="p-4 flex items-center gap-3">
+   484→                  <Skeleton className="size-5 rounded-full shrink-0" />
+   485→                  <div className="flex-1 space-y-2">
+   486→                    <Skeleton className="h-4 w-3/4" />
+   487→                    <Skeleton className="h-3 w-1/4" />
+   488→                  </div>
+   489→                </CardContent>
+   490→              </Card>
+   491→            ))}
+   492→          </div>
+   493→        ) : filteredTasks.length === 0 ? (
+   494→          // Empty state
+   495→          <motion.div
+   496→            initial={{ opacity: 0, y: 16 }}
+   497→            animate={{ opacity: 1, y: 0 }}
+   498→            transition={{ duration: 0.4 }}
+   499→            className="flex flex-col items-center justify-center py-16 text-center"
+   500→          >
+   501→            <motion.div
+   502→              animate={{
+   503→                y: [0, -8, 0],
+   504→                rotate: [0, 3, -3, 0],
+   505→              }}
+   506→              transition={{
+   507→                duration: 4,
+   508→                repeat: Infinity,
+   509→                ease: 'easeInOut',
+   510→              }}
+   511→              className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-900/40 flex items-center justify-center mb-4"
+   512→            >
+   513→              {filter === 'completed' ? (
+   514→                <CheckSquare className="size-9 text-emerald-500/60" />
+   515→              ) : (
+   516→                <Sparkles className="size-9 text-emerald-500/60" />
+   517→              )}
+   518→            </motion.div>
+   519→            <h3 className="text-lg font-semibold text-muted-foreground">
+   520→              {filter === 'completed' ? 'Nenhuma tarefa concluída' : 'Sem tarefas'}
+   521→            </h3>
+   522→            <p className="text-sm text-muted-foreground/60 mt-1 max-w-sm">
+   523→              {filter === 'completed'
+   524→                ? 'Conclua tarefas e elas aparecerão aqui'
+   525→                : 'Clique em "Nova tarefa" para começar a organizar o seu dia'}
+   526→            </p>
+   527→          </motion.div>
+   528→        ) : (
+   529→          // Tarefas
+   530→          <AnimatePresence mode="popLayout">
+   531→            {filteredTasks.map((task) => {
+   532→              const priorityCfg = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.low;
+   533→              const overdue = !task.is_completed && isOverdue(task.due_date);
+   534→              const dueSoon = !task.is_completed && !overdue && isDueSoon(task.due_date);
+   535→
+   536→              return (
+   537→                <motion.div
+   538→                  key={task.id}
+   539→                  layout
+   540→                  initial={{ opacity: 0, x: -16 }}
+   541→                  animate={{ opacity: 1, x: 0 }}
+   542→                  exit={{ opacity: 0, x: 16, scale: 0.95 }}
+   543→                  transition={{ duration: 0.25 }}
+   544→                >
+   545→                  <Card
+   546→                    className={`overflow-hidden transition-all duration-200 hover:shadow-sm group ${
+   547→                      task.is_pinned ? 'ring-1 ring-emerald-200 dark:ring-emerald-800/50' : ''
+   548→                    } ${overdue ? 'ring-1 ring-red-200 dark:ring-red-800/50' : ''}`}
+   549→                  >
+   550→                    <CardContent className={`p-0`}>
+   551→                      <div className={`flex items-start gap-3 p-4 border-l-[3px] ${priorityCfg.borderColor}`}>
+   552→                        {/* Checkbox */}
+   553→                        <button
+   554→                          onClick={() => toggleMutation.mutate(task)}
+   555→                          className="mt-0.5 shrink-0 transition-transform active:scale-90"
+   556→                          disabled={toggleMutation.isPending}
+   557→                        >
+   558→                          {task.is_completed ? (
+   559→                            <div className="size-5 rounded-full bg-emerald-500 flex items-center justify-center">
+   560→                              <svg className="size-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+   561→                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+   562→                              </svg>
+   563→                            </div>
+   564→                          ) : (
+   565→                            <Circle className="size-5 text-muted-foreground/40 hover:text-emerald-500 transition-colors" />
+   566→                          )}
+   567→                        </button>
+   568→
+   569→                        {/* Conteúdo */}
+   570→                        <div className="flex-1 min-w-0">
+   571→                          <p className={`text-sm leading-relaxed break-words ${
+   572→                            task.is_completed
+   573→                              ? 'line-through text-muted-foreground/60'
+   574→                              : 'text-foreground'
+   575→                          }`}>
+   576→                            {task.content}
+   577→                          </p>
+   578→
+   579→                          {/* Meta info */}
+   580→                          <div className="flex flex-wrap items-center gap-2 mt-2">
+   581→                            {/* Prioridade badge */}
+   582→                            <Badge
+   583→                              variant="secondary"
+   584→                              className={`text-[10px] px-1.5 py-0 ${priorityCfg.bgColor} ${priorityCfg.textColor} border-0`}
+   585→                            >
+   586→                              <Flag className="size-2.5 mr-0.5" />
+   587→                              {priorityCfg.label}
+   588→                            </Badge>
+   589→
+   590→                            {/* Data de vencimento */}
+   591→                            {task.due_date && (
+   592→                              <span className={`flex items-center gap-1 text-[11px] ${
+   593→                                overdue
+   594→                                  ? 'text-red-600 dark:text-red-400 font-medium'
+   595→                                  : dueSoon
+   596→                                    ? 'text-amber-600 dark:text-amber-400 font-medium'
+   597→                                    : 'text-muted-foreground'
+   598→                              }`}>
+   599→                                {overdue ? (
+   600→                                  <AlertCircle className="size-3" />
+   601→                                ) : dueSoon ? (
+   602→                                  <Clock className="size-3" />
+   603→                                ) : (
+   604→                                  <CalendarDays className="size-3" />
+   605→                                )}
+   606→                                {overdue ? 'Vencida' : formatDate(task.due_date)}
+   607→                              </span>
+   608→                            )}
+   609→                          </div>
+   610→                        </div>
+   611→
+   612→                        {/* Acções */}
+   613→                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+   614→                          <button
+   615→                            onClick={() => pinMutation.mutate(task)}
+   616→                            className="p-1.5 rounded-md hover:bg-muted transition-colors"
+   617→                            title={task.is_pinned ? 'Desafixar' : 'Fixar'}
+   618→                            disabled={pinMutation.isPending}
+   619→                          >
+   620→                            {task.is_pinned ? (
+   621→                              <PinOff className="size-3.5 text-emerald-500" />
+   622→                            ) : (
+   623→                              <Pin className="size-3.5 text-muted-foreground" />
+   624→                            )}
+   625→                          </button>
+   626→                          <button
+   627→                            onClick={() => deleteMutation.mutate(task.id)}
+   628→                            className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+   629→                            title="Eliminar tarefa"
+   630→                            disabled={deleteMutation.isPending}
+   631→                          >
+   632→                            <Trash2 className="size-3.5 text-muted-foreground hover:text-red-500 transition-colors" />
+   633→                          </button>
+   634→                        </div>
+   635→                      </div>
+   636→                    </CardContent>
+   637→                  </Card>
+   638→                </motion.div>
+   639→              );
+   640→            })}
+   641→          </AnimatePresence>
+   642→        )}
+   643→      </div>
+   644→    </div>
+   645→  );
+   646→}
+   647→

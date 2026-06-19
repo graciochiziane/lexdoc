@@ -1295,3 +1295,22 @@ Stage Summary:
 - 17 tabelas, 17 RLS enable + force, ~50 políticas RLS, 9 triggers cross-firm, 10 updated_at triggers
 - Pronto para executar no Supabase SQL Editor
 - Nota: Prisma schema precisa ser actualizado (cuid() → uuid()) ao migrar para Supabase
+
+---
+Task ID: full-project-analysis
+Agent: Main Orchestrator
+Task: Análise completa do projecto LexDoc — sem acções, apenas inspecção
+
+Work Log:
+- Analisou estrutura: 170+ ficheiros, 56 route files, 84 API handlers, 35 dashboard components
+- Analisou backend: todas as 84 rotas verificadas para multi-tenancy — 100% consistente
+- Analisou frontend: 25 vistas activas, 2 stores, 4 auth components
+- Analisou Prisma vs SQL: encontrou 7 categorias de inconsistências (2 críticas)
+- Identificou 17 problemas totais: 2 críticos, 7 médios, 8 baixos
+
+Stage Summary:
+- Projecto é robusto: multi-tenancy, RBAC, audit, RLS, AI — tudo implementado
+- Bloqueadores P0: @db.Uuid em falta (~40 campos), QuickActionsFAB sem prop
+- P1: 2 colunas em falta no Prisma, 10 JSONB como String, WidgetSettings bug
+- P2: Código morto, duplicados, features incompletas
+- Nenhuma acção tomada — aguardando aprovação do utilizador

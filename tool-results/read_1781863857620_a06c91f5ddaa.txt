@@ -1,0 +1,1453 @@
+     1→// ═══════════════════════════════════════════════════════════════
+     2→// LEXDOC — Centro de Inteligência Artificial (AI Hub View)
+     3→// Full-page AI command center with 4 tabs: Chat, Gerar Doc, Extrair Prazos, Histórico
+     4→// ═══════════════════════════════════════════════════════════════
+     5→
+     6→'use client';
+     7→
+     8→import { useState, useRef, useEffect, useCallback } from 'react';
+     9→import { motion, AnimatePresence } from 'framer-motion';
+    10→import {
+    11→  Bot,
+    12→  Send,
+    13→  Trash2,
+    14→  Sparkles,
+    15→  MessageSquare,
+    16→  FileText,
+    17→  Clock,
+    18→  History,
+    19→  Plus,
+    20→  Search,
+    21→  Copy,
+    22→  Download,
+    23→  Check,
+    24→  ChevronDown,
+    25→  AlertCircle,
+    26→  Loader2,
+    27→  CalendarClock,
+    28→  ArrowRight,
+    29→  FilePlus,
+    30→  Briefcase,
+    31→  Eye,
+    32→  X,
+    33→} from 'lucide-react';
+    34→import { Button } from '@/components/ui/button';
+    35→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    36→import { Input } from '@/components/ui/input';
+    37→import { Textarea } from '@/components/ui/textarea';
+    38→import { Badge } from '@/components/ui/badge';
+    39→import { ScrollArea } from '@/components/ui/scroll-area';
+    40→import { Separator } from '@/components/ui/separator';
+    41→import { Skeleton } from '@/components/ui/skeleton';
+    42→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    43→import {
+    44→  Select,
+    45→  SelectContent,
+    46→  SelectItem,
+    47→  SelectTrigger,
+    48→  SelectValue,
+    49→} from '@/components/ui/select';
+    50→import {
+    51→  Dialog,
+    52→  DialogContent,
+    53→  DialogHeader,
+    54→  DialogTitle,
+    55→  DialogDescription,
+    56→} from '@/components/ui/dialog';
+    57→import {
+    58→  Sheet,
+    59→  SheetContent,
+    60→  SheetHeader,
+    61→  SheetTitle,
+    62→} from '@/components/ui/sheet';
+    63→import { aiApi, processesApi } from '@/lib/api-client';
+    64→import type { ConversationSummary, ConversationMessage, ExtractedDeadline, GenerationRecord } from '@/lib/api-client';
+    65→import { MarkdownContent } from '@/components/shared/MarkdownRenderer';
+    66→
+    67→// ─────────────────────────────────────────
+    68→// Types
+    69→// ─────────────────────────────────────────
+    70→interface ChatMessage {
+    71→  id: string;
+    72→  role: 'user' | 'assistant';
+    73→  content: string;
+    74→  sources?: string[];
+    75→  knowledge_articles_used?: Array<{ id: string; title: string; category: string }>;
+    76→  timestamp: Date;
+    77→}
+    78→
+    79→const QUICK_PROMPTS = [
+    80→  { label: 'Calcular prazo processual', prompt: 'Como calcular prazo processual?', icon: '⏱️' },
+    81→  { label: 'Draftar petição inicial', prompt: 'Draftar uma petição inicial', icon: '📝' },
+    82→  { label: 'Código Civil Moçambicano', prompt: 'Explicar o Código Civil Moçambicano', icon: '📚' },
+    83→  { label: 'Lei do Trabalho', prompt: 'Principais alterações da Lei do Trabalho', icon: '⚖️' },
+    84→];
+    85→
+    86→const DOC_TYPES = [
+    87→  { value: 'contrato', label: 'Contrato' },
+    88→  { value: 'peticao-inicial', label: 'Petição Inicial' },
+    89→  { value: 'contestacao', label: 'Contestação' },
+    90→  { value: 'contrato-trabalho', label: 'Contrato de Trabalho' },
+    91→  { value: 'procuracao', label: 'Procuração Forense' },
+    92→  { value: 'parecer-juridico', label: 'Parecer Jurídico' },
+    93→  { value: 'notificacao', label: 'Notificação' },
+    94→  { value: 'requerimento', label: 'Requerimento' },
+    95→  { value: 'recurso', label: 'Recurso' },
+    96→  { value: 'resumo', label: 'Resumo Jurídico' },
+    97→  { value: 'personalizado', label: 'Personalizado' },
+    98→];
+    99→
+   100→const TYPE_BADGE_COLORS: Record<string, string> = {
+   101→  contrato: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
+   102→  'peticao-inicial': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+   103→  contestacao: 'bg-red-500/15 text-red-400 border-red-500/25',
+   104→  'contrato-trabalho': 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
+   105→  procuracao: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/25',
+   106→  'parecer-juridico': 'bg-violet-500/15 text-violet-400 border-violet-500/25',
+   107→  notificacao: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+   108→  requerimento: 'bg-teal-500/15 text-teal-400 border-teal-500/25',
+   109→  recurso: 'bg-rose-500/15 text-rose-400 border-rose-500/25',
+   110→  resumo: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
+   111→  personalizado: 'bg-gray-500/15 text-gray-400 border-gray-500/25',
+   112→};
+   113→
+   114→const TYPE_LABELS: Record<string, string> = {
+   115→  contrato: 'Contrato',
+   116→  'peticao-inicial': 'Petição Inicial',
+   117→  contestacao: 'Contestação',
+   118→  'contrato-trabalho': 'Contrato de Trabalho',
+   119→  procuracao: 'Procuração Forense',
+   120→  'parecer-juridico': 'Parecer Jurídico',
+   121→  notificacao: 'Notificação',
+   122→  requerimento: 'Requerimento',
+   123→  recurso: 'Recurso',
+   124→  resumo: 'Resumo Jurídico',
+   125→  personalizado: 'Personalizado',
+   126→};
+   127→
+   128→// ─────────────────────────────────────────
+   129→// Shared utility: strip markdown for preview text
+   130→// ─────────────────────────────────────────
+   131→function stripMarkdown(text: unknown): string {
+   132→  if (text == null) return '';
+   133→  const raw = typeof text === 'string' ? text : (typeof text === 'object' && text !== null && 'content' in text ? String((text as { content: unknown }).content) : String(text));
+   134→  return raw
+   135→    .replace(/\*\*\[QUEST[ÃA]O\]\*\*\s*/gi, '')
+   136→    .replace(/\*\*/g, '')
+   137→    .replace(/#{1,6}\s/g, '')
+   138→    .replace(/```[\s\S]*?```/g, '[código]')
+   139→    .replace(/`[^`]+`/g, (match) => match.slice(1, -1))
+   140→    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+   141→    .replace(/---/g, '')
+   142→    .replace(/\n{2,}/g, ' ')
+   143→    .replace(/\n/g, ' ')
+   144→    .trim();
+   145→}
+   146→
+   147→// ─────────────────────────────────────────
+   148→// Typing Indicator
+   149→// ─────────────────────────────────────────
+   150→function TypingIndicator() {
+   151→  return (
+   152→    <div className="flex items-start gap-3 px-4 py-3">
+   153→      <Avatar className="size-8 shrink-0">
+   154→        <AvatarFallback className="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
+   155→          LA
+   156→        </AvatarFallback>
+   157→      </Avatar>
+   158→      <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3">
+   159→        <motion.span className="size-2 rounded-full bg-emerald-400" animate={{ y: [0, -6, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0 }} />
+   160→        <motion.span className="size-2 rounded-full bg-emerald-400" animate={{ y: [0, -6, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.15 }} />
+   161→        <motion.span className="size-2 rounded-full bg-emerald-400" animate={{ y: [0, -6, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.3 }} />
+   162→      </div>
+   163→    </div>
+   164→  );
+   165→}
+   166→
+   167→// ─────────────────────────────────────────
+   168→// Conversation Sidebar (Desktop)
+   169→// ─────────────────────────────────────────
+   170→function ConversationSidebar({
+   171→  conversations,
+   172→  activeId,
+   173→  onSelect,
+   174→  onNew,
+   175→  onDelete,
+   176→  searchQuery,
+   177→  onSearchChange,
+   178→  isLoading,
+   179→}: {
+   180→  conversations: ConversationSummary[];
+   181→  activeId: string | null;
+   182→  onSelect: (id: string) => void;
+   183→  onNew: () => void;
+   184→  onDelete: (id: string) => void;
+   185→  searchQuery: string;
+   186→  onSearchChange: (q: string) => void;
+   187→  isLoading: boolean;
+   188→}) {
+   189→  const filtered = conversations.filter((c) =>
+   190→    c.title.toLowerCase().includes(searchQuery.toLowerCase()),
+   191→  );
+   192→
+   193→  return (
+   194→    <div className="flex flex-col h-full w-72 border-r bg-muted/20">
+   195→      {/* Header */}
+   196→      <div className="p-3 space-y-3">
+   197→        <Button
+   198→          onClick={onNew}
+   199→          className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all"
+   200→        >
+   201→          <Plus className="size-4 mr-2" />
+   202→          Nova Conversa
+   203→        </Button>
+   204→        <div className="relative">
+   205→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+   206→          <Input
+   207→            placeholder="Pesquisar conversas..."
+   208→            value={searchQuery}
+   209→            onChange={(e) => onSearchChange(e.target.value)}
+   210→            className="pl-9 h-9 text-sm"
+   211→          />
+   212→        </div>
+   213→      </div>
+   214→
+   215→      <Separator />
+   216→
+   217→      {/* List */}
+   218→      <ScrollArea className="flex-1">
+   219→        <div className="p-2 space-y-1">
+   220→          {isLoading ? (
+   221→            <div className="space-y-2 p-2">
+   222→              {Array.from({ length: 5 }).map((_, i) => (
+   223→                <div key={i} className="space-y-2">
+   224→                  <Skeleton className="h-4 w-3/4" />
+   225→                  <Skeleton className="h-3 w-1/2" />
+   226→                </div>
+   227→              ))}
+   228→            </div>
+   229→          ) : filtered.length === 0 ? (
+   230→            <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+   231→              <MessageSquare className="size-8 text-muted-foreground/40 mb-2" />
+   232→              <p className="text-xs text-muted-foreground">
+   233→                {searchQuery ? 'Nenhuma conversa encontrada.' : 'Sem conversas ainda.'}
+   234→              </p>
+   235→            </div>
+   236→          ) : (
+   237→            filtered.map((conv) => (
+   238→              <motion.button
+   239→                key={conv.id}
+   240→                onClick={() => onSelect(conv.id)}
+   241→                whileHover={{ x: 2 }}
+   242→                className={`w-full text-left rounded-lg px-3 py-2.5 transition-all duration-150 group relative ${
+   243→                  activeId === conv.id
+   244→                    ? 'bg-emerald-500/10 border border-emerald-500/20'
+   245→                    : 'hover:bg-muted/60 border border-transparent'
+   246→                }`}
+   247→              >
+   248→                <div className="flex items-start justify-between gap-2">
+   249→                  <div className="min-w-0 flex-1">
+   250→                    <p className={`text-sm font-medium truncate ${activeId === conv.id ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground'}`}>
+   251→                      {stripMarkdown(conv.title)}
+   252→                    </p>
+   253→                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+   254→                      {conv.last_message ? stripMarkdown(String(conv.last_message)) : `${conv.message_count} mensagens`}
+   255→                    </p>
+   256→                  </div>
+   257→                  <span
+   258→                    role="button"
+   259→                    tabIndex={0}
+   260→                    onClick={(e) => {
+   261→                      e.stopPropagation();
+   262→                      onDelete(conv.id);
+   263→                    }}
+   264→                    onKeyDown={(e) => {
+   265→                      if (e.key === 'Enter' || e.key === ' ') {
+   266→                        e.stopPropagation();
+   267→                        onDelete(conv.id);
+   268→                      }
+   269→                    }}
+   270→                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 hover:text-red-500 transition-all shrink-0 cursor-pointer"
+   271→                    title="Eliminar conversa"
+   272→                  >
+   273→                    <Trash2 className="size-3" />
+   274→                  </span>
+   275→                </div>
+   276→                <p className="text-[10px] text-muted-foreground/60 mt-1">
+   277→                  {new Date(conv.updated_at).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short' })}
+   278→                </p>
+   279→              </motion.button>
+   280→            ))
+   281→          )}
+   282→        </div>
+   283→      </ScrollArea>
+   284→    </div>
+   285→  );
+   286→}
+   287→
+   288→// ─────────────────────────────────────────
+   289→// Tab 1: Assistente IA (Enhanced Chat)
+   290→// ─────────────────────────────────────────
+   291→function AssistantChatTab() {
+   292→  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+   293→  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+   294→  const [messages, setMessages] = useState<ChatMessage[]>([]);
+   295→  const [inputValue, setInputValue] = useState('');
+   296→  const [isLoading, setIsLoading] = useState(false);
+   297→  const [isLoadingConv, setIsLoadingConv] = useState(false);
+   298→  const [isLoadingList, setIsLoadingList] = useState(false);
+   299→  const [error, setError] = useState<string | null>(null);
+   300→  const [convSearch, setConvSearch] = useState('');
+   301→  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+   302→  const [convContext, setConvContext] = useState<string | undefined>();
+   303→
+   304→  const messagesEndRef = useRef<HTMLDivElement>(null);
+   305→  const textareaRef = useRef<HTMLTextAreaElement>(null);
+   306→
+   307→  // Load conversations list
+   308→  const loadConversations = useCallback(async () => {
+   309→    setIsLoadingList(true);
+   310→    try {
+   311→      const res = await aiApi.listConversations();
+   312→      if (res.success && res.data) {
+   313→        setConversations(res.data as ConversationSummary[]);
+   314→      }
+   315→    } catch {
+   316→      // silently fail — conversations are optional
+   317→    } finally {
+   318→      setIsLoadingList(false);
+   319→    }
+   320→  }, []);
+   321→
+   322→  useEffect(() => {
+   323→    void loadConversations();
+   324→  }, [loadConversations]);
+   325→
+   326→  // Load conversation messages
+   327→  const loadConversation = useCallback(async (id: string) => {
+   328→    setIsLoadingConv(true);
+   329→    setActiveConvId(id);
+   330→    setError(null);
+   331→    try {
+   332→      const res = await aiApi.getConversation(id);
+   333→      if (res.success && res.data) {
+   334→        const detail = res.data as unknown as { messages: Array<Record<string, unknown>>; context?: string; title?: string; context_type?: string; context_id?: string };
+   335→        setConvContext(detail.context);
+   336→        const rawMessages = detail.messages ?? [];
+   337→        if (rawMessages.length === 0) {
+   338→          setMessages([]);
+   339→        } else {
+   340→          setMessages(
+   341→            rawMessages.map((m) => {
+   342→              // Safely extract sources — could be string[] or null
+   343→              let sources: string[] | undefined;
+   344→              if (Array.isArray(m.sources)) {
+   345→                sources = m.sources.filter((s): s is string => typeof s === 'string');
+   346→              }
+   347→              return {
+   348→                id: String(m.id ?? ''),
+   349→                role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
+   350→                content: String(m.content ?? ''),
+   351→                sources,
+   352→                knowledge_articles_used: undefined,
+   353→                timestamp: new Date(String(m.created_at ?? Date.now())),
+   354→              };
+   355→            }),
+   356→          );
+   357→        }
+   358→      } else {
+   359→        setError(res.error?.message ?? 'Erro ao carregar conversa.');
+   360→      }
+   361→    } catch (err) {
+   362→      console.error('[AIHub] loadConversation error:', err);
+   363→      setError('Erro de conexão ao carregar a conversa.');
+   364→    } finally {
+   365→      setIsLoadingConv(false);
+   366→    }
+   367→  }, []);
+   368→
+   369→  // Auto-scroll
+   370→  useEffect(() => {
+   371→    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+   372→  }, [messages, isLoading]);
+   373→
+   374→  // New conversation
+   375→  const handleNewConversation = useCallback(() => {
+   376→    setActiveConvId(null);
+   377→    setMessages([]);
+   378→    setError(null);
+   379→    setConvContext(undefined);
+   380→  }, []);
+   381→
+   382→  // Delete conversation
+   383→  const handleDeleteConversation = useCallback(async (id: string) => {
+   384→    try {
+   385→      await aiApi.deleteConversation(id);
+   386→      setConversations((prev) => prev.filter((c) => c.id !== id));
+   387→      if (activeConvId === id) {
+   388→        handleNewConversation();
+   389→      }
+   390→    } catch {
+   391→      // silently fail
+   392→    }
+   393→  }, [activeConvId, handleNewConversation]);
+   394→
+   395→  // Send message
+   396→  const sendMessage = useCallback(async (text: string) => {
+   397→    const trimmed = text.trim();
+   398→    if (!trimmed || isLoading) return;
+   399→
+   400→    setError(null);
+   401→    const userMsg: ChatMessage = {
+   402→      id: crypto.randomUUID(),
+   403→      role: 'user',
+   404→      content: trimmed,
+   405→      timestamp: new Date(),
+   406→    };
+   407→    setMessages((prev) => [...prev, userMsg]);
+   408→    setInputValue('');
+   409→    setIsLoading(true);
+   410→
+   411→    try {
+   412→      const res = await aiApi.chat({
+   413→        message: trimmed,
+   414→        conversation_id: activeConvId ?? undefined,
+   415→      });
+   416→      if (res.success && res.data) {
+   417→        const assistantMsg: ChatMessage = {
+   418→          id: crypto.randomUUID(),
+   419→          role: 'assistant',
+   420→          content: res.data.message,
+   421→          sources: res.data.sources,
+   422→          knowledge_articles_used: res.data.knowledge_articles_used,
+   423→          timestamp: new Date(),
+   424→        };
+   425→        setMessages((prev) => [...prev, assistantMsg]);
+   426→
+   427→        // Update conversation id if this is a new conversation
+   428→        if (res.data.conversation_id && !activeConvId) {
+   429→          setActiveConvId(res.data.conversation_id);
+   430→          void loadConversations();
+   431→        }
+   432→      } else {
+   433→        setError(res.error?.message ?? 'Erro ao comunicar com o assistente.');
+   434→      }
+   435→    } catch {
+   436→      setError('Erro de conexão. Verifique a sua internet e tente novamente.');
+   437→    } finally {
+   438→      setIsLoading(false);
+   439→    }
+   440→  }, [isLoading, activeConvId, loadConversations]);
+   441→
+   442→  const handleSubmit = useCallback((e: React.FormEvent) => {
+   443→    e.preventDefault();
+   444→    void sendMessage(inputValue);
+   445→  }, [inputValue, sendMessage]);
+   446→
+   447→  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+   448→    if (e.key === 'Enter' && !e.shiftKey) {
+   449→      e.preventDefault();
+   450→      void sendMessage(inputValue);
+   451→    }
+   452→  }, [inputValue, sendMessage]);
+   453→
+   454→  const handleQuickPrompt = useCallback((prompt: string) => {
+   455→    void sendMessage(prompt);
+   456→  }, [sendMessage]);
+   457→
+   458→  const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+   459→
+   460→  return (
+   461→    <div className="flex h-full min-h-[300px] rounded-xl border bg-card shadow-sm overflow-hidden">
+   462→      {/* Mobile conversation selector */}
+   463→      <div className="md:hidden p-3 border-b">
+   464→        <Button
+   465→          variant="outline"
+   466→          className="w-full justify-between"
+   467→          onClick={() => setMobileSheetOpen(true)}
+   468→        >
+   469→          <span className="flex items-center gap-2">
+   470→            <MessageSquare className="size-4" />
+   471→            {activeConvId ? conversations.find((c) => c.id === activeConvId)?.title ?? 'Conversa activa' : 'Nova conversa'}
+   472→          </span>
+   473→          <ChevronDown className="size-4" />
+   474→        </Button>
+   475→      </div>
+   476→
+   477→      {/* Desktop Sidebar */}
+   478→      <div className="hidden md:block">
+   479→        <ConversationSidebar
+   480→          conversations={conversations}
+   481→          activeId={activeConvId}
+   482→          onSelect={(id) => void loadConversation(id)}
+   483→          onNew={handleNewConversation}
+   484→          onDelete={(id) => void handleDeleteConversation(id)}
+   485→          searchQuery={convSearch}
+   486→          onSearchChange={setConvSearch}
+   487→          isLoading={isLoadingList}
+   488→        />
+   489→      </div>
+   490→
+   491→      {/* Mobile Sheet */}
+   492→      <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+   493→        <SheetContent side="left" className="p-0 w-80">
+   494→          <SheetHeader className="p-3 pb-0">
+   495→            <SheetTitle className="text-sm">Conversas</SheetTitle>
+   496→          </SheetHeader>
+   497→          <div className="mt-2 h-[calc(100vh-6rem)]">
+   498→            <ConversationSidebar
+   499→              conversations={conversations}
+   500→              activeId={activeConvId}
+   501→              onSelect={(id) => { void loadConversation(id); setMobileSheetOpen(false); }}
+   502→              onNew={() => { handleNewConversation(); setMobileSheetOpen(false); }}
+   503→              onDelete={(id) => void handleDeleteConversation(id)}
+   504→              searchQuery={convSearch}
+   505→              onSearchChange={setConvSearch}
+   506→              isLoading={isLoadingList}
+   507→            />
+   508→          </div>
+   509→        </SheetContent>
+   510→      </Sheet>
+   511→
+   512→      {/* Main chat area */}
+   513→      <div className="flex-1 flex flex-col min-w-0">
+   514→        {/* Context indicator */}
+   515→        {convContext && (
+   516→          <div className="px-4 py-2 bg-emerald-500/5 border-b border-emerald-500/10">
+   517→            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+   518→              <Briefcase className="size-3" />
+   519→              Contexto: {convContext}
+   520→            </p>
+   521→          </div>
+   522→        )}
+   523→
+   524→        {/* Messages area */}
+   525→        <div className="flex-1 overflow-y-auto">
+   526→          {/* Empty state */}
+   527→          {messages.length === 0 && !isLoading && !isLoadingConv && (
+   528→            <div className="flex flex-col items-center justify-center p-8 text-center h-full">
+   529→              <motion.div
+   530→                initial={{ opacity: 0, scale: 0.9 }}
+   531→                animate={{ opacity: 1, scale: 1 }}
+   532→                transition={{ delay: 0.1 }}
+   533→                className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30 flex items-center justify-center mb-5"
+   534→              >
+   535→                <Sparkles className="size-10 text-emerald-600 dark:text-emerald-400" />
+   536→              </motion.div>
+   537→              <motion.h3
+   538→                initial={{ opacity: 0 }}
+   539→                animate={{ opacity: 1 }}
+   540→                transition={{ delay: 0.15 }}
+   541→                className="text-lg font-bold text-foreground mb-1"
+   542→              >
+   543→                LexAssistent
+   544→              </motion.h3>
+   545→              <motion.p
+   546→                initial={{ opacity: 0 }}
+   547→                animate={{ opacity: 1 }}
+   548→                transition={{ delay: 0.2 }}
+   549→                className="text-sm text-muted-foreground mb-8 max-w-sm"
+   550→              >
+   551→                O seu assistente jurídico virtual especializado em direito moçambicano. Como posso ajudar?
+   552→              </motion.p>
+   553→
+   554→              <motion.div
+   555→                initial={{ opacity: 0, y: 8 }}
+   556→                animate={{ opacity: 1, y: 0 }}
+   557→                transition={{ delay: 0.25 }}
+   558→                className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg w-full"
+   559→              >
+   560→                {QUICK_PROMPTS.map((qp) => (
+   561→                  <button
+   562→                    key={qp.prompt}
+   563→                    onClick={() => handleQuickPrompt(qp.prompt)}
+   564→                    className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/50 hover:border-emerald-300/50 dark:hover:border-emerald-700/50 px-4 py-3 text-left transition-all duration-200 active:scale-[0.98] group"
+   565→                  >
+   566→                    <span className="text-xl shrink-0">{qp.icon}</span>
+   567→                    <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">
+   568→                      {qp.label}
+   569→                    </span>
+   570→                    <ArrowRight className="size-3.5 ml-auto text-muted-foreground/40 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
+   571→                  </button>
+   572→                ))}
+   573→              </motion.div>
+   574→            </div>
+   575→          )}
+   576→
+   577→          {/* Loading conversation */}
+   578→          {isLoadingConv && (
+   579→            <div className="flex flex-col items-center justify-center py-20 gap-3">
+   580→              <Loader2 className="size-8 text-emerald-500 animate-spin" />
+   581→              <p className="text-sm text-muted-foreground">A carregar conversa...</p>
+   582→            </div>
+   583→          )}
+   584→
+   585→          {/* Messages */}
+   586→          {!isLoadingConv && messages.map((msg) => (
+   587→            <motion.div
+   588→              key={msg.id}
+   589→              initial={{ opacity: 0, y: 6 }}
+   590→              animate={{ opacity: 1, y: 0 }}
+   591→              transition={{ duration: 0.2 }}
+   592→              className={`flex items-start gap-3 px-4 py-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+   593→            >
+   594→              {msg.role === 'assistant' ? (
+   595→                <Avatar className="size-8 shrink-0 mt-0.5">
+   596→                  <AvatarFallback className="bg-gradient-to-br from-emerald-400 to-teal-500 text-white text-[10px] font-bold">LA</AvatarFallback>
+   597→                </Avatar>
+   598→              ) : (
+   599→                <Avatar className="size-8 shrink-0 mt-0.5">
+   600→                  <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">EU</AvatarFallback>
+   601→                </Avatar>
+   602→              )}
+   603→              <div className="max-w-[80%] space-y-2">
+   604→                <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed break-words overflow-hidden ${
+   605→                  msg.role === 'user'
+   606→                    ? 'bg-primary text-primary-foreground rounded-tr-sm whitespace-pre-wrap'
+   607→                    : 'bg-muted/60 text-foreground rounded-tl-sm'
+   608→                }`}>
+   609→                  {msg.role === 'user' ? (
+   610→                    msg.content
+   611→                  ) : (
+   612→                    <MarkdownContent>{msg.content}</MarkdownContent>
+   613→                  )}
+   614→                </div>
+   615→                {/* Sources */}
+   616→                {msg.sources && msg.sources.length > 0 && (
+   617→                  <div className="flex flex-wrap gap-1.5">
+   618→                    {msg.sources.map((src, i) => (
+   619→                      <Badge key={i} variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
+   620→                        {src}
+   621→                      </Badge>
+   622→                    ))}
+   623→                  </div>
+   624→                )}
+   625→                {/* Knowledge articles */}
+   626→                {msg.knowledge_articles_used && msg.knowledge_articles_used.length > 0 && (
+   627→                  <div className="flex flex-wrap gap-1.5">
+   628→                    <span className="text-[9px] text-muted-foreground flex items-center gap-1 mr-1">
+   629→                      <BookIcon className="size-3" /> Fontes:
+   630→                    </span>
+   631→                    {msg.knowledge_articles_used.map((article) => (
+   632→                      <Badge key={article.id} variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20">
+   633→                        {article.title}
+   634→                      </Badge>
+   635→                    ))}
+   636→                  </div>
+   637→                )}
+   638→                <p className="text-[10px] text-muted-foreground/50">
+   639→                  {msg.timestamp.toLocaleTimeString('pt-MZ', { hour: '2-digit', minute: '2-digit' })}
+   640→                </p>
+   641→              </div>
+   642→            </motion.div>
+   643→          ))}
+   644→
+   645→          {/* Typing indicator */}
+   646→          {isLoading && <TypingIndicator />}
+   647→
+   648→          {/* Error */}
+   649→          {error && (
+   650→            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="px-4 pb-2">
+   651→              <div className="ml-11 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+   652→                {error}
+   653→              </div>
+   654→            </motion.div>
+   655→          )}
+   656→
+   657→          <div ref={messagesEndRef} />
+   658→        </div>
+   659→
+   660→        {/* Input area */}
+   661→        <div className="border-t bg-background/80 backdrop-blur-sm px-4 py-3">
+   662→          <form onSubmit={handleSubmit} className="relative">
+   663→            <Textarea
+   664→              ref={textareaRef}
+   665→              value={inputValue}
+   666→              onChange={(e) => setInputValue(e.target.value)}
+   667→              onKeyDown={handleKeyDown}
+   668→              placeholder="Escreva a sua pergunta..."
+   669→              disabled={isLoading}
+   670→              rows={2}
+   671→              style={{ fieldSizing: 'fixed' }}
+   672→              className="resize-none overflow-y-auto rounded-xl border-border/60 bg-muted/30 pr-14 min-h-[44px] max-h-[150px] text-sm placeholder:text-muted-foreground/50 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-400/50"
+   673→            />
+   674→            <Button
+   675→              type="submit"
+   676→              size="icon"
+   677→              disabled={!inputValue.trim() || isLoading}
+   678→              className="absolute right-2 bottom-2 size-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md disabled:opacity-40 disabled:shadow-none transition-all active:scale-[0.92]"
+   679→            >
+   680→              <Send className="size-4" />
+   681→            </Button>
+   682→          </form>
+   683→          <p className="text-[10px] text-muted-foreground/50 mt-2 text-center">
+   684→            LexAssistent pode cometer erros. Verifique informações importantes.
+   685→          </p>
+   686→        </div>
+   687→      </div>
+   688→    </div>
+   689→  );
+   690→}
+   691→
+   692→// Small book icon for knowledge sources
+   693→function BookIcon({ className }: { className?: string }) {
+   694→  return (
+   695→    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+   696→      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+   697→      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+   698→    </svg>
+   699→  );
+   700→}
+   701→
+   702→// ─────────────────────────────────────────
+   703→// Tab 2: Gerar Documento
+   704→// ─────────────────────────────────────────
+   705→function GenerateDocumentTab() {
+   706→  const [docType, setDocType] = useState('');
+   707→  const [title, setTitle] = useState('');
+   708→  const [context, setContext] = useState('');
+   709→  const [processId, setProcessId] = useState('');
+   710→  const [processes, setProcesses] = useState<Array<{ id: string; process_number: string; title: string }>>([]);
+   711→  const [isGenerating, setIsGenerating] = useState(false);
+   712→  const [generatedResult, setGeneratedResult] = useState<{ title: string; result: string; type: string } | null>(null);
+   713→  const [copied, setCopied] = useState(false);
+   714→  const [error, setError] = useState<string | null>(null);
+   715→  const [recentGenerations, setRecentGenerations] = useState<GenerationRecord[]>([]);
+   716→  const [loadingHistory, setLoadingHistory] = useState(false);
+   717→
+   718→  // Load processes for select
+   719→  useEffect(() => {
+   720→    async function load() {
+   721→      try {
+   722→        const res = await processesApi.list('limit=50');
+   723→        if (res.success && res.data) {
+   724→          setProcesses(res.data.map((p) => ({ id: p.id, process_number: p.process_number, title: p.title })));
+   725→        }
+   726→      } catch {
+   727→        // silently fail
+   728→      }
+   729→    }
+   730→    void load();
+   731→  }, []);
+   732→
+   733→  // Load recent generations
+   734→  useEffect(() => {
+   735→    async function load() {
+   736→      setLoadingHistory(true);
+   737→      try {
+   738→        const res = await aiApi.listGenerations('limit=5');
+   739→        if (res.success && res.data) {
+   740→          setRecentGenerations(res.data);
+   741→        }
+   742→      } catch {
+   743→        // silently fail
+   744→      } finally {
+   745→        setLoadingHistory(false);
+   746→      }
+   747→    }
+   748→    void load();
+   749→  }, [generatedResult]);
+   750→
+   751→  const handleGenerate = useCallback(async () => {
+   752→    if (!docType || !title.trim() || !context.trim()) {
+   753→      setError('Preencha o tipo, título e instruções do documento.');
+   754→      return;
+   755→    }
+   756→    setError(null);
+   757→    setIsGenerating(true);
+   758→    setGeneratedResult(null);
+   759→
+   760→    try {
+   761→      const res = await aiApi.generate({
+   762→        type: docType,
+   763→        title: title.trim(),
+   764→        context: context.trim(),
+   765→        process_id: processId || undefined,
+   766→      });
+   767→      if (res.success && res.data) {
+   768→        setGeneratedResult({
+   769→          title: res.data.title,
+   770→          result: res.data.result,
+   771→          type: res.data.generation_type,
+   772→        });
+   773→      } else {
+   774→        setError(res.error?.message ?? 'Erro ao gerar documento.');
+   775→      }
+   776→    } catch {
+   777→      setError('Erro de conexão. Tente novamente.');
+   778→    } finally {
+   779→      setIsGenerating(false);
+   780→    }
+   781→  }, [docType, title, context, processId]);
+   782→
+   783→  const handleCopy = useCallback(() => {
+   784→    if (!generatedResult) return;
+   785→    navigator.clipboard.writeText(generatedResult.result);
+   786→    setCopied(true);
+   787→    setTimeout(() => setCopied(false), 2000);
+   788→  }, [generatedResult]);
+   789→
+   790→  const handleDownload = useCallback(() => {
+   791→    if (!generatedResult) return;
+   792→    const blob = new Blob([generatedResult.result], { type: 'text/plain;charset=utf-8' });
+   793→    const url = URL.createObjectURL(blob);
+   794→    const a = document.createElement('a');
+   795→    a.href = url;
+   796→    a.download = `${generatedResult.title.replace(/\s+/g, '_')}.txt`;
+   797→    a.click();
+   798→    URL.revokeObjectURL(url);
+   799→  }, [generatedResult]);
+   800→
+   801→  return (
+   802→    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   803→      {/* Form */}
+   804→      <Card className="rounded-xl border shadow-sm">
+   805→        <CardHeader className="pb-4">
+   806→          <CardTitle className="text-base flex items-center gap-2">
+   807→            <FilePlus className="size-5 text-emerald-500" />
+   808→            Gerar Documento
+   809→          </CardTitle>
+   810→        </CardHeader>
+   811→        <CardContent className="space-y-4">
+   812→          <div className="space-y-2">
+   813→            <label className="text-sm font-medium">Tipo de Documento</label>
+   814→            <Select value={docType} onValueChange={setDocType}>
+   815→              <SelectTrigger>
+   816→                <SelectValue placeholder="Seleccionar tipo..." />
+   817→              </SelectTrigger>
+   818→              <SelectContent>
+   819→                {DOC_TYPES.map((dt) => (
+   820→                  <SelectItem key={dt.value} value={dt.value}>{dt.label}</SelectItem>
+   821→                ))}
+   822→              </SelectContent>
+   823→            </Select>
+   824→          </div>
+   825→
+   826→          <div className="space-y-2">
+   827→            <label className="text-sm font-medium">Título do Documento</label>
+   828→            <Input
+   829→              value={title}
+   830→              onChange={(e) => setTitle(e.target.value)}
+   831→              placeholder="Ex: Contrato de Prestação de Serviços"
+   832→            />
+   833→          </div>
+   834→
+   835→          <div className="space-y-2">
+   836→            <label className="text-sm font-medium">Contexto / Instruções</label>
+   837→            <Textarea
+   838→              value={context}
+   839→              onChange={(e) => setContext(e.target.value)}
+   840→              placeholder="Descreva detalhadamente o que pretende gerar. Inclua as partes envolvidas, cláusulas desejadas, e qualquer informação relevante..."
+   841→              rows={6}
+   842→              className="resize-none"
+   843→            />
+   844→          </div>
+   845→
+   846→          <div className="space-y-2">
+   847→            <label className="text-sm font-medium">Processo Relacionado <span className="text-muted-foreground">(opcional)</span></label>
+   848→            <Select value={processId} onValueChange={setProcessId}>
+   849→              <SelectTrigger>
+   850→                <SelectValue placeholder="Seleccionar processo..." />
+   851→              </SelectTrigger>
+   852→              <SelectContent>
+   853→                {processes.map((p) => (
+   854→                  <SelectItem key={p.id} value={p.id}>
+   855→                    {p.process_number} — {p.title}
+   856→                  </SelectItem>
+   857→                ))}
+   858→              </SelectContent>
+   859→            </Select>
+   860→          </div>
+   861→
+   862→          {error && (
+   863→            <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+   864→              <AlertCircle className="size-4 shrink-0" />
+   865→              {error}
+   866→            </div>
+   867→          )}
+   868→
+   869→          <Button
+   870→            onClick={() => void handleGenerate()}
+   871→            disabled={isGenerating || !docType || !title.trim() || !context.trim()}
+   872→            className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all"
+   873→          >
+   874→            {isGenerating ? (
+   875→              <>
+   876→                <Loader2 className="size-4 mr-2 animate-spin" />
+   877→                A gerar documento...
+   878→              </>
+   879→            ) : (
+   880→              <>
+   881→                <Sparkles className="size-4 mr-2" />
+   882→                Gerar Documento
+   883→              </>
+   884→            )}
+   885→          </Button>
+   886→        </CardContent>
+   887→      </Card>
+   888→
+   889→      {/* Result */}
+   890→      <div className="space-y-4">
+   891→        {isGenerating && (
+   892→          <Card className="rounded-xl border shadow-sm">
+   893→            <CardContent className="flex flex-col items-center justify-center py-16 gap-3">
+   894→              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}>
+   895→                <Sparkles className="size-10 text-emerald-500" />
+   896→              </motion.div>
+   897→              <p className="text-sm font-medium text-foreground">A gerar documento com IA...</p>
+   898→              <p className="text-xs text-muted-foreground">Isto pode levar alguns segundos</p>
+   899→              <div className="w-48 h-1.5 rounded-full bg-muted overflow-hidden mt-2">
+   900→                <motion.div
+   901→                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"
+   902→                  initial={{ width: '0%' }}
+   903→                  animate={{ width: '90%' }}
+   904→                  transition={{ duration: 8, ease: 'easeOut' }}
+   905→                />
+   906→              </div>
+   907→            </CardContent>
+   908→          </Card>
+   909→        )}
+   910→
+   911→        {generatedResult && (
+   912→          <motion.div
+   913→            initial={{ opacity: 0, y: 10 }}
+   914→            animate={{ opacity: 1, y: 0 }}
+   915→          >
+   916→            <Card className="rounded-xl border shadow-sm overflow-hidden">
+   917→              <CardHeader className="pb-3 bg-gradient-to-r from-emerald-500/5 to-teal-500/5">
+   918→                <div className="flex items-start justify-between gap-3">
+   919→                  <div>
+   920→                    <CardTitle className="text-base">{generatedResult.title}</CardTitle>
+   921→                    <Badge variant="outline" className={`mt-1.5 text-[10px] ${TYPE_BADGE_COLORS[generatedResult.type] ?? TYPE_BADGE_COLORS.personalizado}`}>
+   922→                      {TYPE_LABELS[generatedResult.type] ?? generatedResult.type}
+   923→                    </Badge>
+   924→                  </div>
+   925→                  <div className="flex gap-1">
+   926→                    <Button size="icon" variant="outline" onClick={handleCopy} className="size-8" title="Copiar">
+   927→                      {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+   928→                    </Button>
+   929→                    <Button size="icon" variant="outline" onClick={handleDownload} className="size-8" title="Descarregar">
+   930→                      <Download className="size-3.5" />
+   931→                    </Button>
+   932→                  </div>
+   933→                </div>
+   934→              </CardHeader>
+   935→              <CardContent>
+   936→                <ScrollArea className="h-[400px]">
+   937→                  <MarkdownContent className="text-sm leading-relaxed">
+   938→                    {generatedResult.result}
+   939→                  </MarkdownContent>
+   940→                </ScrollArea>
+   941→              </CardContent>
+   942→            </Card>
+   943→          </motion.div>
+   944→        )}
+   945→
+   946→        {/* Recent generations */}
+   947→        {!isGenerating && !generatedResult && (
+   948→          <Card className="rounded-xl border shadow-sm">
+   949→            <CardHeader className="pb-3">
+   950→              <CardTitle className="text-sm flex items-center gap-2">
+   951→                <History className="size-4 text-muted-foreground" />
+   952→                Gerações Recentes
+   953→              </CardTitle>
+   954→            </CardHeader>
+   955→            <CardContent>
+   956→              {loadingHistory ? (
+   957→                <div className="space-y-3">
+   958→                  {Array.from({ length: 3 }).map((_, i) => (
+   959→                    <div key={i} className="flex items-center gap-3">
+   960→                      <Skeleton className="size-9 rounded-lg" />
+   961→                      <div className="flex-1 space-y-1.5">
+   962→                        <Skeleton className="h-4 w-3/4" />
+   963→                        <Skeleton className="h-3 w-1/2" />
+   964→                      </div>
+   965→                    </div>
+   966→                  ))}
+   967→                </div>
+   968→              ) : recentGenerations.length === 0 ? (
+   969→                <div className="flex flex-col items-center py-8 text-center">
+   970→                  <FileText className="size-8 text-muted-foreground/40 mb-2" />
+   971→                  <p className="text-sm text-muted-foreground">Nenhuma geração recente.</p>
+   972→                </div>
+   973→              ) : (
+   974→                <div className="space-y-2">
+   975→                  {recentGenerations.map((gen) => (
+   976→                    <div key={gen.id} className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/50 transition-colors cursor-default">
+   977→                      <div className="size-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+   978→                        <FileText className="size-4 text-emerald-600 dark:text-emerald-400" />
+   979→                      </div>
+   980→                      <div className="min-w-0 flex-1">
+   981→                        <p className="text-sm font-medium truncate">{gen.title}</p>
+   982→                        <div className="flex items-center gap-2 mt-0.5">
+   983→                          <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-3.5 ${TYPE_BADGE_COLORS[gen.generation_type] ?? TYPE_BADGE_COLORS.personalizado}`}>
+   984→                            {TYPE_LABELS[gen.generation_type] ?? gen.generation_type}
+   985→                          </Badge>
+   986→                          <span className="text-[10px] text-muted-foreground">
+   987→                            {new Date(gen.created_at).toLocaleDateString('pt-MZ')}
+   988→                          </span>
+   989→                        </div>
+   990→                      </div>
+   991→                    </div>
+   992→                  ))}
+   993→                </div>
+   994→              )}
+   995→            </CardContent>
+   996→          </Card>
+   997→        )}
+   998→      </div>
+   999→    </div>
+  1000→  );
+  1001→}
+  1002→
+  1003→// ─────────────────────────────────────────
+  1004→// Tab 3: Extrair Prazos
+  1005→// ─────────────────────────────────────────
+  1006→function ExtractDeadlinesTab() {
+  1007→  const [text, setText] = useState('');
+  1008→  const [processId, setProcessId] = useState('');
+  1009→  const [processes, setProcesses] = useState<Array<{ id: string; process_number: string; title: string }>>([]);
+  1010→  const [isExtracting, setIsExtracting] = useState(false);
+  1011→  const [deadlines, setDeadlines] = useState<ExtractedDeadline[]>([]);
+  1012→  const [error, setError] = useState<string | null>(null);
+  1013→
+  1014→  useEffect(() => {
+  1015→    async function load() {
+  1016→      try {
+  1017→        const res = await processesApi.list('limit=50');
+  1018→        if (res.success && res.data) {
+  1019→          setProcesses(res.data.map((p) => ({ id: p.id, process_number: p.process_number, title: p.title })));
+  1020→        }
+  1021→      } catch {
+  1022→        // silently fail
+  1023→      }
+  1024→    }
+  1025→    void load();
+  1026→  }, []);
+  1027→
+  1028→  const handleExtract = useCallback(async () => {
+  1029→    if (!text.trim()) {
+  1030→      setError('Cole o texto legal para extrair prazos.');
+  1031→      return;
+  1032→    }
+  1033→    setError(null);
+  1034→    setIsExtracting(true);
+  1035→    setDeadlines([]);
+  1036→
+  1037→    try {
+  1038→      const res = await aiApi.extractDeadlines({
+  1039→        text: text.trim(),
+  1040→        process_id: processId || undefined,
+  1041→      });
+  1042→      if (res.success && res.data) {
+  1043→        setDeadlines(res.data.deadlines);
+  1044→      } else {
+  1045→        setError(res.error?.message ?? 'Erro ao extrair prazos.');
+  1046→      }
+  1047→    } catch {
+  1048→      setError('Erro de conexão. Tente novamente.');
+  1049→    } finally {
+  1050→      setIsExtracting(false);
+  1051→    }
+  1052→  }, [text, processId]);
+  1053→
+  1054→  return (
+  1055→    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  1056→      {/* Input */}
+  1057→      <Card className="rounded-xl border shadow-sm">
+  1058→        <CardHeader className="pb-4">
+  1059→          <CardTitle className="text-base flex items-center gap-2">
+  1060→            <CalendarClock className="size-5 text-emerald-500" />
+  1061→            Extrair Prazos
+  1062→          </CardTitle>
+  1063→        </CardHeader>
+  1064→        <CardContent className="space-y-4">
+  1065→          <div className="space-y-2">
+  1066→            <label className="text-sm font-medium">Texto Legal</label>
+  1067→            <Textarea
+  1068→              value={text}
+  1069→              onChange={(e) => setText(e.target.value)}
+  1070→              placeholder="Cole aqui o texto legal do qual deseja extrair prazos processuais. Ex: decisões judiciais, citações, despachos..."
+  1071→              rows={12}
+  1072→              className="resize-none text-sm"
+  1073→            />
+  1074→          </div>
+  1075→
+  1076→          <div className="space-y-2">
+  1077→            <label className="text-sm font-medium">Processo Relacionado <span className="text-muted-foreground">(opcional)</span></label>
+  1078→            <Select value={processId} onValueChange={setProcessId}>
+  1079→              <SelectTrigger>
+  1080→                <SelectValue placeholder="Seleccionar processo..." />
+  1081→              </SelectTrigger>
+  1082→              <SelectContent>
+  1083→                {processes.map((p) => (
+  1084→                  <SelectItem key={p.id} value={p.id}>
+  1085→                    {p.process_number} — {p.title}
+  1086→                  </SelectItem>
+  1087→                ))}
+  1088→              </SelectContent>
+  1089→            </Select>
+  1090→          </div>
+  1091→
+  1092→          {error && (
+  1093→            <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+  1094→              <AlertCircle className="size-4 shrink-0" />
+  1095→              {error}
+  1096→            </div>
+  1097→          )}
+  1098→
+  1099→          <Button
+  1100→            onClick={() => void handleExtract()}
+  1101→            disabled={isExtracting || !text.trim()}
+  1102→            className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all"
+  1103→          >
+  1104→            {isExtracting ? (
+  1105→              <>
+  1106→                <Loader2 className="size-4 mr-2 animate-spin" />
+  1107→                A extrair prazos...
+  1108→              </>
+  1109→            ) : (
+  1110→              <>
+  1111→                <Clock className="size-4 mr-2" />
+  1112→                Extrair Prazos
+  1113→              </>
+  1114→            )}
+  1115→          </Button>
+  1116→        </CardContent>
+  1117→      </Card>
+  1118→
+  1119→      {/* Results */}
+  1120→      <div className="space-y-4">
+  1121→        {isExtracting && (
+  1122→          <Card className="rounded-xl border shadow-sm">
+  1123→            <CardContent className="flex flex-col items-center justify-center py-16 gap-3">
+  1124→              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}>
+  1125→                <Clock className="size-10 text-emerald-500" />
+  1126→              </motion.div>
+  1127→              <p className="text-sm font-medium text-foreground">A analisar texto legal...</p>
+  1128→              <p className="text-xs text-muted-foreground">Identificando prazos e datas relevantes</p>
+  1129→            </CardContent>
+  1130→          </Card>
+  1131→        )}
+  1132→
+  1133→        {deadlines.length > 0 && (
+  1134→          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+  1135→            <div className="flex items-center justify-between">
+  1136→              <h3 className="text-sm font-semibold text-foreground">
+  1137→                {deadlines.length} {deadlines.length === 1 ? 'prazo encontrado' : 'prazos encontrados'}
+  1138→              </h3>
+  1139→              <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 text-xs">
+  1140→                Extraídos com IA
+  1141→              </Badge>
+  1142→            </div>
+  1143→            {deadlines.map((dl, i) => (
+  1144→              <motion.div
+  1145→                key={i}
+  1146→                initial={{ opacity: 0, y: 6 }}
+  1147→                animate={{ opacity: 1, y: 0 }}
+  1148→                transition={{ delay: i * 0.08 }}
+  1149→              >
+  1150→                <Card className="rounded-xl border shadow-sm hover:shadow-md transition-shadow">
+  1151→                  <CardContent className="p-4">
+  1152→                    <div className="flex items-start justify-between gap-3">
+  1153→                      <div className="flex-1 min-w-0">
+  1154→                        <h4 className="text-sm font-semibold text-foreground">{dl.title}</h4>
+  1155→                        <div className="flex items-center gap-2 mt-1.5">
+  1156→                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800">
+  1157→                            <Clock className="size-2.5 mr-1" />
+  1158→                            {dl.due_date}
+  1159→                          </Badge>
+  1160→                        </div>
+  1161→                        {dl.description && (
+  1162→                          <p className="text-sm text-muted-foreground mt-2">{dl.description}</p>
+  1163→                        )}
+  1164→                        {dl.source_text && (
+  1165→                          <div className="mt-2 rounded-lg bg-muted/40 px-3 py-2">
+  1166→                            <p className="text-[11px] text-muted-foreground italic line-clamp-2">
+  1167→                              &ldquo;{dl.source_text}&rdquo;
+  1168→                            </p>
+  1169→                          </div>
+  1170→                        )}
+  1171→                      </div>
+  1172→                      <Button size="sm" variant="outline" className="shrink-0 text-xs border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30">
+  1173→                        Criar no Processo
+  1174→                      </Button>
+  1175→                    </div>
+  1176→                  </CardContent>
+  1177→                </Card>
+  1178→              </motion.div>
+  1179→            ))}
+  1180→          </motion.div>
+  1181→        )}
+  1182→
+  1183→        {!isExtracting && deadlines.length === 0 && (
+  1184→          <Card className="rounded-xl border shadow-sm">
+  1185→            <CardContent className="flex flex-col items-center py-16 text-center">
+  1186→              <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+  1187→                <CalendarClock className="size-8 text-muted-foreground/40" />
+  1188→              </div>
+  1189→              <h3 className="text-sm font-semibold text-foreground mb-1">Extracção de Prazos</h3>
+  1190→              <p className="text-sm text-muted-foreground max-w-sm">
+  1191→                Cole um texto legal no formulário e a IA identificará automaticamente todos os prazos processuais, datas e termos relevantes.
+  1192→              </p>
+  1193→            </CardContent>
+  1194→          </Card>
+  1195→        )}
+  1196→      </div>
+  1197→    </div>
+  1198→  );
+  1199→}
+  1200→
+  1201→// ─────────────────────────────────────────
+  1202→// Tab 4: Histórico
+  1203→// ─────────────────────────────────────────
+  1204→function HistoryTab() {
+  1205→  const [generations, setGenerations] = useState<GenerationRecord[]>([]);
+  1206→  const [isLoading, setIsLoading] = useState(true);
+  1207→  const [typeFilter, setTypeFilter] = useState('all');
+  1208→  const [selectedGen, setSelectedGen] = useState<GenerationRecord | null>(null);
+  1209→
+  1210→  const loadGenerations = useCallback(async () => {
+  1211→    setIsLoading(true);
+  1212→    try {
+  1213→      const params = typeFilter !== 'all' ? `type=${typeFilter}` : '';
+  1214→      const res = await aiApi.listGenerations(params);
+  1215→      if (res.success && res.data) {
+  1216→        setGenerations(res.data);
+  1217→      }
+  1218→    } catch {
+  1219→      // silently fail
+  1220→    } finally {
+  1221→      setIsLoading(false);
+  1222→    }
+  1223→  }, [typeFilter]);
+  1224→
+  1225→  useEffect(() => {
+  1226→    void loadGenerations();
+  1227→  }, [loadGenerations]);
+  1228→
+  1229→  const handleDelete = useCallback(async (id: string) => {
+  1230→    try {
+  1231→      await aiApi.deleteGeneration(id);
+  1232→      setGenerations((prev) => prev.filter((g) => g.id !== id));
+  1233→      if (selectedGen?.id === id) setSelectedGen(null);
+  1234→    } catch {
+  1235→      // silently fail
+  1236→    }
+  1237→  }, [selectedGen]);
+  1238→
+  1239→  return (
+  1240→    <div className="space-y-4">
+  1241→      {/* Filters */}
+  1242→      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+  1243→        <div className="flex items-center gap-2">
+  1244→          <span className="text-sm font-medium">Filtrar por tipo:</span>
+  1245→          <Select value={typeFilter} onValueChange={setTypeFilter}>
+  1246→            <SelectTrigger className="w-48 h-9">
+  1247→              <SelectValue />
+  1248→            </SelectTrigger>
+  1249→            <SelectContent>
+  1250→              <SelectItem value="all">Todos</SelectItem>
+  1251→              {DOC_TYPES.map((dt) => (
+  1252→                <SelectItem key={dt.value} value={dt.value}>{dt.label}</SelectItem>
+  1253→              ))}
+  1254→            </SelectContent>
+  1255→          </Select>
+  1256→        </div>
+  1257→        <Badge variant="outline" className="text-xs">
+  1258→          {generations.length} {generations.length === 1 ? 'geração' : 'gerações'}
+  1259→        </Badge>
+  1260→      </div>
+  1261→
+  1262→      {/* Table */}
+  1263→      <Card className="rounded-xl border shadow-sm overflow-hidden">
+  1264→        {isLoading ? (
+  1265→          <CardContent className="p-6 space-y-4">
+  1266→            {Array.from({ length: 5 }).map((_, i) => (
+  1267→              <div key={i} className="flex items-center gap-4">
+  1268→                <Skeleton className="size-9 rounded-lg" />
+  1269→                <div className="flex-1 space-y-2">
+  1270→                  <Skeleton className="h-4 w-3/4" />
+  1271→                  <Skeleton className="h-3 w-1/2" />
+  1272→                </div>
+  1273→                <Skeleton className="h-8 w-20" />
+  1274→              </div>
+  1275→            ))}
+  1276→          </CardContent>
+  1277→        ) : generations.length === 0 ? (
+  1278→          <CardContent className="flex flex-col items-center py-16 text-center">
+  1279→            <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+  1280→              <History className="size-8 text-muted-foreground/40" />
+  1281→            </div>
+  1282→            <h3 className="text-sm font-semibold text-foreground mb-1">Sem Histórico</h3>
+  1283→            <p className="text-sm text-muted-foreground max-w-sm">
+  1284→              Ainda não gerou nenhum documento com IA. Use o separador &quot;Gerar Documento&quot; para começar.
+  1285→            </p>
+  1286→          </CardContent>
+  1287→        ) : (
+  1288→          <div className="overflow-x-auto">
+  1289→            <table className="w-full text-sm">
+  1290→              <thead>
+  1291→                <tr className="border-b bg-muted/30">
+  1292→                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Título</th>
+  1293→                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tipo</th>
+  1294→                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Data</th>
+  1295→                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Acções</th>
+  1296→                </tr>
+  1297→              </thead>
+  1298→              <tbody>
+  1299→                {generations.map((gen) => (
+  1300→                  <tr key={gen.id} className="border-b hover:bg-muted/20 transition-colors">
+  1301→                    <td className="px-4 py-3">
+  1302→                      <div className="flex items-center gap-3">
+  1303→                        <div className="size-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+  1304→                          <FileText className="size-4 text-emerald-600 dark:text-emerald-400" />
+  1305→                        </div>
+  1306→                        <span className="font-medium truncate max-w-xs">{gen.title}</span>
+  1307→                      </div>
+  1308→                    </td>
+  1309→                    <td className="px-4 py-3">
+  1310→                      <Badge variant="outline" className={`text-[10px] ${TYPE_BADGE_COLORS[gen.generation_type] ?? TYPE_BADGE_COLORS.personalizado}`}>
+  1311→                        {TYPE_LABELS[gen.generation_type] ?? gen.generation_type}
+  1312→                      </Badge>
+  1313→                    </td>
+  1314→                    <td className="px-4 py-3 text-muted-foreground">
+  1315→                      {new Date(gen.created_at).toLocaleDateString('pt-MZ', {
+  1316→                        day: '2-digit',
+  1317→                        month: 'short',
+  1318→                        year: 'numeric',
+  1319→                      })}
+  1320→                    </td>
+  1321→                    <td className="px-4 py-3">
+  1322→                      <div className="flex items-center justify-end gap-1">
+  1323→                        <Button size="icon" variant="ghost" onClick={() => setSelectedGen(gen)} className="size-8 hover:bg-emerald-500/10 hover:text-emerald-600" title="Ver">
+  1324→                          <Eye className="size-3.5" />
+  1325→                        </Button>
+  1326→                        <Button size="icon" variant="ghost" onClick={() => void handleDelete(gen.id)} className="size-8 hover:bg-red-500/10 hover:text-red-500" title="Eliminar">
+  1327→                          <Trash2 className="size-3.5" />
+  1328→                        </Button>
+  1329→                      </div>
+  1330→                    </td>
+  1331→                  </tr>
+  1332→                ))}
+  1333→              </tbody>
+  1334→            </table>
+  1335→          </div>
+  1336→        )}
+  1337→      </Card>
+  1338→
+  1339→      {/* View Dialog */}
+  1340→      <Dialog open={!!selectedGen} onOpenChange={(open) => !open && setSelectedGen(null)}>
+  1341→        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+  1342→          <DialogHeader>
+  1343→            <DialogTitle className="flex items-center gap-2">
+  1344→              {selectedGen?.title}
+  1345→              {selectedGen && (
+  1346→                <Badge variant="outline" className={`text-[10px] ${TYPE_BADGE_COLORS[selectedGen.generation_type] ?? TYPE_BADGE_COLORS.personalizado}`}>
+  1347→                  {TYPE_LABELS[selectedGen.generation_type] ?? selectedGen.generation_type}
+  1348→                </Badge>
+  1349→              )}
+  1350→            </DialogTitle>
+  1351→            <DialogDescription>
+  1352→              Gerado em {selectedGen ? new Date(selectedGen.created_at).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+  1353→            </DialogDescription>
+  1354→          </DialogHeader>
+  1355→          {selectedGen && (
+  1356→            <ScrollArea className="flex-1 -mx-6 px-6">
+  1357→              <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm leading-relaxed pb-4">
+  1358→                {selectedGen.result}
+  1359→              </div>
+  1360→            </ScrollArea>
+  1361→          )}
+  1362→        </DialogContent>
+  1363→      </Dialog>
+  1364→    </div>
+  1365→  );
+  1366→}
+  1367→
+  1368→// ─────────────────────────────────────────
+  1369→// Main AIHubView Component
+  1370→// ─────────────────────────────────────────
+  1371→export function AIHubView() {
+  1372→  const [activeTab, setActiveTab] = useState('chat');
+  1373→
+  1374→  const tabs = [
+  1375→    { id: 'chat', label: 'Assistente IA', icon: Bot },
+  1376→    { id: 'gerar', label: 'Gerar Documento', icon: FilePlus },
+  1377→    { id: 'extrair', label: 'Extrair Prazos', icon: CalendarClock },
+  1378→    { id: 'historico', label: 'Histórico', icon: History },
+  1379→  ] as const;
+  1380→
+  1381→  type TabId = (typeof tabs)[number]['id'];
+  1382→
+  1383→  return (
+  1384→    <div className="flex flex-col h-full gap-6">
+  1385→      {/* Header */}
+  1386→      <motion.div
+  1387→        initial={{ opacity: 0, y: -8 }}
+  1388→        animate={{ opacity: 1, y: 0 }}
+  1389→        className="relative overflow-hidden rounded-xl border bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent p-6"
+  1390→      >
+  1391→        {/* Decorative elements */}
+  1392→        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full -translate-y-1/2 translate-x-1/3" />
+  1393→        <div className="absolute bottom-0 left-1/2 w-48 h-48 bg-teal-500/5 rounded-full translate-y-1/2" />
+  1394→
+  1395→        <div className="relative flex items-center gap-4">
+  1396→          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+  1397→            <Bot className="size-7 text-white" />
+  1398→          </div>
+  1399→          <div>
+  1400→            <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+  1401→              Centro de Inteligência Artificial
+  1402→              <Badge className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0 text-[10px] shadow-sm">
+  1403→                IA
+  1404→              </Badge>
+  1405→            </h2>
+  1406→            <p className="text-sm text-muted-foreground mt-0.5">
+  1407→              Assistente jurídico virtual, geração de documentos e análise inteligente
+  1408→            </p>
+  1409→          </div>
+  1410→        </div>
+  1411→      </motion.div>
+  1412→
+  1413→      {/* Tabs — custom implementation for reliable switching */}
+  1414→      <div role="tablist" className="flex bg-muted/60 p-1 rounded-xl h-auto w-fit">
+  1415→        {tabs.map((tab) => (
+  1416→          <button
+  1417→            key={tab.id}
+  1418→            role="tab"
+  1419→            aria-selected={activeTab === tab.id}
+  1420→            onClick={() => setActiveTab(tab.id)}
+  1421→            className={`rounded-lg px-4 py-2.5 text-sm transition-all inline-flex items-center gap-2 ${
+  1422→              activeTab === tab.id
+  1423→                ? 'bg-background text-foreground shadow-sm font-medium'
+  1424→                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+  1425→            }`}
+  1426→          >
+  1427→            <tab.icon className="size-4" />
+  1428→            <span className="hidden sm:inline">{tab.label}</span>
+  1429→          </button>
+  1430→        ))}
+  1431→      </div>
+  1432→
+  1433→      <div className="flex-1 min-h-0">
+  1434→        <AnimatePresence mode="wait">
+  1435→          <motion.div
+  1436→            key={activeTab}
+  1437→            initial={{ opacity: 0, y: 6 }}
+  1438→            animate={{ opacity: 1, y: 0 }}
+  1439→            exit={{ opacity: 0, y: -6 }}
+  1440→              transition={{ duration: 0.2 }}
+  1441→            className={activeTab === 'chat' ? 'h-full' : ''}
+  1442→            >
+  1443→              {activeTab === 'chat' && <AssistantChatTab />}
+  1444→              {activeTab === 'gerar' && <GenerateDocumentTab />}
+  1445→              {activeTab === 'extrair' && <ExtractDeadlinesTab />}
+  1446→              {activeTab === 'historico' && <HistoryTab />}
+  1447→            </motion.div>
+  1448→          </AnimatePresence>
+  1449→        </div>
+  1450→    </div>
+  1451→  );
+  1452→}
+  1453→

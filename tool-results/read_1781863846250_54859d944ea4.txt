@@ -1,0 +1,866 @@
+     1→// ═══════════════════════════════════════════════════════════════
+     2→// LEXDOC — Vista de Relatórios
+     3→// Painel abrangente com gráficos e análises do escritório
+     4→// ═══════════════════════════════════════════════════════════════
+     5→
+     6→'use client';
+     7→
+     8→import { useMemo, useState } from 'react';
+     9→import { motion } from 'framer-motion';
+    10→import { useQuery } from '@tanstack/react-query';
+    11→import {
+    12→  Building2,
+    13→  Users,
+    14→  FileText,
+    15→  Calendar,
+    16→  Clock,
+    17→  Shield,
+    18→  Printer,
+    19→  TrendingUp,
+    20→  TrendingDown,
+    21→  Lock,
+    22→  HardDrive,
+    23→  Activity,
+    24→  FileDown,
+    25→  Loader2,
+    26→} from 'lucide-react';
+    27→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    28→import { Badge } from '@/components/ui/badge';
+    29→import { Button } from '@/components/ui/button';
+    30→import { Skeleton } from '@/components/ui/skeleton';
+    31→import { Separator } from '@/components/ui/separator';
+    32→import {
+    33→  ChartContainer,
+    34→  ChartTooltip,
+    35→  ChartTooltipContent,
+    36→  type ChartConfig,
+    37→} from '@/components/ui/chart';
+    38→import {
+    39→  PieChart,
+    40→  Pie,
+    41→  Cell,
+    42→  BarChart,
+    43→  Bar,
+    44→  XAxis,
+    45→  YAxis,
+    46→  CartesianGrid,
+    47→  ResponsiveContainer,
+    48→} from 'recharts';
+    49→import { reportsApi, exportApi, type ReportOverviewData } from '@/lib/api-client';
+    50→import { toast } from 'sonner';
+    51→
+    52→// ─────────────────────────────────────────
+    53→// Chart configs
+    54→// ─────────────────────────────────────────
+    55→const areaChartConfig: ChartConfig = {
+    56→  CIVIL: { label: 'Civil', color: 'hsl(142, 76%, 36%)' },
+    57→  CRIMINAL: { label: 'Criminal', color: 'hsl(0, 72%, 51%)' },
+    58→  LABORAL: { label: 'Laboral', color: 'hsl(38, 92%, 50%)' },
+    59→  COMERCIAL: { label: 'Comercial', color: 'hsl(217, 91%, 60%)' },
+    60→  FAMILIA: { label: 'Família', color: 'hsl(280, 65%, 60%)' },
+    61→  OUTRO: { label: 'Outro', color: 'hsl(215, 14%, 34%)' },
+    62→};
+    63→
+    64→const priorityChartConfig: ChartConfig = {
+    65→  LOW: { label: 'Baixa', color: 'hsl(215, 14%, 34%)' },
+    66→  MEDIUM: { label: 'Média', color: 'hsl(38, 92%, 50%)' },
+    67→  HIGH: { label: 'Alta', color: 'hsl(25, 95%, 53%)' },
+    68→  URGENT: { label: 'Urgente', color: 'hsl(0, 72%, 51%)' },
+    69→};
+    70→
+    71→const clientChartConfig: ChartConfig = {
+    72→  INDIVIDUAL: { label: 'Individual', color: 'hsl(142, 76%, 36%)' },
+    73→  EMPRESA: { label: 'Empresa', color: 'hsl(217, 91%, 60%)' },
+    74→  GOVERNO: { label: 'Governo', color: 'hsl(25, 95%, 53%)' },
+    75→  ONG: { label: 'ONG', color: 'hsl(280, 65%, 60%)' },
+    76→};
+    77→
+    78→const documentChartConfig: ChartConfig = {
+    79→  DRAFT: { label: 'Rascunho', color: 'hsl(38, 92%, 50%)' },
+    80→  FINAL: { label: 'Final', color: 'hsl(142, 76%, 36%)' },
+    81→  ARCHIVED: { label: 'Arquivado', color: 'hsl(215, 14%, 34%)' },
+    82→};
+    83→
+    84→const activityChartConfig: ChartConfig = {
+    85→  CREATE: { label: 'Criação', color: 'hsl(142, 76%, 36%)' },
+    86→  UPDATE: { label: 'Actualização', color: 'hsl(217, 91%, 60%)' },
+    87→  DELETE: { label: 'Eliminação', color: 'hsl(0, 72%, 51%)' },
+    88→  LOGIN_SUCCESS: { label: 'Login', color: 'hsl(38, 92%, 50%)' },
+    89→};
+    90→
+    91→const AREA_LABELS: Record<string, string> = {
+    92→  CIVIL: 'Civil',
+    93→  CRIMINAL: 'Criminal',
+    94→  LABORAL: 'Laboral',
+    95→  COMERCIAL: 'Comercial',
+    96→  FAMILIA: 'Família',
+    97→  OUTRO: 'Outro',
+    98→};
+    99→
+   100→const PRIORITY_LABELS: Record<string, string> = {
+   101→  LOW: 'Baixa',
+   102→  MEDIUM: 'Média',
+   103→  HIGH: 'Alta',
+   104→  URGENT: 'Urgente',
+   105→};
+   106→
+   107→const CLIENT_LABELS: Record<string, string> = {
+   108→  INDIVIDUAL: 'Individual',
+   109→  EMPRESA: 'Empresa',
+   110→  GOVERNO: 'Governo',
+   111→  ONG: 'ONG',
+   112→};
+   113→
+   114→const DOC_STATUS_LABELS: Record<string, string> = {
+   115→  DRAFT: 'Rascunho',
+   116→  FINAL: 'Final',
+   117→  ARCHIVED: 'Arquivado',
+   118→};
+   119→
+   120→const ACTIVITY_LABELS: Record<string, string> = {
+   121→  CREATE: 'Criação',
+   122→  UPDATE: 'Actualização',
+   123→  DELETE: 'Eliminação',
+   124→  LOGIN_SUCCESS: 'Login',
+   125→};
+   126→
+   127→// ─────────────────────────────────────────
+   128→// Helpers
+   129→// ─────────────────────────────────────────
+   130→function formatBytes(bytes: number): string {
+   131→  if (bytes === 0) return '0 B';
+   132→  const k = 1024;
+   133→  const sizes = ['B', 'KB', 'MB', 'GB'];
+   134→  const i = Math.floor(Math.log(bytes) / Math.log(k));
+   135→  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+   136→}
+   137→
+   138→function formatDays(days: number): string {
+   139→  if (days < 30) return `${days} dia${days !== 1 ? 's' : ''}`;
+   140→  const months = Math.floor(days / 30);
+   141→  const remDays = days % 30;
+   142→  if (months < 12) {
+   143→    return remDays > 0 ? `${months} mês${months > 1 ? 'es' : ''} e ${remDays} dia${remDays > 1 ? 's' : ''}` : `${months} mês${months > 1 ? 'es' : ''}`;
+   144→  }
+   145→  const years = Math.floor(months / 12);
+   146→  const remMonths = months % 12;
+   147→  return `${years} ano${years > 1 ? 's' : ''} e ${remMonths} mês${remMonths > 1 ? 'es' : ''}`;
+   148→}
+   149→
+   150→function getPlanBadgeClass(plan: string): string {
+   151→  switch (plan) {
+   152→    case 'ENTERPRISE': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 border-purple-200';
+   153→    case 'PROFESSIONAL': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200';
+   154→    default: return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200';
+   155→  }
+   156→}
+   157→
+   158→// ─────────────────────────────────────────
+   159→// Skeletons
+   160→// ─────────────────────────────────────────
+   161→function CardSkeleton() {
+   162→  return (
+   163→    <Card>
+   164→      <CardHeader className="pb-2">
+   165→        <Skeleton className="h-5 w-32" />
+   166→      </CardHeader>
+   167→      <CardContent>
+   168→        <div className="space-y-3">
+   169→          {Array.from({ length: 4 }).map((_, i) => (
+   170→            <Skeleton key={i} className="h-6 w-full" />
+   171→          ))}
+   172→        </div>
+   173→      </CardContent>
+   174→    </Card>
+   175→  );
+   176→}
+   177→
+   178→function ChartSkeleton() {
+   179→  return (
+   180→    <Card>
+   181→      <CardHeader className="pb-2">
+   182→        <Skeleton className="h-5 w-32" />
+   183→      </CardHeader>
+   184→      <CardContent>
+   185→        <div className="flex items-center justify-center h-[200px]">
+   186→          <Skeleton className="h-[180px] w-[180px] rounded-full" />
+   187→        </div>
+   188→      </CardContent>
+   189→    </Card>
+   190→  );
+   191→}
+   192→
+   193→// ─────────────────────────────────────────
+   194→// Bar Chart Component
+   195→// ─────────────────────────────────────────
+   196→function HorizontalBarChart({
+   197→  data,
+   198→  config,
+   199→  labels,
+   200→  colors,
+   201→}: {
+   202→  data: Record<string, number>;
+   203→  config: ChartConfig;
+   204→  labels: Record<string, string>;
+   205→  colors: Record<string, string>;
+   206→}) {
+   207→  const entries = Object.entries(data).filter(([, v]) => v > 0);
+   208→  const maxVal = Math.max(...entries.map(([, v]) => v), 1);
+   209→
+   210→  if (entries.length === 0) {
+   211→    return (
+   212→      <div className="flex items-center justify-center h-[140px] text-sm text-muted-foreground">
+   213→        Sem dados disponíveis
+   214→      </div>
+   215→    );
+   216→  }
+   217→
+   218→  return (
+   219→    <div className="space-y-2.5 pt-1">
+   220→      {entries.map(([key, value]) => {
+   221→        const pct = (value / maxVal) * 100;
+   222→        return (
+   223→          <div key={key} className="space-y-1">
+   224→            <div className="flex items-center justify-between">
+   225→              <span className="text-sm text-muted-foreground">{labels[key] ?? key}</span>
+   226→              <span className="text-sm font-semibold">{value}</span>
+   227→            </div>
+   228→            <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+   229→              <motion.div
+   230→                initial={{ width: 0 }}
+   231→                animate={{ width: `${pct}%` }}
+   232→                transition={{ duration: 0.6, ease: 'easeOut' }}
+   233→                className="h-full rounded-full"
+   234→                style={{ backgroundColor: colors[key] ?? 'hsl(142, 76%, 36%)' }}
+   235→              />
+   236→            </div>
+   237→          </div>
+   238→        );
+   239→      })}
+   240→    </div>
+   241→  );
+   242→}
+   243→
+   244→// ─────────────────────────────────────────
+   245→// Pie/Donut Chart Component
+   246→// ─────────────────────────────────────────
+   247→function DonutChart({
+   248→  data,
+   249→  config,
+   250→  labels,
+   251→}: {
+   252→  data: Record<string, number>;
+   253→  config: ChartConfig;
+   254→  labels: Record<string, string>;
+   255→}) {
+   256→  const entries = Object.entries(data).filter(([, v]) => v > 0);
+   257→
+   258→  if (entries.length === 0) {
+   259→    return (
+   260→      <div className="flex items-center justify-center h-[140px] text-sm text-muted-foreground">
+   261→        Sem dados disponíveis
+   262→      </div>
+   263→    );
+   264→  }
+   265→
+   266→  const chartData = entries.map(([name, value]) => ({
+   267→    name,
+   268→    value,
+   269→    fill: `var(--color-${name.toLowerCase()})`,
+   270→  }));
+   271→
+   272→  return (
+   273→    <div className="flex items-center gap-4">
+   274→      <ChartContainer config={config} className="w-[130px] h-[130px] shrink-0">
+   275→        <PieChart>
+   276→          <ChartTooltip content={<ChartTooltipContent />} />
+   277→          <Pie
+   278→            data={chartData}
+   279→            dataKey="value"
+   280→            nameKey="name"
+   281→            cx="50%"
+   282→            cy="50%"
+   283→            innerRadius={30}
+   284→            outerRadius={58}
+   285→            strokeWidth={2}
+   286→            stroke="var(--background)"
+   287→          >
+   288→            {chartData.map((entry) => (
+   289→              <Cell key={entry.name} fill={entry.fill} />
+   290→            ))}
+   291→          </Pie>
+   292→        </PieChart>
+   293→      </ChartContainer>
+   294→      <div className="flex-1 space-y-2">
+   295→        {entries.map(([key, value]) => {
+   296→          const cfg = config[key as keyof typeof config];
+   297→          return (
+   298→            <div key={key} className="flex items-center justify-between">
+   299→              <div className="flex items-center gap-2">
+   300→                <div
+   301→                  className="w-3 h-3 rounded-sm"
+   302→                  style={{ backgroundColor: cfg?.color ?? '#999' }}
+   303→                />
+   304→                <span className="text-sm text-muted-foreground">{labels[key] ?? key}</span>
+   305→              </div>
+   306→              <span className="text-sm font-semibold">{value}</span>
+   307→            </div>
+   308→          );
+   309→        })}
+   310→      </div>
+   311→    </div>
+   312→  );
+   313→}
+   314→
+   315→// ─────────────────────────────────────────
+   316→// Deadline Progress Bar Component
+   317→// ─────────────────────────────────────────
+   318→function DeadlineStatusBar({
+   319→  label,
+   320→  value,
+   321→  total,
+   322→  color,
+   323→}: {
+   324→  label: string;
+   325→  value: number;
+   326→  total: number;
+   327→  color: string;
+   328→}) {
+   329→  const pct = total > 0 ? (value / total) * 100 : 0;
+   330→  return (
+   331→    <div className="space-y-1.5">
+   332→      <div className="flex items-center justify-between">
+   333→        <span className="text-sm font-medium">{label}</span>
+   334→        <span className="text-sm font-semibold">{value}</span>
+   335→      </div>
+   336→      <div className="h-3 rounded-full bg-muted overflow-hidden">
+   337→        <motion.div
+   338→          initial={{ width: 0 }}
+   339→          animate={{ width: `${pct}%` }}
+   340→          transition={{ duration: 0.6, ease: 'easeOut' }}
+   341→          className={`h-full rounded-full ${color}`}
+   342→        />
+   343→      </div>
+   344→    </div>
+   345→  );
+   346→}
+   347→
+   348→// ─────────────────────────────────────────
+   349→// Main Component
+   350→// ─────────────────────────────────────────
+   351→export function ReportsView() {
+   352→  const { data: responseData, isLoading } = useQuery({
+   353→    queryKey: ['reports', 'overview'],
+   354→    queryFn: () => reportsApi.overview(),
+   355→    staleTime: 5 * 60 * 1000, // 5 min cache
+   356→  });
+   357→
+   358→  const report = responseData?.data ?? null;
+   359→
+   360→  // ── Process data for charts ──
+   361→  const areaData = useMemo(() => {
+   362→    if (!report) return {} as Record<string, number>;
+   363→    return report.processes.by_area;
+   364→  }, [report]);
+   365→
+   366→  const priorityData = useMemo(() => {
+   367→    if (!report) return {} as Record<string, number>;
+   368→    return report.processes.by_priority;
+   369→  }, [report]);
+   370→
+   371→  const clientTypeData = useMemo(() => {
+   372→    if (!report) return {} as Record<string, number>;
+   373→    return report.clients.by_type;
+   374→  }, [report]);
+   375→
+   376→  const docStatusData = useMemo(() => {
+   377→    if (!report) return {} as Record<string, number>;
+   378→    return report.documents.by_status;
+   379→  }, [report]);
+   380→
+   381→  const activityTypeData = useMemo(() => {
+   382→    if (!report) return {} as Record<string, number>;
+   383→    return report.activity.recent_actions_by_type;
+   384→  }, [report]);
+   385→
+   386→  // Monthly comparison
+   387→  const monthlyComparison = useMemo(() => {
+   388→    if (!report) return null;
+   389→    const { this_month, last_month } = report.processes;
+   390→    const diff = this_month - last_month;
+   391→    const pct = last_month > 0 ? Math.round((diff / last_month) * 100) : 0;
+   392→    return { this_month, last_month, diff, pct };
+   393→  }, [report]);
+   394→
+   395→  // Handle print
+   396→  const handlePrint = () => {
+   397→    window.print();
+   398→  };
+   399→
+   400→  // Handle PDF export
+   401→  const [exporting, setExporting] = useState(false);
+   402→
+   403→  const handleExportPdf = async () => {
+   404→    setExporting(true);
+   405→    try {
+   406→      const blob = await exportApi.reportPdf('firm_overview');
+   407→      const url = URL.createObjectURL(blob);
+   408→      const a = document.createElement('a');
+   409→      a.href = url;
+   410→      a.download = `relatorio_firm_overview_${new Date().toISOString().split('T')[0]}.html`;
+   411→      document.body.appendChild(a);
+   412→      a.click();
+   413→      document.body.removeChild(a);
+   414→      URL.revokeObjectURL(url);
+   415→      toast.success('Relatório exportado com sucesso!', { description: 'Abra o ficheiro HTML e utilize Imprimir > Guardar como PDF.' });
+   416→    } catch {
+   417→      toast.error('Erro ao exportar relatório.', { description: 'Não foi possível gerar o relatório. Tente novamente.' });
+   418→    } finally {
+   419→      setExporting(false);
+   420→    }
+   421→  };
+   422→
+   423→  if (isLoading) {
+   424→    return (
+   425→      <div className="space-y-6">
+   426→        <Skeleton className="h-10 w-48" />
+   427→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   428→          <CardSkeleton />
+   429→          <ChartSkeleton />
+   430→          <ChartSkeleton />
+   431→          <CardSkeleton />
+   432→        </div>
+   433→      </div>
+   434→    );
+   435→  }
+   436→
+   437→  if (!report) {
+   438→    return (
+   439→      <div className="text-center py-12 text-muted-foreground">
+   440→        Não foi possível carregar os dados do relatório.
+   441→      </div>
+   442→    );
+   443→  }
+   444→
+   445→  return (
+   446→    <div className="space-y-6 print:space-y-4">
+   447→      {/* Header with print button */}
+   448→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
+   449→        <div>
+   450→          <h2 className="text-2xl font-bold tracking-tight">Relatórios</h2>
+   451→          <p className="text-sm text-muted-foreground mt-1">
+   452→            Análise completa do escritório {report.firm.name}
+   453→          </p>
+   454→        </div>
+   455→        <div className="flex items-center gap-2">
+   456→          <Button
+   457→            variant="outline"
+   458→            onClick={handlePrint}
+   459→            className="gap-2 active:scale-[0.98]"
+   460→          >
+   461→            <Printer className="size-4" />
+   462→            Imprimir Relatório
+   463→          </Button>
+   464→          <Button
+   465→            variant="outline"
+   466→            onClick={handleExportPdf}
+   467→            disabled={exporting}
+   468→            className="gap-2 active:scale-[0.98] bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white border-0 shadow-md"
+   469→          >
+   470→            {exporting ? (
+   471→              <Loader2 className="size-4 animate-spin" />
+   472→            ) : (
+   473→              <FileDown className="size-4" />
+   474→            )}
+   475→            {exporting ? 'A exportar...' : 'Exportar PDF'}
+   476→          </Button>
+   477→        </div>
+   478→      </div>
+   479→
+   480→      {/* ── Executive Summary ── */}
+   481→      <Card className="print:shadow-none print:border print:border-gray-300">
+   482→        <CardHeader className="pb-3">
+   483→          <CardTitle className="text-base flex items-center gap-2">
+   484→            <Building2 className="size-4 text-emerald-500" />
+   485→            Resumo Executivo
+   486→          </CardTitle>
+   487→        </CardHeader>
+   488→        <CardContent>
+   489→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   490→            <div>
+   491→              <p className="text-xs text-muted-foreground mb-1">Escritório</p>
+   492→              <p className="font-semibold text-sm truncate">{report.firm.name}</p>
+   493→            </div>
+   494→            <div>
+   495→              <p className="text-xs text-muted-foreground mb-1">Plano</p>
+   496→              <Badge variant="outline" className={`text-xs ${getPlanBadgeClass(report.firm.plan)}`}>
+   497→                {report.firm.plan}
+   498→              </Badge>
+   499→            </div>
+   500→            <div>
+   501→              <p className="text-xs text-muted-foreground mb-1">Membros</p>
+   502→              <p className="font-semibold text-sm flex items-center gap-1.5">
+   503→                <Users className="size-3.5 text-muted-foreground" />
+   504→                {report.firm.member_count}
+   505→              </p>
+   506→            </div>
+   507→            <div>
+   508→              <p className="text-xs text-muted-foreground mb-1">Idade</p>
+   509→              <p className="font-semibold text-sm flex items-center gap-1.5">
+   510→                <Clock className="size-3.5 text-muted-foreground" />
+   511→                {formatDays(report.firm.age_days)}
+   512→              </p>
+   513→            </div>
+   514→          </div>
+   515→        </CardContent>
+   516→      </Card>
+   517→
+   518→      {/* ── Process Analytics ── */}
+   519→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   520→        {/* Area breakdown */}
+   521→        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-emerald-50/30 dark:from-background dark:to-emerald-950/10">
+   522→          <CardHeader className="pb-2">
+   523→            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   524→              <FileText className="size-4 text-emerald-500" />
+   525→              Processos por Área
+   526→            </CardTitle>
+   527→          </CardHeader>
+   528→          <CardContent>
+   529→            <HorizontalBarChart
+   530→              data={areaData}
+   531→              config={areaChartConfig}
+   532→              labels={AREA_LABELS}
+   533→              colors={{
+   534→                CIVIL: 'hsl(142, 76%, 36%)',
+   535→                CRIMINAL: 'hsl(0, 72%, 51%)',
+   536→                LABORAL: 'hsl(38, 92%, 50%)',
+   537→                COMERCIAL: 'hsl(217, 91%, 60%)',
+   538→                FAMILIA: 'hsl(280, 65%, 60%)',
+   539→                OUTRO: 'hsl(215, 14%, 34%)',
+   540→              }}
+   541→            />
+   542→          </CardContent>
+   543→        </Card>
+   544→
+   545→        {/* Priority breakdown */}
+   546→        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-amber-50/30 dark:from-background dark:to-amber-950/10">
+   547→          <CardHeader className="pb-2">
+   548→            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   549→              <TrendingUp className="size-4 text-amber-500" />
+   550→              Processos por Prioridade
+   551→            </CardTitle>
+   552→          </CardHeader>
+   553→          <CardContent>
+   554→            <HorizontalBarChart
+   555→              data={priorityData}
+   556→              config={priorityChartConfig}
+   557→              labels={PRIORITY_LABELS}
+   558→              colors={{
+   559→                LOW: 'hsl(215, 14%, 34%)',
+   560→                MEDIUM: 'hsl(38, 92%, 50%)',
+   561→                HIGH: 'hsl(25, 95%, 53%)',
+   562→                URGENT: 'hsl(0, 72%, 51%)',
+   563→              }}
+   564→            />
+   565→          </CardContent>
+   566→        </Card>
+   567→
+   568→        {/* Monthly comparison */}
+   569→        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow lg:col-span-2 bg-gradient-to-br from-white to-cyan-50/30 dark:from-background dark:to-cyan-950/10">
+   570→          <CardHeader className="pb-2">
+   571→            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   572→              <Calendar className="size-4 text-cyan-500" />
+   573→              Comparação Mensal de Processos
+   574→            </CardTitle>
+   575→          </CardHeader>
+   576→          <CardContent>
+   577→            <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-10">
+   578→              <div className="flex items-center gap-6">
+   579→                <div className="text-center">
+   580→                  <p className="text-xs text-muted-foreground mb-1">Este mês</p>
+   581→                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+   582→                    {monthlyComparison?.this_month ?? 0}
+   583→                  </p>
+   584→                </div>
+   585→                <Separator orientation="vertical" className="h-10" />
+   586→                <div className="text-center">
+   587→                  <p className="text-xs text-muted-foreground mb-1">Mês passado</p>
+   588→                  <p className="text-2xl font-bold text-muted-foreground">
+   589→                    {monthlyComparison?.last_month ?? 0}
+   590→                  </p>
+   591→                </div>
+   592→              </div>
+   593→              {monthlyComparison && (
+   594→                <div className="flex items-center gap-2">
+   595→                  {monthlyComparison.diff > 0 ? (
+   596→                    <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 rounded-full">
+   597→                      <TrendingUp className="size-4" />
+   598→                      <span className="text-sm font-semibold">+{monthlyComparison.pct}%</span>
+   599→                    </div>
+   600→                  ) : monthlyComparison.diff < 0 ? (
+   601→                    <div className="flex items-center gap-1 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 px-3 py-1.5 rounded-full">
+   602→                      <TrendingDown className="size-4" />
+   603→                      <span className="text-sm font-semibold">{monthlyComparison.pct}%</span>
+   604→                    </div>
+   605→                  ) : (
+   606→                    <div className="flex items-center gap-1 text-muted-foreground bg-muted px-3 py-1.5 rounded-full">
+   607→                      <span className="text-sm font-semibold">0%</span>
+   608→                    </div>
+   609→                  )}
+   610→                  <span className="text-xs text-muted-foreground">
+   611→                    vs. mês passado
+   612→                  </span>
+   613→                </div>
+   614→              )}
+   615→              <div className="hidden sm:block text-center ml-auto">
+   616→                <p className="text-xs text-muted-foreground mb-1">Média/mês</p>
+   617→                <p className="text-lg font-bold">{report.processes.avg_per_month}</p>
+   618→              </div>
+   619→            </div>
+   620→          </CardContent>
+   621→        </Card>
+   622→      </div>
+   623→
+   624→      {/* ── Client Analytics ── */}
+   625→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   626→        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-cyan-50/30 dark:from-background dark:to-cyan-950/10">
+   627→          <CardHeader className="pb-2">
+   628→            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   629→              <Users className="size-4 text-cyan-500" />
+   630→              Clientes por Tipo
+   631→            </CardTitle>
+   632→          </CardHeader>
+   633→          <CardContent>
+   634→            <DonutChart
+   635→              data={clientTypeData}
+   636→              config={clientChartConfig}
+   637→              labels={CLIENT_LABELS}
+   638→            />
+   639→          </CardContent>
+   640→        </Card>
+   641→
+   642→        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-purple-50/30 dark:from-background dark:to-purple-950/10">
+   643→          <CardHeader className="pb-2">
+   644→            <CardTitle className="text-sm font-semibold">Novos Clientes</CardTitle>
+   645→          </CardHeader>
+   646→          <CardContent>
+   647→            <div className="flex items-center justify-center h-[130px]">
+   648→              <div className="text-center">
+   649→                <motion.p
+   650→                  initial={{ scale: 0.5, opacity: 0 }}
+   651→                  animate={{ scale: 1, opacity: 1 }}
+   652→                  className="text-4xl font-bold text-emerald-600 dark:text-emerald-400"
+   653→                >
+   654→                  {report.clients.new_this_month}
+   655→                </motion.p>
+   656→                <p className="text-sm text-muted-foreground mt-1">
+   657→                  novos clientes este mês
+   658→                </p>
+   659→                <p className="text-xs text-muted-foreground mt-2">
+   660→                  Total: {report.clients.total} clientes
+   661→                </p>
+   662→              </div>
+   663→            </div>
+   664→          </CardContent>
+   665→        </Card>
+   666→      </div>
+   667→
+   668→      {/* ── Document Analytics ── */}
+   669→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   670→        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-amber-50/30 dark:from-background dark:to-amber-950/10">
+   671→          <CardHeader className="pb-2">
+   672→            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   673→              <FileText className="size-4 text-amber-500" />
+   674→              Documentos por Estado
+   675→            </CardTitle>
+   676→          </CardHeader>
+   677→          <CardContent>
+   678→            <DonutChart
+   679→              data={docStatusData}
+   680→              config={documentChartConfig}
+   681→              labels={DOC_STATUS_LABELS}
+   682→            />
+   683→          </CardContent>
+   684→        </Card>
+   685→
+   686→        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-emerald-50/30 dark:from-background dark:to-emerald-950/10">
+   687→          <CardHeader className="pb-2">
+   688→            <CardTitle className="text-sm font-semibold">Armazenamento e Segurança</CardTitle>
+   689→          </CardHeader>
+   690→          <CardContent>
+   691→            <div className="space-y-5 pt-2">
+   692→              <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
+   693→                <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+   694→                  <HardDrive className="size-5 text-amber-600 dark:text-amber-400" />
+   695→                </div>
+   696→                <div>
+   697→                  <p className="text-xs text-muted-foreground">Armazenamento total</p>
+   698→                  <p className="text-lg font-bold">{formatBytes(report.documents.total_size_bytes)}</p>
+   699→                </div>
+   700→              </div>
+   701→              <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
+   702→                <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center shrink-0">
+   703→                  <Lock className="size-5 text-red-600 dark:text-red-400" />
+   704→                </div>
+   705→                <div>
+   706→                  <p className="text-xs text-muted-foreground">Documentos confidenciais</p>
+   707→                  <p className="text-lg font-bold">{report.documents.confidential_count}</p>
+   708→                </div>
+   709→              </div>
+   710→              <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
+   711→                <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+   712→                  <FileText className="size-5 text-emerald-600 dark:text-emerald-400" />
+   713→                </div>
+   714→                <div>
+   715→                  <p className="text-xs text-muted-foreground">Total de documentos</p>
+   716→                  <p className="text-lg font-bold">{report.documents.total}</p>
+   717→                </div>
+   718→              </div>
+   719→            </div>
+   720→          </CardContent>
+   721→        </Card>
+   722→      </div>
+   723→
+   724→      {/* ── Deadline Analytics ── */}
+   725→      <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-red-50/30 dark:from-background dark:to-red-950/10">
+   726→        <CardHeader className="pb-2">
+   727→          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   728→            <Calendar className="size-4 text-red-500" />
+   729→            Análise de Prazos
+   730→          </CardTitle>
+   731→        </CardHeader>
+   732→        <CardContent>
+   733→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+   734→            <div className="text-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30">
+   735→              <p className="text-2xl font-bold text-red-600 dark:text-red-400">{report.deadlines.overdue}</p>
+   736→              <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-1">Expirados</p>
+   737→            </div>
+   738→            <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30">
+   739→              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{report.deadlines.upcoming_7d}</p>
+   740→              <p className="text-xs text-amber-600/80 dark:text-amber-400/80 mt-1">Próximos 7 dias</p>
+   741→            </div>
+   742→            <div className="text-center p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30">
+   743→              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{report.deadlines.upcoming_30d}</p>
+   744→              <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80 mt-1">Próximos 30 dias</p>
+   745→            </div>
+   746→            <div className="text-center p-3 rounded-lg bg-muted border border-border">
+   747→              <p className="text-2xl font-bold text-muted-foreground">{report.deadlines.completed}</p>
+   748→              <p className="text-xs text-muted-foreground mt-1">Concluídos</p>
+   749→            </div>
+   750→          </div>
+   751→          <div className="space-y-3">
+   752→            <DeadlineStatusBar
+   753→              label="Expirados"
+   754→              value={report.deadlines.overdue}
+   755→              total={report.deadlines.total}
+   756→              color="bg-red-500"
+   757→            />
+   758→            <DeadlineStatusBar
+   759→              label="Próximos 7 dias"
+   760→              value={report.deadlines.upcoming_7d}
+   761→              total={report.deadlines.total}
+   762→              color="bg-amber-500"
+   763→            />
+   764→            <DeadlineStatusBar
+   765→              label="Próximos 30 dias"
+   766→              value={report.deadlines.upcoming_30d}
+   767→              total={report.deadlines.total}
+   768→              color="bg-emerald-500"
+   769→            />
+   770→            <DeadlineStatusBar
+   771→              label="Concluídos"
+   772→              value={report.deadlines.completed}
+   773→              total={report.deadlines.total}
+   774→              color="bg-gray-400 dark:bg-gray-500"
+   775→            />
+   776→          </div>
+   777→        </CardContent>
+   778→      </Card>
+   779→
+   780→      {/* ── Activity Section ── */}
+   781→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   782→        {/* Most active users */}
+   783→        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-purple-50/30 dark:from-background dark:to-purple-950/10">
+   784→          <CardHeader className="pb-2">
+   785→            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   786→              <Activity className="size-4 text-purple-500" />
+   787→              Utilizadores Mais Activos
+   788→            </CardTitle>
+   789→          </CardHeader>
+   790→          <CardContent>
+   791→            {report.activity.most_active_users.length === 0 ? (
+   792→              <div className="text-center py-8 text-sm text-muted-foreground">
+   793→                Sem dados de actividade
+   794→              </div>
+   795→            ) : (
+   796→              <div className="space-y-3">
+   797→                {report.activity.most_active_users.map((user, i) => {
+   798→                  const maxActions = report.activity.most_active_users[0]?.actions_count ?? 1;
+   799→                  const pct = (user.actions_count / maxActions) * 100;
+   800→                  const medalColors = ['text-amber-500', 'text-gray-400', 'text-orange-600', 'text-muted-foreground', 'text-muted-foreground'];
+   801→                  return (
+   802→                    <motion.div
+   803→                      key={user.name}
+   804→                      initial={{ opacity: 0, x: -10 }}
+   805→                      animate={{ opacity: 1, x: 0 }}
+   806→                      transition={{ delay: i * 0.05 }}
+   807→                      className="flex items-center gap-3"
+   808→                    >
+   809→                      <span className={`text-sm font-bold w-5 text-center ${i < 3 ? medalColors[i] : ''}`}>
+   810→                        {i + 1}
+   811→                      </span>
+   812→                      <div className="flex-1 min-w-0">
+   813→                        <div className="flex items-center justify-between mb-1">
+   814→                          <span className="text-sm font-medium truncate">{user.name}</span>
+   815→                          <span className="text-xs text-muted-foreground shrink-0 ml-2">
+   816→                            {user.actions_count} acções
+   817→                          </span>
+   818→                        </div>
+   819→                        <div className="h-2 rounded-full bg-muted overflow-hidden">
+   820→                          <motion.div
+   821→                            initial={{ width: 0 }}
+   822→                            animate={{ width: `${pct}%` }}
+   823→                            transition={{ duration: 0.5, delay: i * 0.05 }}
+   824→                            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600"
+   825→                          />
+   826→                        </div>
+   827→                      </div>
+   828→                    </motion.div>
+   829→                  );
+   830→                })}
+   831→              </div>
+   832→            )}
+   833→          </CardContent>
+   834→        </Card>
+   835→
+   836→        {/* Activity type breakdown */}
+   837→        <Card className="print:shadow-none print:border print:border-gray-300 hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-emerald-50/30 dark:from-background dark:to-emerald-950/10">
+   838→          <CardHeader className="pb-2">
+   839→            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   840→              <Shield className="size-4 text-emerald-500" />
+   841→              Tipos de Actividade
+   842→            </CardTitle>
+   843→          </CardHeader>
+   844→          <CardContent>
+   845→            <DonutChart
+   846→              data={activityTypeData}
+   847→              config={activityChartConfig}
+   848→              labels={ACTIVITY_LABELS}
+   849→            />
+   850→            <div className="mt-4 pt-3 border-t text-center">
+   851→              <p className="text-xs text-muted-foreground">
+   852→                Total de registos de auditoria: {report.activity.total_audit_entries}
+   853→              </p>
+   854→            </div>
+   855→          </CardContent>
+   856→        </Card>
+   857→      </div>
+   858→
+   859→      {/* Print footer */}
+   860→      <div className="hidden print:block text-center text-xs text-gray-500 pt-4 border-t">
+   861→        <p>Relatório gerado em {new Date().toLocaleDateString('pt-MZ', { dateStyle: 'full' })} — LexDoc © 2026</p>
+   862→      </div>
+   863→    </div>
+   864→  );
+   865→}
+   866→
