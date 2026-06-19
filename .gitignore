@@ -50,6 +50,10 @@ test
 prompt
 
 server.log
+
+# Upload directory (user uploads, screenshots, exports)
+upload/
+
 # Skills directory
 /skills/tool-results/
 db/*.db
