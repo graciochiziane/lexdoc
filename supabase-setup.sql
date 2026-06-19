@@ -1371,7 +1371,7 @@ WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
 ORDER BY table_name;
 
 -- 9.2 Verificar RLS activado
-SELECT relname AS tabela, rowsecurity AS rls_active, rowforce AS rls_forced
+SELECT relname AS tabela, relrowsecurity AS rls_active, relforcerowsecurity AS rls_forced
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public'
