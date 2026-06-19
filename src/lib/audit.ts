@@ -3,6 +3,7 @@
 // Regista eventos de forma não-bloqueante — nunca lançar excepções
 // ═══════════════════════════════════════════════════════════════
 
+import { randomUUID } from 'crypto';
 import { db } from '@/lib/db';
 
 // ─────────────────────────────────────────
@@ -85,21 +86,17 @@ export function logAudit(payload: AuditLogPayload): void {
         ? safeStringify(payload.metadata)
         : null;
 
-      // Apenas INSERT — nunca update ou delete em audit_logs
-      await db.auditLog.create({
-        data: {
-          firm_id: payload.firm_id ?? null,
-          user_id: payload.user_id ?? null,
-          action: payload.action,
-          entity_type: payload.entity_type,
-          entity_id: payload.entity_id ?? null,
-          old_values: redactedOld,
-          new_values: redactedNew,
-          ip_address: payload.ip_address ?? null,
-          user_agent: payload.user_agent ?? null,
-          metadata: serializedMeta,
-        },
-      });
+      const id = randomUUID();
+
+      // Usar executeRaw para evitar problemas de UUID default e RLS search_path na Supabase
+      await db.$executeRaw`
+        SET search_path TO public;
+        INSERT INTO audit_logs (id, firm_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address, user_agent, metadata, created_at)
+        VALUES (${id}::uuid, ${payload.firm_id ?? null}::uuid, ${payload.user_id ?? null}::uuid,
+                ${payload.action}, ${payload.entity_type}, ${payload.entity_id ?? null}::uuid,
+                ${redactedOld}, ${redactedNew}, ${payload.ip_address ?? null}, ${payload.user_agent ?? null},
+                ${serializedMeta}, now()::timestamptz)
+      `;
     } catch {
       // Silencioso — nunca propagar erros de auditoria
     }
