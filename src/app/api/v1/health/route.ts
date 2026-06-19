@@ -64,4 +64,3 @@ export async function GET() {
     { status: allOk ? 200 : 503 }
   );
 }
-// deploy trigger Fri Jun 19 13:09:07 UTC 2026
