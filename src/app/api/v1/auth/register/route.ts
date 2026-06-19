@@ -263,8 +263,28 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    // Log do erro para depuração (nunca exibir ao utilizador)
-    console.error('[REGISTER] Erro interno:', error);
+    // Log detalhado do erro para depuração (nunca exibir detalhes ao utilizador)
+    const errorInfo = error instanceof Error
+      ? { message: error.message, stack: error.stack?.split('\n').slice(0, 5) }
+      : { message: String(error) };
+    console.error('[REGISTER] Erro interno:', JSON.stringify(errorInfo, null, 2));
+
+    // Detectar erros específicos para logging
+    if (error instanceof Error) {
+      const msg = error.message;
+      if (msg.includes('DIRECT_URL') || msg.includes('Environment variable')) {
+        console.error('[REGISTER] ERRO: Variável de ambiente DIRECT_URL em falta. Verifique as env vars no painel.');
+      }
+      if (msg.includes('prepared statement') || msg.includes('42P05')) {
+        console.error('[REGISTER] ERRO: PgBouncer - prepared statement conflict. Use Session Mode ou adicione ?pgbouncer=true à DATABASE_URL.');
+      }
+      if (msg.includes('relation') && msg.includes('does not exist')) {
+        console.error('[REGISTER] ERRO: Tabela não existe na base de dados. Execute prisma db push com a DATABASE_URL do Supabase.');
+      }
+      if (msg.includes('ECONNREFUSED') || msg.includes('connect')) {
+        console.error('[REGISTER] ERRO: Não foi possível ligar à base de dados. Verifique a DATABASE_URL.');
+      }
+    }
 
     return NextResponse.json(
       {

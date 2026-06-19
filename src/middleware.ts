@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
   '/api/v1/auth/forgot-password',
   '/api/v1/auth/reset-password',
   '/api/v1/invitations/',
+  '/api/v1/health',
 ];
 
 // Rotas que são completamente públicas (health check, etc.)
