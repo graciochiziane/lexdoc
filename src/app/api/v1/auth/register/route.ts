@@ -217,17 +217,20 @@ export async function POST(request: NextRequest) {
     // ── Hash e guardar refresh token ──
     const refreshTokenHash = hashToken(refreshToken);
 
-    // Calcular data de expiração do refresh token (7 dias)
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    // Usar executeRawUnsafe para evitar problemas com PgBouncer prepared statements
+    // ── Guardar refresh token (opcional — não bloqueia o registo se falhar) ──
     const refreshTokenId = randomUUID();
     const ip = request.headers.get('x-forwarded-for') ?? null;
     const device = request.headers.get('user-agent') ?? null;
-    await db.$executeRawUnsafe(
-      `INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at) VALUES ('${refreshTokenId}', '${user.id}', '${refreshTokenHash}', '${expiresAt.toISOString()}', ${ip ? `'${ip}'` : 'NULL'}, ${device ? `'${device}'` : 'NULL'}, now())`
-    );
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    try {
+      await db.$executeRawUnsafe(
+        `INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at) VALUES ('${refreshTokenId}', '${user.id}', '${refreshTokenHash}', '${expiresAt.toISOString()}', ${ip ? `'${ip}'` : 'NULL'}, ${device ? `'${device}'` : 'NULL'}, now())`
+      );
+    } catch (rtError) {
+      console.error('[REGISTER] Aviso: refresh_token não guardado (non-critical):', rtError);
+    }
 
     // ── Log de auditoria ──
     logAudit({
