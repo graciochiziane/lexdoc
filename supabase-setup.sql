@@ -568,22 +568,23 @@ END;
 $$;
 
 -- Aplicar trigger explicitamente a cada tabela com coluna updated_at
+-- Usa FOREACH + text[] para evitar dependência de COLUMN1 (portável/seguro)
 DO $$
 DECLARE
-  r RECORD;
+  tbl TEXT;
 BEGIN
-  FOR r IN
-    VALUES
-      ('firms'),
-      ('users'),
-      ('clients'),
-      ('legal_processes'),
-      ('documents'),
-      ('deadlines'),
-      ('notes'),
-      ('knowledge_articles'),
-      ('process_templates'),
-      ('ai_conversations')
+  FOREACH tbl IN ARRAY ARRAY[
+    'firms',
+    'users',
+    'clients',
+    'legal_processes',
+    'documents',
+    'deadlines',
+    'notes',
+    'knowledge_articles',
+    'process_templates',
+    'ai_conversations'
+  ]
   LOOP
     EXECUTE format(
       'DROP TRIGGER IF EXISTS set_updated_at ON %I;
@@ -591,7 +592,7 @@ BEGIN
          BEFORE UPDATE ON %I
          FOR EACH ROW
          EXECUTE FUNCTION lexdoc_auth.update_updated_at_column();',
-      r.COLUMN1, r.COLUMN1
+      tbl, tbl
     );
   END LOOP;
 END;
@@ -1046,7 +1047,15 @@ CREATE POLICY pol_doc_update ON documents
       OR lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
     )
   )
-  WITH CHECK (firm_id = lexdoc_auth.current_firm_id());
+  -- WITH CHECK avalia contra o NOVO estado da linha (NEW)
+  -- Impede ASSISTANT de ligar is_confidential = true
+  WITH CHECK (
+    firm_id = lexdoc_auth.current_firm_id()
+    AND (
+      is_confidential = false
+      OR lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+    )
+  );
 CREATE POLICY pol_doc_delete ON documents
   FOR DELETE USING (
     firm_id = lexdoc_auth.current_firm_id()
