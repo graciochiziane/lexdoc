@@ -167,6 +167,7 @@ export async function POST(
     await db.refreshToken.create({
       data: {
         user_id: user.id,
+        firm_id: invitation.firm_id,
         token_hash: refreshTokenHash,
         expires_at: expiresAt,
         ip_address: request.headers.get('x-forwarded-for') ?? undefined,

@@ -1,8 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// LEXDOC — Schema para Supabase (PostgreSQL)
-// PARA ACTIVAR: renomear este ficheiro para schema.prisma e apagar o actual
-// Depois: DATABASE_URL=postgresql://postgres... no .env
-// E executar: bun run db:push
+// LEXDOC — Schema Prisma (alinhado com Supabase SQL v3)
+// IDs: UUID, Sem @updatedAt (trigger no Supabase faz isso)
 // ═══════════════════════════════════════════════════════════════════════════
 
 generator client {
@@ -12,33 +10,39 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // Conexão directa para migrations
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────
 // MULTI-TENANCY: ESCRITÓRIO (FIRM)
 // ─────────────────────────────────────────
 model Firm {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid()) @db.Uuid
   name        String
   slug        String   @unique
   nif         String?
   oam_number  String?
   is_active   Boolean  @default(true)
   plan        String   @default("STARTER")
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  settings    String   @default("{}")
+  created_at  DateTime @default(now()) @db.Timestamptz()
+  updated_at  DateTime @default(now()) @db.Timestamptz()
 
-  users       User[]
-  clients     Client[]
-  processes   LegalProcess[]
-  audit_logs  AuditLog[]
-  invitations Invitation[]
-  notes       Note[]
+  users             User[]
+  clients           Client[]
+  processes         LegalProcess[]
+  audit_logs        AuditLog[]
+  invitations       Invitation[]
+  notes             Note[]
   knowledge_articles KnowledgeArticle[]
   process_templates ProcessTemplate[]
-  ai_conversations AIConversation[]
-  ai_generations   AIGeneration[]
+  ai_conversations  AIConversation[]
+  ai_generations    AIGeneration[]
+  refresh_tokens    RefreshToken[]
+  process_assignments ProcessAssignment[]
+  deadlines         Deadline[]
+  process_notes     ProcessNote[]
+  ai_messages       AIMessage[]
 
   @@map("firms")
 }
@@ -47,24 +51,25 @@ model Firm {
 // UTILIZADORES E RBAC
 // ─────────────────────────────────────────
 model User {
-  id                String    @id @default(cuid())
-  firm_id           String
+  id                String    @id @default(uuid()) @db.Uuid
+  firm_id           String    @db.Uuid
   email             String    @unique
   password_hash     String
   full_name         String
   role              String    @default("CLIENT")
   bi_number         String?
   phone             String?
+  avatar_url        String?
   is_active         Boolean   @default(true)
   email_verified    Boolean   @default(false)
   failed_login_count Int      @default(0)
-  locked_until      DateTime?
+  locked_until      DateTime? @db.Timestamptz()
   mfa_enabled       Boolean   @default(false)
   mfa_secret        String?
 
-  created_at        DateTime  @default(now())
-  updated_at        DateTime  @updatedAt
-  last_login_at     DateTime?
+  created_at        DateTime  @default(now()) @db.Timestamptz()
+  updated_at        DateTime  @default(now()) @db.Timestamptz()
+  last_login_at     DateTime? @db.Timestamptz()
 
   firm              Firm      @relation(fields: [firm_id], references: [id], onDelete: Cascade)
   refresh_tokens    RefreshToken[]
@@ -87,18 +92,22 @@ model User {
 // TOKENS DE AUTENTICAÇÃO
 // ─────────────────────────────────────────
 model RefreshToken {
-  id          String   @id @default(cuid())
-  user_id     String
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String   @db.Uuid
+  firm_id     String   @db.Uuid
   token_hash  String   @unique
   device_info String?
   ip_address  String?
-  expires_at  DateTime
-  revoked_at  DateTime?
-  created_at  DateTime @default(now())
+  user_agent  String?
+  expires_at  DateTime @db.Timestamptz()
+  revoked_at  DateTime? @db.Timestamptz()
+  created_at  DateTime @default(now()) @db.Timestamptz()
 
   user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  firm        Firm     @relation(fields: [firm_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
+  @@index([firm_id])
   @@index([token_hash])
   @@map("refresh_tokens")
 }
@@ -107,18 +116,18 @@ model RefreshToken {
 // AUDIT TRAIL IMUTÁVEL
 // ─────────────────────────────────────────
 model AuditLog {
-  id           String      @id @default(cuid())
-  firm_id      String?
-  user_id      String?
+  id           String      @id @default(uuid()) @db.Uuid
+  firm_id      String?     @db.Uuid
+  user_id      String?     @db.Uuid
   action       String
   entity_type  String
-  entity_id    String?
+  entity_id    String?     @db.Uuid
   old_values   String?     @db.Text
   new_values   String?     @db.Text
   ip_address   String?
   user_agent   String?
   metadata     String?     @db.Text
-  created_at   DateTime    @default(now())
+  created_at   DateTime    @default(now()) @db.Timestamptz()
 
   firm         Firm?       @relation(fields: [firm_id], references: [id])
   user         User?       @relation(fields: [user_id], references: [id])
@@ -134,9 +143,9 @@ model AuditLog {
 // CLIENTES DO ESCRITÓRIO
 // ─────────────────────────────────────────
 model Client {
-  id           String   @id @default(cuid())
-  firm_id      String
-  user_id      String?
+  id           String   @id @default(uuid()) @db.Uuid
+  firm_id      String   @db.Uuid
+  user_id      String?  @db.Uuid
   full_name    String
   email        String?
   phone        String?
@@ -146,8 +155,8 @@ model Client {
   client_type  String   @default("INDIVIDUAL")
   is_active    Boolean  @default(true)
   notes        String?  @db.Text
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  created_at   DateTime @default(now()) @db.Timestamptz()
+  updated_at   DateTime @default(now()) @db.Timestamptz()
 
   firm         Firm           @relation(fields: [firm_id], references: [id], onDelete: Cascade)
   processes    LegalProcess[]
@@ -160,9 +169,9 @@ model Client {
 // PROCESSOS JURÍDICOS
 // ─────────────────────────────────────────
 model LegalProcess {
-  id              String         @id @default(cuid())
-  firm_id         String
-  client_id       String
+  id              String         @id @default(uuid()) @db.Uuid
+  firm_id         String         @db.Uuid
+  client_id       String         @db.Uuid
   process_number  String
   title           String
   description     String?        @db.Text
@@ -172,10 +181,10 @@ model LegalProcess {
   court           String?
   judge           String?
   opposing_party  String?
-  opened_at       DateTime       @default(now())
-  closed_at       DateTime?
-  created_at      DateTime       @default(now())
-  updated_at      DateTime       @updatedAt
+  opened_at       DateTime       @default(now()) @db.Timestamptz()
+  closed_at       DateTime?      @db.Timestamptz()
+  created_at      DateTime       @default(now()) @db.Timestamptz()
+  updated_at      DateTime       @default(now()) @db.Timestamptz()
 
   firm            Firm           @relation(fields: [firm_id], references: [id], onDelete: Cascade)
   client          Client         @relation(fields: [client_id], references: [id])
@@ -194,16 +203,19 @@ model LegalProcess {
 // ATRIBUIÇÃO DE PROCESSOS
 // ─────────────────────────────────────────
 model ProcessAssignment {
-  id          String       @id @default(cuid())
-  process_id  String
-  user_id     String
+  id          String       @id @default(uuid()) @db.Uuid
+  firm_id     String       @db.Uuid
+  process_id  String       @db.Uuid
+  user_id     String       @db.Uuid
   role        String
-  assigned_at DateTime     @default(now())
+  assigned_at DateTime     @default(now()) @db.Timestamptz()
 
+  firm        Firm         @relation(fields: [firm_id], references: [id], onDelete: Cascade)
   process     LegalProcess @relation(fields: [process_id], references: [id], onDelete: Cascade)
   user        User         @relation(fields: [user_id], references: [id])
 
   @@unique([process_id, user_id])
+  @@index([firm_id])
   @@map("process_assignments")
 }
 
@@ -211,11 +223,11 @@ model ProcessAssignment {
 // DOCUMENTOS
 // ─────────────────────────────────────────
 model Document {
-  id              String          @id @default(cuid())
-  firm_id         String
-  process_id      String?
-  created_by_id   String
-  updated_by_id   String?
+  id              String          @id @default(uuid()) @db.Uuid
+  firm_id         String          @db.Uuid
+  process_id      String?         @db.Uuid
+  created_by_id   String          @db.Uuid
+  updated_by_id   String?         @db.Uuid
   title           String
   description     String?         @db.Text
   file_key        String
@@ -223,14 +235,14 @@ model Document {
   file_size       Int
   mime_type       String
   version         Int             @default(1)
-  parent_id       String?
+  parent_id       String?         @db.Uuid
   status          String          @default("DRAFT")
   is_confidential Boolean         @default(false)
   tags            String?         @db.Text
   ai_summary      String?         @db.Text
-  ai_processed_at DateTime?
-  created_at      DateTime        @default(now())
-  updated_at      DateTime        @updatedAt
+  ai_processed_at DateTime?       @db.Timestamptz()
+  created_at      DateTime        @default(now()) @db.Timestamptz()
+  updated_at      DateTime        @default(now()) @db.Timestamptz()
 
   process         LegalProcess?   @relation(fields: [process_id], references: [id])
   created_by      User            @relation("DocumentCreator", fields: [created_by_id], references: [id])
@@ -248,20 +260,23 @@ model Document {
 // PRAZOS PROCESSUAIS
 // ─────────────────────────────────────────
 model Deadline {
-  id           String       @id @default(cuid())
-  process_id   String
+  id           String       @id @default(uuid()) @db.Uuid
+  firm_id      String       @db.Uuid
+  process_id   String       @db.Uuid
   title        String
   description  String?      @db.Text
-  due_date     DateTime
-  reminder_at  DateTime?
+  due_date     DateTime     @db.Timestamptz()
+  reminder_at  DateTime?    @db.Timestamptz()
   status       String       @default("PENDING")
   source       String       @default("MANUAL")
   ai_extracted Boolean      @default(false)
-  created_at   DateTime     @default(now())
-  updated_at   DateTime     @updatedAt
+  created_at   DateTime     @default(now()) @db.Timestamptz()
+  updated_at   DateTime     @default(now()) @db.Timestamptz()
 
+  firm         Firm         @relation(fields: [firm_id], references: [id], onDelete: Cascade)
   process      LegalProcess @relation(fields: [process_id], references: [id], onDelete: Cascade)
 
+  @@index([firm_id])
   @@index([process_id])
   @@index([due_date])
   @@map("deadlines")
@@ -271,18 +286,18 @@ model Deadline {
 // NOTAS / TAREFAS
 // ─────────────────────────────────────────
 model Note {
-  id            String    @id @default(cuid())
-  firm_id       String
+  id            String    @id @default(uuid()) @db.Uuid
+  firm_id       String    @db.Uuid
   entity_type   String
-  entity_id     String?
+  entity_id     String?   @db.Uuid
   content       String    @db.Text
   is_pinned     Boolean   @default(false)
   is_completed  Boolean   @default(false)
   priority      String    @default("low")
-  due_date      DateTime?
-  created_by_id String
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+  due_date      DateTime? @db.Timestamptz()
+  created_by_id String    @db.Uuid
+  created_at    DateTime  @default(now()) @db.Timestamptz()
+  updated_at    DateTime  @default(now()) @db.Timestamptz()
 
   created_by    User      @relation("NoteCreator", fields: [created_by_id], references: [id])
   firm          Firm      @relation(fields: [firm_id], references: [id], onDelete: Cascade)
@@ -297,8 +312,8 @@ model Note {
 // BASE DE CONHECIMENTO JURÍDICO
 // ─────────────────────────────────────────
 model KnowledgeArticle {
-  id            String   @id @default(cuid())
-  firm_id       String
+  id            String   @id @default(uuid()) @db.Uuid
+  firm_id       String   @db.Uuid
   title         String
   content       String   @db.Text
   category      String   @default("OUTRO")
@@ -306,9 +321,9 @@ model KnowledgeArticle {
   tags          String?  @db.Text
   is_pinned     Boolean  @default(false)
   view_count    Int      @default(0)
-  created_by_id String
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  created_by_id String   @db.Uuid
+  created_at    DateTime @default(now()) @db.Timestamptz()
+  updated_at    DateTime @default(now()) @db.Timestamptz()
 
   created_by  User     @relation("KnowledgeCreator", fields: [created_by_id], references: [id])
   firm        Firm     @relation(fields: [firm_id], references: [id], onDelete: Cascade)
@@ -323,17 +338,17 @@ model KnowledgeArticle {
 // MODELOS DE PROCESSO
 // ─────────────────────────────────────────
 model ProcessTemplate {
-  id              String   @id @default(cuid())
-  firm_id         String
+  id              String   @id @default(uuid()) @db.Uuid
+  firm_id         String   @db.Uuid
   title           String
   description     String?  @db.Text
   area            String
   default_priority String  @default("MEDIUM")
   checklist_items  String   @db.Text
   is_active       Boolean  @default(true)
-  created_by_id   String
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  created_by_id   String   @db.Uuid
+  created_at      DateTime @default(now()) @db.Timestamptz()
+  updated_at      DateTime @default(now()) @db.Timestamptz()
 
   created_by      User     @relation("TemplateCreator", fields: [created_by_id], references: [id])
   firm            Firm     @relation(fields: [firm_id], references: [id], onDelete: Cascade)
@@ -347,14 +362,17 @@ model ProcessTemplate {
 // NOTAS DO PROCESSO
 // ─────────────────────────────────────────
 model ProcessNote {
-  id          String   @id @default(cuid())
-  process_id  String
+  id          String   @id @default(uuid()) @db.Uuid
+  firm_id     String   @db.Uuid
+  process_id  String   @db.Uuid
   content     String   @db.Text
-  created_by  String
-  created_at  DateTime @default(now())
+  created_by  String   @db.Uuid
+  created_at  DateTime @default(now()) @db.Timestamptz()
 
+  firm        Firm         @relation(fields: [firm_id], references: [id], onDelete: Cascade)
   process     LegalProcess @relation(fields: [process_id], references: [id], onDelete: Cascade)
 
+  @@index([firm_id])
   @@index([process_id])
   @@map("process_notes")
 }
@@ -363,14 +381,15 @@ model ProcessNote {
 // CONVITES
 // ─────────────────────────────────────────
 model Invitation {
-  id          String     @id @default(cuid())
-  firm_id     String
+  id          String     @id @default(uuid()) @db.Uuid
+  firm_id     String     @db.Uuid
   email       String
   role        String
   token_hash  String     @unique
-  expires_at  DateTime
-  accepted_at DateTime?
-  created_at  DateTime   @default(now())
+  expires_at  DateTime   @db.Timestamptz()
+  accepted_at DateTime?  @db.Timestamptz()
+  invited_by  String     @db.Uuid
+  created_at  DateTime   @default(now()) @db.Timestamptz()
 
   firm        Firm       @relation(fields: [firm_id], references: [id], onDelete: Cascade)
 
@@ -382,15 +401,15 @@ model Invitation {
 // CONVERSAS IA
 // ─────────────────────────────────────────
 model AIConversation {
-  id           String        @id @default(cuid())
-  firm_id      String
-  user_id      String
+  id           String        @id @default(uuid()) @db.Uuid
+  firm_id      String        @db.Uuid
+  user_id      String        @db.Uuid
   title        String        @default("Nova Conversa")
   context_type String?
-  context_id   String?
+  context_id   String?       @db.Uuid
   is_active   Boolean       @default(true)
-  created_at  DateTime      @default(now())
-  updated_at  DateTime      @updatedAt
+  created_at  DateTime      @default(now()) @db.Timestamptz()
+  updated_at  DateTime      @default(now()) @db.Timestamptz()
 
   messages    AIMessage[]
 
@@ -407,17 +426,20 @@ model AIConversation {
 // MENSAGENS IA
 // ─────────────────────────────────────────
 model AIMessage {
-  id              String          @id @default(cuid())
-  conversation_id String
+  id              String          @id @default(uuid()) @db.Uuid
+  firm_id         String          @db.Uuid
+  conversation_id String          @db.Uuid
   role            String
   content         String          @db.Text
   sources         String?         @db.Text
   knowledge_ids   String?         @db.Text
   metadata        String?         @db.Text
-  created_at      DateTime        @default(now())
+  created_at      DateTime        @default(now()) @db.Timestamptz()
 
+  firm           Firm            @relation(fields: [firm_id], references: [id], onDelete: Cascade)
   conversation    AIConversation  @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
 
+  @@index([firm_id])
   @@index([conversation_id])
   @@index([created_at])
   @@map("ai_messages")
@@ -427,17 +449,17 @@ model AIMessage {
 // GERAÇÕES IA
 // ─────────────────────────────────────────
 model AIGeneration {
-  id              String   @id @default(cuid())
-  firm_id         String
-  user_id         String
+  id              String   @id @default(uuid()) @db.Uuid
+  firm_id         String   @db.Uuid
+  user_id         String   @db.Uuid
   generation_type String
   title           String
   prompt          String   @db.Text
   result          String   @db.Text
-  template_id     String?
-  process_id      String?
+  template_id     String?  @db.Uuid
+  process_id      String?  @db.Uuid
   metadata        String?  @db.Text
-  created_at      DateTime @default(now())
+  created_at      DateTime @default(now()) @db.Timestamptz()
 
   firm            Firm     @relation(fields: [firm_id], references: [id], onDelete: Cascade)
   user            User     @relation(fields: [user_id], references: [id])

@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
         role,
         token_hash: tokenHash,
         expires_at: expiresAt,
+        invited_by: payload.sub,
       },
     });
 

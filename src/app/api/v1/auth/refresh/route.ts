@@ -149,6 +149,7 @@ export async function POST(request: NextRequest) {
     await db.refreshToken.create({
       data: {
         user_id: storedToken.user.id,
+        firm_id: storedToken.user.firm_id,
         token_hash: newRefreshTokenHash,
         expires_at: expiresAt,
         ip_address: clientIp,
