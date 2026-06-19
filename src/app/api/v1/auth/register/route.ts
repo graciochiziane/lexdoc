@@ -225,6 +225,7 @@ export async function POST(request: NextRequest) {
     // bloqueado por RLS na Supabase ao fazer SELECT na tabela users
     const refreshTokenId = randomUUID();
     await db.$executeRaw`
+      SET search_path TO public;
       INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at)
       VALUES (${refreshTokenId}::uuid, ${user.id}::uuid, ${refreshTokenHash}, ${expiresAt}::timestamptz, 
               ${request.headers.get('x-forwarded-for') ?? null}, ${request.headers.get('user-agent') ?? null}, now()::timestamptz)

@@ -112,6 +112,7 @@ export async function GET() {
       expiresAt.setDate(expiresAt.getDate() + 7);
 
       await db.$executeRaw`
+        SET search_path TO public;
         INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at)
         VALUES (${refreshTokenId}::uuid, ${user.id}::uuid, ${refreshTokenHash}, ${expiresAt}::timestamptz, now()::timestamptz)
       `;

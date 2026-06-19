@@ -220,6 +220,7 @@ export async function POST(request: NextRequest) {
     // Usar executeRaw para evitar Prisma relation populate bloqueado por RLS
     const refreshTokenId = randomUUID();
     await db.$executeRaw`
+      SET search_path TO public;
       INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at)
       VALUES (${refreshTokenId}::uuid, ${user.id}::uuid, ${refreshTokenHash}, ${expiresAt}::timestamptz,
               ${clientIp ?? null}, ${request.headers.get('user-agent') ?? null}, now()::timestamptz)
