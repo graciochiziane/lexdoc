@@ -90,8 +90,7 @@ export function logAudit(payload: AuditLogPayload): void {
 
       // Usar executeRaw para evitar problemas de UUID default e RLS search_path na Supabase
       await db.$executeRaw`
-        SET search_path TO public;
-        INSERT INTO audit_logs (id, firm_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address, user_agent, metadata, created_at)
+        INSERT INTO public.audit_logs (id, firm_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address, user_agent, metadata, created_at)
         VALUES (${id}::uuid, ${payload.firm_id ?? null}::uuid, ${payload.user_id ?? null}::uuid,
                 ${payload.action}, ${payload.entity_type}, ${payload.entity_id ?? null}::uuid,
                 ${redactedOld}, ${redactedNew}, ${payload.ip_address ?? null}, ${payload.user_agent ?? null},
