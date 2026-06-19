@@ -114,7 +114,6 @@ export async function GET() {
         data: {
           id: randomUUID(),
           user_id: user.id,
-          firm_id: firm.id,
           token_hash: refreshTokenHash,
           expires_at: expiresAt,
         },

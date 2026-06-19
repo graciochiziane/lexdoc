@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
+import crypto, { randomUUID } from 'crypto';
 import { db } from '@/lib/db';
 import {
   hashPassword,
@@ -166,8 +166,8 @@ export async function POST(
 
     await db.refreshToken.create({
       data: {
+        id: randomUUID(),
         user_id: user.id,
-        firm_id: invitation.firm_id,
         token_hash: refreshTokenHash,
         expires_at: expiresAt,
         ip_address: request.headers.get('x-forwarded-for') ?? undefined,

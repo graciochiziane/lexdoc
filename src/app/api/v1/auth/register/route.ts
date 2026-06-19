@@ -225,7 +225,6 @@ export async function POST(request: NextRequest) {
       data: {
         id: randomUUID(),
         user_id: user.id,
-        firm_id: firm.id,
         token_hash: refreshTokenHash,
         expires_at: expiresAt,
         ip_address: request.headers.get('x-forwarded-for') ?? undefined,
