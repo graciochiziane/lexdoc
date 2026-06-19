@@ -88,14 +88,13 @@ export function logAudit(payload: AuditLogPayload): void {
 
       const id = randomUUID();
 
-      // Usar executeRaw para evitar problemas de UUID default e RLS search_path na Supabase
-      await db.$executeRaw`
-        INSERT INTO public.audit_logs (id, firm_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address, user_agent, metadata, created_at)
-        VALUES (${id}::uuid, ${payload.firm_id ?? null}::uuid, ${payload.user_id ?? null}::uuid,
-                ${payload.action}, ${payload.entity_type}, ${payload.entity_id ?? null}::uuid,
-                ${redactedOld}, ${redactedNew}, ${payload.ip_address ?? null}, ${payload.user_agent ?? null},
-                ${serializedMeta}, now()::timestamptz)
-      `;
+      // Usar executeRawUnsafe para evitar PgBouncer prepared statement issues
+      const firmId = payload.firm_id ?? null;
+      const userId = payload.user_id ?? null;
+      const entityId = payload.entity_id ?? null;
+      await db.$executeRawUnsafe(
+        `INSERT INTO public.audit_logs (id, firm_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address, user_agent, metadata, created_at) VALUES ('${id}', ${firmId ? `'${firmId}'` : 'NULL'}, ${userId ? `'${userId}'` : 'NULL'}, '${payload.action}', '${payload.entity_type}', ${entityId ? `'${entityId}'` : 'NULL'}, ${redactedOld ? `'${redactedOld.replace(/'/g, "''")}'` : 'NULL'}, ${redactedNew ? `'${redactedNew.replace(/'/g, "''")}'` : 'NULL'}, ${payload.ip_address ? `'${payload.ip_address}'` : 'NULL'}, ${payload.user_agent ? `'${payload.user_agent.replace(/'/g, "''")}'` : 'NULL'}, ${serializedMeta ? `'${serializedMeta.replace(/'/g, "''")}'` : 'NULL'}, now())`
+      );
     } catch {
       // Silencioso — nunca propagar erros de auditoria
     }

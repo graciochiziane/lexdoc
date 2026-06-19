@@ -111,10 +111,9 @@ export async function GET() {
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
 
-      await db.$executeRaw`
-        INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, created_at)
-        VALUES (${refreshTokenId}::uuid, ${user.id}::uuid, ${refreshTokenHash}, ${expiresAt}::timestamptz, now()::timestamptz)
-      `;
+      await db.$executeRawUnsafe(
+        `INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, created_at) VALUES ('${refreshTokenId}', '${user.id}', '${refreshTokenHash}', '${expiresAt.toISOString()}', now())`
+      );
       steps.push({ step: '7. Raw SQL INSERT refresh_tokens', ok: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

@@ -221,14 +221,13 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Usar executeRaw para evitar Prisma relation populate que pode ser
-    // bloqueado por RLS na Supabase ao fazer SELECT na tabela users
+    // Usar executeRawUnsafe para evitar problemas com PgBouncer prepared statements
     const refreshTokenId = randomUUID();
-    await db.$executeRaw`
-      INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at)
-      VALUES (${refreshTokenId}::uuid, ${user.id}::uuid, ${refreshTokenHash}, ${expiresAt}::timestamptz, 
-              ${request.headers.get('x-forwarded-for') ?? null}, ${request.headers.get('user-agent') ?? null}, now()::timestamptz)
-    `;
+    const ip = request.headers.get('x-forwarded-for') ?? null;
+    const device = request.headers.get('user-agent') ?? null;
+    await db.$executeRawUnsafe(
+      `INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at) VALUES ('${refreshTokenId}', '${user.id}', '${refreshTokenHash}', '${expiresAt.toISOString()}', ${ip ? `'${ip}'` : 'NULL'}, ${device ? `'${device}'` : 'NULL'}, now())`
+    );
 
     // ── Log de auditoria ──
     logAudit({

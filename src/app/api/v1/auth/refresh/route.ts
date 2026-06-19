@@ -149,11 +149,11 @@ export async function POST(request: NextRequest) {
 
     // Usar executeRaw para evitar Prisma relation populate bloqueado por RLS
     const refreshTokenId = randomUUID();
-    await db.$executeRaw`
-      INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at)
-      VALUES (${refreshTokenId}::uuid, ${storedToken.user.id}::uuid, ${newRefreshTokenHash}, ${expiresAt}::timestamptz,
-              ${clientIp ?? null}, ${userAgent ?? null}, now()::timestamptz)
-    `;
+    const ip = clientIp ?? null;
+    const device = userAgent ?? null;
+    await db.$executeRawUnsafe(
+      `INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at) VALUES ('${refreshTokenId}', '${storedToken.user.id}', '${newRefreshTokenHash}', '${expiresAt.toISOString()}', ${ip ? `'${ip}'` : 'NULL'}, ${device ? `'${device}'` : 'NULL'}, now())`
+    );
 
     // ── Log de auditoria ──
     logAudit({
