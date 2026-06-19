@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { db } from '@/lib/db';
 import {
   hashPassword,
@@ -178,17 +179,21 @@ export async function POST(request: NextRequest) {
     // ── Hash da password ──
     const passwordHash = await hashPassword(password);
 
-    // ── Criar escritório (Firm) ──
+    // ── Criar escritório (Firm) — UUID gerado client-side ──
+    const firmId = randomUUID();
     const firm = await db.firm.create({
       data: {
+        id: firmId,
         name: firm_name.trim(),
         slug,
       },
     });
 
-    // ── Criar utilizador vinculado ao escritório ──
+    // ── Criar utilizador vinculado ao escritório — UUID gerado client-side ──
+    const userId = randomUUID();
     const user = await db.user.create({
       data: {
+        id: userId,
         firm_id: firm.id,
         email: normalizedEmail,
         password_hash: passwordHash,
@@ -218,6 +223,7 @@ export async function POST(request: NextRequest) {
 
     await db.refreshToken.create({
       data: {
+        id: randomUUID(),
         user_id: user.id,
         firm_id: firm.id,
         token_hash: refreshTokenHash,

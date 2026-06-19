@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { db } from '@/lib/db';
 import {
   verifyPassword,
@@ -218,6 +219,7 @@ export async function POST(request: NextRequest) {
 
     await db.refreshToken.create({
       data: {
+        id: randomUUID(),
         user_id: user.id,
         firm_id: user.firm_id,
         token_hash: refreshTokenHash,

@@ -1,10 +1,11 @@
 // ═══════════════════════════════════════════════════════════════
 // LEXDOC — Register Diagnostic Endpoint (temporary debug)
 // GET /api/v1/debug/register-test
-// Tests each step of the registration flow
+// Tests each step of the registration flow with explicit UUIDs
 // ═══════════════════════════════════════════════════════════════
 
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { db } from '@/lib/db';
 import { hashPassword, generateAccessToken, generateRefreshToken, hashToken } from '@/lib/auth';
 
@@ -32,70 +33,41 @@ export async function GET() {
     steps.push({ step: '2. Raw query', ok: false, error: msg });
   }
 
-  // Step 3: Check if firms table exists
-  try {
-    await db.$queryRaw`SELECT count(*) FROM firms`;
-    steps.push({ step: '3. Firms table', ok: true });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    steps.push({ step: '3. Firms table', ok: false, error: msg });
-  }
-
-  // Step 4: Check if users table exists
-  try {
-    await db.$queryRaw`SELECT count(*) FROM users`;
-    steps.push({ step: '4. Users table', ok: true });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    steps.push({ step: '4. Users table', ok: false, error: msg });
-  }
-
-  // Step 5: Check if refresh_tokens table exists
-  try {
-    await db.$queryRaw`SELECT count(*) FROM refresh_tokens`;
-    steps.push({ step: '5. Refresh tokens table', ok: true });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    steps.push({ step: '5. Refresh tokens table', ok: false, error: msg });
-  }
-
-  // Step 6: Prisma findUnique on firms
-  try {
-    await db.firm.findFirst();
-    steps.push({ step: '6. Prisma firm.findFirst', ok: true });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    steps.push({ step: '6. Prisma firm.findFirst', ok: false, error: msg });
-  }
-
-  // Step 7: Prisma create firm
+  // Step 3: Prisma create firm with explicit UUID
   let firm = null;
   try {
+    const firmId = randomUUID();
     const slug = `debug-${Date.now()}`;
     firm = await db.firm.create({
-      data: { name: TEST_FIRM_NAME, slug },
+      data: {
+        id: firmId,
+        name: TEST_FIRM_NAME,
+        slug,
+      },
     });
-    steps.push({ step: '7. Prisma firm.create', ok: true, detail: `firm_id=${firm.id}` });
+    steps.push({ step: '3. Prisma firm.create (explicit UUID)', ok: true, detail: `firm_id=${firm.id}` });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    steps.push({ step: '7. Prisma firm.create', ok: false, error: msg });
+    steps.push({ step: '3. Prisma firm.create (explicit UUID)', ok: false, error: msg });
   }
 
-  // Step 8: Hash password
+  // Step 4: Hash password
   try {
     const hash = await hashPassword('TestPass@123');
-    steps.push({ step: '8. Hash password', ok: true, detail: `hash_length=${hash.length}` });
+    steps.push({ step: '4. Hash password', ok: true, detail: `hash_length=${hash.length}` });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    steps.push({ step: '8. Hash password', ok: false, error: msg });
+    steps.push({ step: '4. Hash password', ok: false, error: msg });
   }
 
-  // Step 9: Prisma create user
+  // Step 5: Prisma create user with explicit UUID
   let user = null;
   if (firm) {
     try {
+      const userId = randomUUID();
       user = await db.user.create({
         data: {
+          id: userId,
           firm_id: firm.id,
           email: `debug-test-${Date.now()}@lexdoc.co.mz`,
           password_hash: 'test_hash_placeholder',
@@ -103,16 +75,16 @@ export async function GET() {
           role: 'ADMIN',
         },
       });
-      steps.push({ step: '9. Prisma user.create', ok: true, detail: `user_id=${user.id}` });
+      steps.push({ step: '5. Prisma user.create (explicit UUID)', ok: true, detail: `user_id=${user.id}` });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      steps.push({ step: '9. Prisma user.create', ok: false, error: msg });
+      steps.push({ step: '5. Prisma user.create (explicit UUID)', ok: false, error: msg });
     }
   } else {
-    steps.push({ step: '9. Prisma user.create', ok: false, error: 'Skipped (firm not created)' });
+    steps.push({ step: '5. Prisma user.create', ok: false, error: 'Skipped (firm not created)' });
   }
 
-  // Step 10: Generate tokens
+  // Step 6: Generate tokens
   try {
     if (user) {
       const accessToken = generateAccessToken({
@@ -122,16 +94,16 @@ export async function GET() {
         firm_id: user.firm_id,
       });
       generateRefreshToken({ sub: user.id });
-      steps.push({ step: '10. Generate tokens', ok: true });
+      steps.push({ step: '6. Generate tokens', ok: true });
     } else {
       throw new Error('No user created');
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    steps.push({ step: '10. Generate tokens', ok: false, error: msg });
+    steps.push({ step: '6. Generate tokens', ok: false, error: msg });
   }
 
-  // Step 11: Create refresh token in DB
+  // Step 7: Create refresh token with explicit UUID
   if (user && firm) {
     try {
       const refreshTokenHash = hashToken('test-refresh-token');
@@ -140,19 +112,20 @@ export async function GET() {
 
       await db.refreshToken.create({
         data: {
+          id: randomUUID(),
           user_id: user.id,
           firm_id: firm.id,
           token_hash: refreshTokenHash,
           expires_at: expiresAt,
         },
       });
-      steps.push({ step: '11. Prisma refreshToken.create', ok: true });
+      steps.push({ step: '7. Prisma refreshToken.create (explicit UUID)', ok: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      steps.push({ step: '11. Prisma refreshToken.create', ok: false, error: msg });
+      steps.push({ step: '7. Prisma refreshToken.create (explicit UUID)', ok: false, error: msg });
     }
   } else {
-    steps.push({ step: '11. Prisma refreshToken.create', ok: false, error: 'Skipped' });
+    steps.push({ step: '7. Prisma refreshToken.create', ok: false, error: 'Skipped' });
   }
 
   // Cleanup: delete test data
