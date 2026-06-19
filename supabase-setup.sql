@@ -183,8 +183,9 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_firm_id ON refresh_tokens(firm_id);
+-- Parcial: apenas tokens não-revogados (expires_at > now() fica na query da aplicação)
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_active ON refresh_tokens(user_id)
-  WHERE revoked_at IS NULL AND expires_at > now();
+  WHERE revoked_at IS NULL;
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
