@@ -1,0 +1,1409 @@
+     1→-- ═════════════════════════════════════════════════════════════════════════════════
+     2→-- LEXDOC v3 — Schema Completo para Supabase (PostgreSQL)
+     3→-- Plataforma SaaS de Gestão Documental Jurídica — Moçambique
+     4→-- ═════════════════════════════════════════════════════════════════════════════════
+     5→--
+     6→-- INSTRUÇÕES:
+     7→--   1. Abre Supabase Dashboard → SQL Editor
+     8→--   2. Clica "New query"
+     9→--   3. Cola TODO este SQL e clica "Run"
+    10→--
+    11→-- CORRECÇÕES v2 → v3 (baseado na análise Supabase AI):
+    12→--   ✅ UUID nativo (não TEXT) para todos os IDs primários
+    13→--   ✅ RLS explícito por tabela (sem loop genérico que falha em tabelas sem firm_id)
+    14→--   ✅ firm_id denormalizado em TODAS as tabelas (incluindo junction/child)
+    15→--   ✅ FORCE ROW LEVEL SECURITY activado em todas as tabelas
+    16→--   ✅ Triggers de integridade cross-firm (impede referência entre firms)
+    17→--   ✅ Permissões diferenciadas por role (ADMIN/LAWYER/ASSISTANT/CLIENT)
+    18→--   ✅ search_path fixo em todas as funções SECURITY DEFINER
+    19→--   ✅ Triggers explícitos por tabela (não loop dinâmico)
+    20→--   ✅ Cleanup agendado com pg_cron (documentado)
+    21→--   ✅ CHECK constraints para enums (status, role, priority, etc.)
+    22→--   ✅ Sem REVOKE ALL ON SCHEMA public (compatível com Supabase)
+    23→--   ✅ JSONB em vez de TEXT para arrays/objetos
+    24→--   ✅ Índices parciais optimizados
+    25→--   ✅ documents.firm_id com FK para firms (antes era sem constraint)
+    26→--   ✅ is_confidential protegido por RLS (só ADMIN/LAWYER)
+    27→--
+    28→-- NOTA ARQUITECTURAL:
+    29→--   LexDoc usa autenticação JWT própria (NÃO Supabase Auth).
+    30→--   Prisma liga como role 'postgres' → BYPASS RLS automaticamente.
+    31→--   Portanto:
+    32→--     - Isolamento PRINCIPAL: application-layer (middleware + Prisma queries com firm_id)
+    33→--     - RLS: defesa em profundidade para acesso directo via PostgREST/anon key
+    34→--     - Se habilitar PostgREST: configurar JWT secret em Supabase Dashboard
+    35→--     - JWT do LexDoc inclui: sub (user ID), email, role, firm_id
+    36→--
+    37→-- PRISMA: Ao mudar para Supabase, actualizar schema.prisma:
+    38→--   - @default(cuid()) → @default(uuid()) em todos os models
+    39→--   - Adicionar @db.Uuid nos campos de ID
+    40→--   - Adicionar firm_id nos models: RefreshToken, ProcessAssignment, Deadline,
+    41→--     ProcessNote, AIMessage
+    42→-- ═════════════════════════════════════════════════════════════════════════════════
+    43→
+    44→
+    45→-- ═════════════════════════════════════════════════════════════════════════════════
+    46→-- 0. EXTENSÕES
+    47→-- ═════════════════════════════════════════════════════════════════════════════════
+    48→-- pgcrypto: necessário para gen_random_uuid()
+    49→CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+    50→
+    51→-- NOTA: pg_cron precisa ser activado manualmente no Supabase Dashboard.
+    52→-- A limpeza periódica (cleanup) está documentada na Secção 8 deste script.
+    53→
+    54→
+    55→-- ═════════════════════════════════════════════════════════════════════════════════
+    56→-- 1. SEGURANÇA — Schema lexdoc_auth + Funções Auxiliares para RLS
+    57→-- ═════════════════════════════════════════════════════════════════════════════════
+    58→-- Estas funções leem claims do JWT customizado do LexDoc.
+    59→-- Requisito: o JWT deve incluir sub, role, firm_id como claims.
+    60→-- Se o JWT não estiver presente (sem autenticação), as funções retornam NULL,
+    61→-- o que BLOQUEIA tudo via RLS (deny by default — seguro por natureza).
+    62→
+    63→CREATE SCHEMA IF NOT EXISTS lexdoc_auth;
+    64→
+    65→-- ID do utilizador actual (do claim 'sub' do JWT)
+    66→CREATE OR REPLACE FUNCTION lexdoc_auth.current_user_id()
+    67→RETURNS UUID
+    68→LANGUAGE sql
+    69→STABLE
+    70→SECURITY DEFINER
+    71→SET search_path = 'lexdoc_auth'
+    72→AS $$
+    73→  SELECT NULLIF(
+    74→    (current_setting('request.jwt.claims', true)::json->>'sub')::TEXT,
+    75→    ''
+    76→  )::UUID;
+    77→$$;
+    78→
+    79→-- firm_id do utilizador actual (do claim 'firm_id' do JWT)
+    80→CREATE OR REPLACE FUNCTION lexdoc_auth.current_firm_id()
+    81→RETURNS UUID
+    82→LANGUAGE sql
+    83→STABLE
+    84→SECURITY DEFINER
+    85→SET search_path = 'lexdoc_auth'
+    86→AS $$
+    87→  SELECT NULLIF(
+    88→    (current_setting('request.jwt.claims', true)::json->>'firm_id')::TEXT,
+    89→    ''
+    90→  )::UUID;
+    91→$$;
+    92→
+    93→-- Role do utilizador actual (do claim 'role' do JWT)
+    94→CREATE OR REPLACE FUNCTION lexdoc_auth.current_user_role()
+    95→RETURNS TEXT
+    96→LANGUAGE sql
+    97→STABLE
+    98→SECURITY DEFINER
+    99→SET search_path = 'lexdoc_auth'
+   100→AS $$
+   101→  SELECT NULLIF(
+   102→    current_setting('request.jwt.claims', true)::json->>'role',
+   103→    ''
+   104→  )::TEXT;
+   105→$$;
+   106→
+   107→
+   108→-- ═════════════════════════════════════════════════════════════════════════════════
+   109→-- 2. TABELAS
+   110→-- ═════════════════════════════════════════════════════════════════════════════════
+   111→
+   112→
+   113→-- ─────────────────────────────────────────────────────────────────────────────
+   114→-- 2.1 FIRMS (Escritórios)
+   115→-- ─────────────────────────────────────────────────────────────────────────────
+   116→CREATE TABLE IF NOT EXISTS firms (
+   117→  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   118→  name        TEXT NOT NULL,
+   119→  slug        TEXT NOT NULL UNIQUE,
+   120→  nif         TEXT,                                  -- PII — protegido por RLS
+   121→  oam_number  TEXT,                                  -- Registo OAM Moçambique
+   122→  is_active   BOOLEAN NOT NULL DEFAULT true,
+   123→  plan        TEXT NOT NULL DEFAULT 'STARTER',
+   124→  settings    JSONB NOT NULL DEFAULT '{}',           -- Configurações por escritório
+   125→  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+   126→  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+   127→
+   128→  CONSTRAINT chk_firms_plan CHECK (plan IN ('STARTER', 'PRO', 'ENTERPRISE'))
+   129→);
+   130→
+   131→CREATE INDEX IF NOT EXISTS idx_firms_slug ON firms(slug);
+   132→CREATE INDEX IF NOT EXISTS idx_firms_is_active ON firms(is_active) WHERE is_active = true;
+   133→
+   134→
+   135→-- ─────────────────────────────────────────────────────────────────────────────
+   136→-- 2.2 USERS (Utilizadores + RBAC)
+   137→-- ─────────────────────────────────────────────────────────────────────────────
+   138→CREATE TABLE IF NOT EXISTS users (
+   139→  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   140→  firm_id            UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   141→  email              TEXT NOT NULL UNIQUE,
+   142→  password_hash      TEXT NOT NULL,
+   143→  full_name          TEXT NOT NULL,
+   144→  role               TEXT NOT NULL DEFAULT 'CLIENT',
+   145→  bi_number          TEXT,                                  -- PII
+   146→  phone              TEXT,
+   147→  avatar_url         TEXT,
+   148→  is_active          BOOLEAN NOT NULL DEFAULT true,
+   149→  email_verified     BOOLEAN NOT NULL DEFAULT false,
+   150→  failed_login_count INTEGER NOT NULL DEFAULT 0,
+   151→  locked_until       TIMESTAMPTZ,
+   152→  mfa_enabled        BOOLEAN NOT NULL DEFAULT false,
+   153→  mfa_secret         TEXT,                                  -- Encriptado em repouso
+   154→  last_login_at      TIMESTAMPTZ,
+   155→  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+   156→  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+   157→
+   158→  CONSTRAINT chk_users_role CHECK (role IN ('ADMIN', 'LAWYER', 'ASSISTANT', 'CLIENT'))
+   159→);
+   160→
+   161→CREATE INDEX IF NOT EXISTS idx_users_firm_id ON users(firm_id);
+   162→CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+   163→CREATE INDEX IF NOT EXISTS idx_users_role ON users(firm_id, role);
+   164→CREATE INDEX IF NOT EXISTS idx_users_active ON users(firm_id) WHERE is_active = true;
+   165→
+   166→
+   167→-- ─────────────────────────────────────────────────────────────────────────────
+   168→-- 2.3 REFRESH_TOKENS
+   169→-- ─────────────────────────────────────────────────────────────────────────────
+   170→-- firm_id denormalizado para RLS (sem necessidade de JOIN)
+   171→CREATE TABLE IF NOT EXISTS refresh_tokens (
+   172→  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   173→  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+   174→  firm_id     UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   175→  token_hash  TEXT NOT NULL UNIQUE,
+   176→  device_info TEXT,
+   177→  ip_address  TEXT,
+   178→  user_agent  TEXT,
+   179→  expires_at  TIMESTAMPTZ NOT NULL,
+   180→  revoked_at  TIMESTAMPTZ,
+   181→  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+   182→);
+   183→
+   184→CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+   185→CREATE INDEX IF NOT EXISTS idx_refresh_tokens_firm_id ON refresh_tokens(firm_id);
+   186→-- Parcial: apenas tokens não-revogados (expires_at > now() fica na query da aplicação)
+   187→CREATE INDEX IF NOT EXISTS idx_refresh_tokens_active ON refresh_tokens(user_id)
+   188→  WHERE revoked_at IS NULL;
+   189→
+   190→
+   191→-- ─────────────────────────────────────────────────────────────────────────────
+   192→-- 2.4 CLIENTS
+   193→-- ─────────────────────────────────────────────────────────────────────────────
+   194→CREATE TABLE IF NOT EXISTS clients (
+   195→  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   196→  firm_id      UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   197→  user_id      UUID REFERENCES users(id),               -- Se cliente tem conta própria
+   198→  full_name    TEXT NOT NULL,
+   199→  email        TEXT,
+   200→  phone        TEXT,
+   201→  bi_number    TEXT,                                     -- PII
+   202→  nif          TEXT,                                     -- PII
+   203→  address      TEXT,
+   204→  client_type  TEXT NOT NULL DEFAULT 'INDIVIDUAL',
+   205→  is_active    BOOLEAN NOT NULL DEFAULT true,
+   206→  notes        TEXT,
+   207→  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+   208→  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+   209→
+   210→  CONSTRAINT uq_clients_firm_name UNIQUE (firm_id, full_name),
+   211→  CONSTRAINT chk_clients_type CHECK (client_type IN ('INDIVIDUAL', 'COMPANY'))
+   212→);
+   213→
+   214→CREATE INDEX IF NOT EXISTS idx_clients_firm_id ON clients(firm_id);
+   215→CREATE INDEX IF NOT EXISTS idx_clients_user_id ON clients(user_id) WHERE user_id IS NOT NULL;
+   216→CREATE INDEX IF NOT EXISTS idx_clients_active ON clients(firm_id) WHERE is_active = true;
+   217→
+   218→
+   219→-- ─────────────────────────────────────────────────────────────────────────────
+   220→-- 2.5 LEGAL_PROCESSES (Processos Jurídicos)
+   221→-- ─────────────────────────────────────────────────────────────────────────────
+   222→CREATE TABLE IF NOT EXISTS legal_processes (
+   223→  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   224→  firm_id         UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   225→  client_id       UUID NOT NULL REFERENCES clients(id),
+   226→  process_number  TEXT NOT NULL,
+   227→  title           TEXT NOT NULL,
+   228→  description     TEXT,
+   229→  area            TEXT NOT NULL,
+   230→  status          TEXT NOT NULL DEFAULT 'ACTIVE',
+   231→  priority        TEXT NOT NULL DEFAULT 'MEDIUM',
+   232→  court           TEXT,
+   233→  judge           TEXT,
+   234→  opposing_party  TEXT,
+   235→  opened_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+   236→  closed_at       TIMESTAMPTZ,
+   237→  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+   238→  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+   239→
+   240→  CONSTRAINT uq_legal_processes_firm_number UNIQUE (firm_id, process_number),
+   241→  CONSTRAINT chk_lp_status CHECK (status IN ('ACTIVE', 'SUSPENDED', 'CLOSED', 'ARCHIVED')),
+   242→  CONSTRAINT chk_lp_priority CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'URGENT')),
+   243→  CONSTRAINT chk_lp_closed_date CHECK (
+   244→    (status = 'CLOSED' AND closed_at IS NOT NULL) OR (status <> 'CLOSED')
+   245→  )
+   246→);
+   247→
+   248→CREATE INDEX IF NOT EXISTS idx_lp_firm_id ON legal_processes(firm_id);
+   249→CREATE INDEX IF NOT EXISTS idx_lp_client_id ON legal_processes(client_id);
+   250→CREATE INDEX IF NOT EXISTS idx_lp_status ON legal_processes(firm_id, status);
+   251→CREATE INDEX IF NOT EXISTS idx_lp_priority ON legal_processes(firm_id, priority);
+   252→CREATE INDEX IF NOT EXISTS idx_lp_opened_at ON legal_processes(opened_at);
+   253→
+   254→
+   255→-- ─────────────────────────────────────────────────────────────────────────────
+   256→-- 2.6 PROCESS_ASSIGNMENTS
+   257→-- ─────────────────────────────────────────────────────────────────────────────
+   258→-- firm_id denormalizado para RLS directo (sem JOIN)
+   259→CREATE TABLE IF NOT EXISTS process_assignments (
+   260→  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   261→  firm_id     UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   262→  process_id  UUID NOT NULL REFERENCES legal_processes(id) ON DELETE CASCADE,
+   263→  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+   264→  role        TEXT NOT NULL,
+   265→  assigned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+   266→
+   267→  CONSTRAINT uq_pa_process_user UNIQUE (process_id, user_id),
+   268→  CONSTRAINT chk_pa_role CHECK (role IN ('LEAD', 'ASSISTANT', 'REVIEWER'))
+   269→);
+   270→
+   271→CREATE INDEX IF NOT EXISTS idx_pa_firm_id ON process_assignments(firm_id);
+   272→CREATE INDEX IF NOT EXISTS idx_pa_user_id ON process_assignments(user_id);
+   273→CREATE INDEX IF NOT EXISTS idx_pa_process_id ON process_assignments(process_id);
+   274→
+   275→
+   276→-- ─────────────────────────────────────────────────────────────────────────────
+   277→-- 2.7 DOCUMENTS
+   278→-- ─────────────────────────────────────────────────────────────────────────────
+   279→CREATE TABLE IF NOT EXISTS documents (
+   280→  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   281→  firm_id         UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   282→  process_id      UUID REFERENCES legal_processes(id),
+   283→  created_by_id   UUID NOT NULL REFERENCES users(id),
+   284→  updated_by_id   UUID REFERENCES users(id),
+   285→  title           TEXT NOT NULL,
+   286→  description     TEXT,
+   287→  file_key        TEXT NOT NULL,
+   288→  file_name       TEXT NOT NULL,
+   289→  file_size       BIGINT NOT NULL DEFAULT 0,
+   290→  mime_type       TEXT NOT NULL,
+   291→  version         INTEGER NOT NULL DEFAULT 1,
+   292→  parent_id       UUID REFERENCES documents(id),          -- Self-ref para versões
+   293→  status          TEXT NOT NULL DEFAULT 'DRAFT',
+   294→  is_confidential BOOLEAN NOT NULL DEFAULT false,
+   295→  tags            JSONB NOT NULL DEFAULT '[]',
+   296→  ai_summary      TEXT,
+   297→  ai_processed_at TIMESTAMPTZ,
+   298→  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+   299→  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+   300→
+   301→  CONSTRAINT chk_doc_status CHECK (status IN ('DRAFT', 'FINAL', 'SIGNED', 'ARCHIVED')),
+   302→  CONSTRAINT chk_doc_version CHECK (version > 0)
+   303→);
+   304→
+   305→CREATE INDEX IF NOT EXISTS idx_doc_firm_id ON documents(firm_id);
+   306→CREATE INDEX IF NOT EXISTS idx_doc_process_id ON documents(process_id) WHERE process_id IS NOT NULL;
+   307→CREATE INDEX IF NOT EXISTS idx_doc_created_by ON documents(created_by_id);
+   308→CREATE INDEX IF NOT EXISTS idx_doc_parent_id ON documents(parent_id) WHERE parent_id IS NOT NULL;
+   309→CREATE INDEX IF NOT EXISTS idx_doc_status ON documents(firm_id, status);
+   310→CREATE INDEX IF NOT EXISTS idx_doc_confidential ON documents(firm_id) WHERE is_confidential = true;
+   311→
+   312→
+   313→-- ─────────────────────────────────────────────────────────────────────────────
+   314→-- 2.8 DEADLINES (Prazos Processuais)
+   315→-- ─────────────────────────────────────────────────────────────────────────────
+   316→-- firm_id denormalizado para RLS directo
+   317→CREATE TABLE IF NOT EXISTS deadlines (
+   318→  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   319→  firm_id      UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   320→  process_id   UUID NOT NULL REFERENCES legal_processes(id) ON DELETE CASCADE,
+   321→  title        TEXT NOT NULL,
+   322→  description  TEXT,
+   323→  due_date     TIMESTAMPTZ NOT NULL,
+   324→  reminder_at  TIMESTAMPTZ,
+   325→  status       TEXT NOT NULL DEFAULT 'PENDING',
+   326→  source       TEXT NOT NULL DEFAULT 'MANUAL',
+   327→  ai_extracted BOOLEAN NOT NULL DEFAULT false,
+   328→  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+   329→  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+   330→
+   331→  CONSTRAINT chk_dl_status CHECK (status IN ('PENDING', 'COMPLETED', 'OVERDUE', 'CANCELLED')),
+   332→  CONSTRAINT chk_dl_source CHECK (source IN ('MANUAL', 'AI_EXTRACTED'))
+   333→);
+   334→
+   335→CREATE INDEX IF NOT EXISTS idx_dl_firm_id ON deadlines(firm_id);
+   336→CREATE INDEX IF NOT EXISTS idx_dl_process_id ON deadlines(process_id);
+   337→CREATE INDEX IF NOT EXISTS idx_dl_due_date ON deadlines(due_date);
+   338→CREATE INDEX IF NOT EXISTS idx_dl_status ON deadlines(firm_id, status);
+   339→
+   340→
+   341→-- ─────────────────────────────────────────────────────────────────────────────
+   342→-- 2.9 NOTES (Notas / Tarefas)
+   343→-- ─────────────────────────────────────────────────────────────────────────────
+   344→CREATE TABLE IF NOT EXISTS notes (
+   345→  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   346→  firm_id       UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   347→  entity_type   TEXT NOT NULL,
+   348→  entity_id     UUID,
+   349→  content       TEXT NOT NULL,
+   350→  is_pinned     BOOLEAN NOT NULL DEFAULT false,
+   351→  is_completed  BOOLEAN NOT NULL DEFAULT false,
+   352→  priority      TEXT NOT NULL DEFAULT 'low',
+   353→  due_date      TIMESTAMPTZ,
+   354→  created_by_id UUID NOT NULL REFERENCES users(id),
+   355→  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+   356→  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+   357→
+   358→  CONSTRAINT chk_notes_entity CHECK (entity_type IN ('process', 'client', 'deadline', 'general', 'document')),
+   359→  CONSTRAINT chk_notes_priority CHECK (priority IN ('low', 'medium', 'high', 'urgent'))
+   360→);
+   361→
+   362→CREATE INDEX IF NOT EXISTS idx_notes_firm_id ON notes(firm_id);
+   363→CREATE INDEX IF NOT EXISTS idx_notes_entity ON notes(entity_type, entity_id);
+   364→CREATE INDEX IF NOT EXISTS idx_notes_created_by ON notes(created_by_id);
+   365→CREATE INDEX IF NOT EXISTS idx_notes_pending ON notes(firm_id) WHERE is_completed = false;
+   366→
+   367→
+   368→-- ─────────────────────────────────────────────────────────────────────────────
+   369→-- 2.10 KNOWLEDGE_ARTICLES (Base de Conhecimento Jurídico)
+   370→-- ─────────────────────────────────────────────────────────────────────────────
+   371→CREATE TABLE IF NOT EXISTS knowledge_articles (
+   372→  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   373→  firm_id       UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   374→  title         TEXT NOT NULL,
+   375→  content       TEXT NOT NULL,
+   376→  category      TEXT NOT NULL DEFAULT 'OUTRO',
+   377→  source        TEXT,                                   -- "Lei nº 5/2019", URL, etc.
+   378→  tags          JSONB NOT NULL DEFAULT '[]',
+   379→  is_pinned     BOOLEAN NOT NULL DEFAULT false,
+   380→  view_count    INTEGER NOT NULL DEFAULT 0,
+   381→  created_by_id UUID NOT NULL REFERENCES users(id),
+   382→  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+   383→  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+   384→);
+   385→
+   386→CREATE INDEX IF NOT EXISTS idx_ka_firm_id ON knowledge_articles(firm_id);
+   387→CREATE INDEX IF NOT EXISTS idx_ka_category ON knowledge_articles(firm_id, category);
+   388→CREATE INDEX IF NOT EXISTS idx_ka_created_by ON knowledge_articles(created_by_id);
+   389→
+   390→
+   391→-- ─────────────────────────────────────────────────────────────────────────────
+   392→-- 2.11 PROCESS_TEMPLATES (Modelos de Processo)
+   393→-- ─────────────────────────────────────────────────────────────────────────────
+   394→CREATE TABLE IF NOT EXISTS process_templates (
+   395→  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   396→  firm_id          UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   397→  title            TEXT NOT NULL,
+   398→  description      TEXT,
+   399→  area             TEXT NOT NULL,
+   400→  default_priority TEXT NOT NULL DEFAULT 'MEDIUM',
+   401→  checklist_items  JSONB NOT NULL DEFAULT '[]',
+   402→  is_active        BOOLEAN NOT NULL DEFAULT true,
+   403→  created_by_id    UUID NOT NULL REFERENCES users(id),
+   404→  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+   405→  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+   406→);
+   407→
+   408→CREATE INDEX IF NOT EXISTS idx_pt_firm_id ON process_templates(firm_id);
+   409→CREATE INDEX IF NOT EXISTS idx_pt_area ON process_templates(firm_id, area);
+   410→CREATE INDEX IF NOT EXISTS idx_pt_active ON process_templates(firm_id) WHERE is_active = true;
+   411→
+   412→
+   413→-- ─────────────────────────────────────────────────────────────────────────────
+   414→-- 2.12 PROCESS_NOTES (Notas do Processo)
+   415→-- ─────────────────────────────────────────────────────────────────────────────
+   416→-- firm_id denormalizado para RLS directo
+   417→CREATE TABLE IF NOT EXISTS process_notes (
+   418→  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   419→  firm_id     UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   420→  process_id  UUID NOT NULL REFERENCES legal_processes(id) ON DELETE CASCADE,
+   421→  content     TEXT NOT NULL,
+   422→  created_by  UUID NOT NULL REFERENCES users(id),
+   423→  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+   424→);
+   425→
+   426→CREATE INDEX IF NOT EXISTS idx_pn_firm_id ON process_notes(firm_id);
+   427→CREATE INDEX IF NOT EXISTS idx_pn_process_id ON process_notes(process_id);
+   428→
+   429→
+   430→-- ─────────────────────────────────────────────────────────────────────────────
+   431→-- 2.13 INVITATIONS (Convites de Utilizadores)
+   432→-- ─────────────────────────────────────────────────────────────────────────────
+   433→CREATE TABLE IF NOT EXISTS invitations (
+   434→  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   435→  firm_id     UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   436→  email       TEXT NOT NULL,
+   437→  role        TEXT NOT NULL,
+   438→  token_hash  TEXT NOT NULL UNIQUE,
+   439→  expires_at  TIMESTAMPTZ NOT NULL,
+   440→  accepted_at TIMESTAMPTZ,
+   441→  invited_by  UUID NOT NULL REFERENCES users(id),
+   442→  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+   443→
+   444→  CONSTRAINT chk_inv_role CHECK (role IN ('ADMIN', 'LAWYER', 'ASSISTANT', 'CLIENT')),
+   445→  CONSTRAINT chk_inv_expires CHECK (expires_at > created_at)
+   446→);
+   447→
+   448→CREATE INDEX IF NOT EXISTS idx_inv_firm_id ON invitations(firm_id);
+   449→CREATE INDEX IF NOT EXISTS idx_inv_email ON invitations(firm_id, email);
+   450→
+   451→
+   452→-- ─────────────────────────────────────────────────────────────────────────────
+   453→-- 2.14 AI_CONVERSATIONS (Conversas IA)
+   454→-- ─────────────────────────────────────────────────────────────────────────────
+   455→CREATE TABLE IF NOT EXISTS ai_conversations (
+   456→  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   457→  firm_id      UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   458→  user_id      UUID NOT NULL REFERENCES users(id),
+   459→  title        TEXT NOT NULL DEFAULT 'Nova Conversa',
+   460→  context_type TEXT,
+   461→  context_id   UUID,
+   462→  is_active    BOOLEAN NOT NULL DEFAULT true,
+   463→  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+   464→  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+   465→
+   466→  CONSTRAINT chk_aic_context CHECK (
+   467→    context_type IS NULL OR context_type IN ('process', 'client', 'document')
+   468→  )
+   469→);
+   470→
+   471→CREATE INDEX IF NOT EXISTS idx_aic_firm_id ON ai_conversations(firm_id);
+   472→CREATE INDEX IF NOT EXISTS idx_aic_user_id ON ai_conversations(user_id);
+   473→CREATE INDEX IF NOT EXISTS idx_aic_active ON ai_conversations(firm_id) WHERE is_active = true;
+   474→
+   475→
+   476→-- ─────────────────────────────────────────────────────────────────────────────
+   477→-- 2.15 AI_MESSAGES (Mensagens IA)
+   478→-- ─────────────────────────────────────────────────────────────────────────────
+   479→-- firm_id denormalizado para RLS directo (sem JOIN)
+   480→CREATE TABLE IF NOT EXISTS ai_messages (
+   481→  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   482→  firm_id         UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   483→  conversation_id UUID NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+   484→  role            TEXT NOT NULL,
+   485→  content         TEXT NOT NULL,
+   486→  sources         JSONB NOT NULL DEFAULT '[]',
+   487→  knowledge_ids   UUID[],
+   488→  metadata        JSONB NOT NULL DEFAULT '{}',
+   489→  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+   490→
+   491→  CONSTRAINT chk_aim_role CHECK (role IN ('user', 'assistant', 'system'))
+   492→);
+   493→
+   494→CREATE INDEX IF NOT EXISTS idx_aim_firm_id ON ai_messages(firm_id);
+   495→CREATE INDEX IF NOT EXISTS idx_aim_conv_id ON ai_messages(conversation_id);
+   496→CREATE INDEX IF NOT EXISTS idx_aim_created ON ai_messages(created_at);
+   497→
+   498→
+   499→-- ─────────────────────────────────────────────────────────────────────────────
+   500→-- 2.16 AI_GENERATIONS (Documentos Gerados por IA)
+   501→-- ─────────────────────────────────────────────────────────────────────────────
+   502→CREATE TABLE IF NOT EXISTS ai_generations (
+   503→  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   504→  firm_id         UUID NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+   505→  user_id         UUID NOT NULL REFERENCES users(id),
+   506→  generation_type TEXT NOT NULL,
+   507→  title           TEXT NOT NULL,
+   508→  prompt          TEXT NOT NULL,
+   509→  result          TEXT NOT NULL,
+   510→  template_id     UUID REFERENCES process_templates(id),
+   511→  process_id      UUID,
+   512→  metadata        JSONB NOT NULL DEFAULT '{}',
+   513→  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+   514→
+   515→  CONSTRAINT chk_aig_type CHECK (
+   516→    generation_type IN ('document', 'contract', 'petition', 'legal_opinion', 'summary', 'other')
+   517→  )
+   518→);
+   519→
+   520→CREATE INDEX IF NOT EXISTS idx_aig_firm_id ON ai_generations(firm_id);
+   521→CREATE INDEX IF NOT EXISTS idx_aig_user_id ON ai_generations(user_id);
+   522→CREATE INDEX IF NOT EXISTS idx_aig_type ON ai_generations(firm_id, generation_type);
+   523→CREATE INDEX IF NOT EXISTS idx_aig_created ON ai_generations(created_at);
+   524→
+   525→
+   526→-- ─────────────────────────────────────────────────────────────────────────────
+   527→-- 2.17 AUDIT_LOGS (Trilha de Auditoria — IMUTÁVEL)
+   528→-- ─────────────────────────────────────────────────────────────────────────────
+   529→-- Sem updated_at (audit logs são imutáveis por definição)
+   530→-- firm_id e user_id nullable para logar tentativas de login sem sessão
+   531→CREATE TABLE IF NOT EXISTS audit_logs (
+   532→  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   533→  firm_id      UUID,
+   534→  user_id      UUID,
+   535→  action       TEXT NOT NULL,
+   536→  entity_type  TEXT NOT NULL,
+   537→  entity_id    UUID,
+   538→  old_values   JSONB,
+   539→  new_values   JSONB,
+   540→  ip_address   TEXT,
+   541→  user_agent   TEXT,
+   542→  metadata     JSONB NOT NULL DEFAULT '{}',
+   543→  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+   544→);
+   545→
+   546→CREATE INDEX IF NOT EXISTS idx_al_firm_id ON audit_logs(firm_id) WHERE firm_id IS NOT NULL;
+   547→CREATE INDEX IF NOT EXISTS idx_al_user_id ON audit_logs(user_id) WHERE user_id IS NOT NULL;
+   548→CREATE INDEX IF NOT EXISTS idx_al_entity ON audit_logs(entity_type, entity_id);
+   549→CREATE INDEX IF NOT EXISTS idx_al_created ON audit_logs(created_at);
+   550→CREATE INDEX IF NOT EXISTS idx_al_action ON audit_logs(action);
+   551→
+   552→
+   553→-- ═════════════════════════════════════════════════════════════════════════════════
+   554→-- 3. TRIGGER: updated_at automático (explícito por tabela)
+   555→-- ═════════════════════════════════════════════════════════════════════════════════
+   556→-- Não usa loop dinâmico — cada tabela é listada explicitamente.
+   557→-- SECURITY DEFINER com search_path fixo (evita search_path hijacking).
+   558→
+   559→CREATE OR REPLACE FUNCTION lexdoc_auth.update_updated_at_column()
+   560→RETURNS TRIGGER
+   561→LANGUAGE plpgsql
+   562→SECURITY DEFINER
+   563→SET search_path = 'lexdoc_auth'
+   564→AS $$
+   565→BEGIN
+   566→  NEW.updated_at = now();
+   567→  RETURN NEW;
+   568→END;
+   569→$$;
+   570→
+   571→-- Aplicar trigger explicitamente a cada tabela com coluna updated_at
+   572→-- Usa FOREACH + text[] para evitar dependência de COLUMN1 (portável/seguro)
+   573→DO $$
+   574→DECLARE
+   575→  tbl TEXT;
+   576→BEGIN
+   577→  FOREACH tbl IN ARRAY ARRAY[
+   578→    'firms',
+   579→    'users',
+   580→    'clients',
+   581→    'legal_processes',
+   582→    'documents',
+   583→    'deadlines',
+   584→    'notes',
+   585→    'knowledge_articles',
+   586→    'process_templates',
+   587→    'ai_conversations'
+   588→  ]
+   589→  LOOP
+   590→    EXECUTE format(
+   591→      'DROP TRIGGER IF EXISTS set_updated_at ON %I;
+   592→       CREATE TRIGGER set_updated_at
+   593→         BEFORE UPDATE ON %I
+   594→         FOR EACH ROW
+   595→         EXECUTE FUNCTION lexdoc_auth.update_updated_at_column();',
+   596→      tbl, tbl
+   597→    );
+   598→  END LOOP;
+   599→END;
+   600→$$;
+   601→
+   602→
+   603→-- ═════════════════════════════════════════════════════════════════════════════════
+   604→-- 4. TRIGGERS: Integridade Multi-Tenant (Cross-Firm Validation)
+   605→-- ═════════════════════════════════════════════════════════════════════════════════
+   606→-- Estes triggers impedem que FKs apontem para entidades de outro firm.
+   607→-- Exemplo: impossível criar um legal_process com client_id de outro firm.
+   608→-- Todas as funções usam SECURITY DEFINER com search_path fixo.
+   609→
+   610→
+   611→-- ── 4.1 legal_processes.client_id → clients.firm_id ──
+   612→CREATE OR REPLACE FUNCTION lexdoc_auth.chk_process_client()
+   613→RETURNS TRIGGER
+   614→LANGUAGE plpgsql
+   615→SECURITY DEFINER
+   616→SET search_path = 'lexdoc_auth'
+   617→AS $$
+   618→BEGIN
+   619→  IF NEW.client_id IS NOT NULL AND NOT EXISTS (
+   620→    SELECT 1 FROM clients WHERE id = NEW.client_id AND firm_id = NEW.firm_id
+   621→  ) THEN
+   622→    RAISE EXCEPTION 'INTEGRIDADE: clients(%) não pertence ao firm(%)', NEW.client_id, NEW.firm_id;
+   623→  END IF;
+   624→  RETURN NEW;
+   625→END;
+   626→$$;
+   627→
+   628→CREATE TRIGGER trg_chk_process_client
+   629→  BEFORE INSERT OR UPDATE ON legal_processes
+   630→  FOR EACH ROW EXECUTE FUNCTION lexdoc_auth.chk_process_client();
+   631→
+   632→
+   633→-- ── 4.2 documents.created_by_id → users.firm_id + process_id → legal_processes.firm_id ──
+   634→CREATE OR REPLACE FUNCTION lexdoc_auth.chk_document_firm()
+   635→RETURNS TRIGGER
+   636→LANGUAGE plpgsql
+   637→SECURITY DEFINER
+   638→SET search_path = 'lexdoc_auth'
+   639→AS $$
+   640→BEGIN
+   641→  -- O criador deve pertencer ao mesmo firm
+   642→  IF NOT EXISTS (
+   643→    SELECT 1 FROM users WHERE id = NEW.created_by_id AND firm_id = NEW.firm_id
+   644→  ) THEN
+   645→    RAISE EXCEPTION 'INTEGRIDADE: created_by(%) não pertence ao firm(%)', NEW.created_by_id, NEW.firm_id;
+   646→  END IF;
+   647→  -- Se ligado a processo, deve ser do mesmo firm
+   648→  IF NEW.process_id IS NOT NULL AND NOT EXISTS (
+   649→    SELECT 1 FROM legal_processes WHERE id = NEW.process_id AND firm_id = NEW.firm_id
+   650→  ) THEN
+   651→    RAISE EXCEPTION 'INTEGRIDADE: process(%) não pertence ao firm(%)', NEW.process_id, NEW.firm_id;
+   652→  END IF;
+   653→  RETURN NEW;
+   654→END;
+   655→$$;
+   656→
+   657→CREATE TRIGGER trg_chk_document_firm
+   658→  BEFORE INSERT OR UPDATE ON documents
+   659→  FOR EACH ROW EXECUTE FUNCTION lexdoc_auth.chk_document_firm();
+   660→
+   661→
+   662→-- ── 4.3 process_assignments: user + process → mesmo firm ──
+   663→CREATE OR REPLACE FUNCTION lexdoc_auth.chk_assignment_firm()
+   664→RETURNS TRIGGER
+   665→LANGUAGE plpgsql
+   666→SECURITY DEFINER
+   667→SET search_path = 'lexdoc_auth'
+   668→AS $$
+   669→BEGIN
+   670→  IF NOT EXISTS (
+   671→    SELECT 1 FROM users WHERE id = NEW.user_id AND firm_id = NEW.firm_id
+   672→  ) THEN
+   673→    RAISE EXCEPTION 'INTEGRIDADE: user(%) não pertence ao firm(%)', NEW.user_id, NEW.firm_id;
+   674→  END IF;
+   675→  IF NOT EXISTS (
+   676→    SELECT 1 FROM legal_processes WHERE id = NEW.process_id AND firm_id = NEW.firm_id
+   677→  ) THEN
+   678→    RAISE EXCEPTION 'INTEGRIDADE: process(%) não pertence ao firm(%)', NEW.process_id, NEW.firm_id;
+   679→  END IF;
+   680→  RETURN NEW;
+   681→END;
+   682→$$;
+   683→
+   684→CREATE TRIGGER trg_chk_assignment_firm
+   685→  BEFORE INSERT OR UPDATE ON process_assignments
+   686→  FOR EACH ROW EXECUTE FUNCTION lexdoc_auth.chk_assignment_firm();
+   687→
+   688→
+   689→-- ── 4.4 deadlines.process_id → legal_processes.firm_id ──
+   690→CREATE OR REPLACE FUNCTION lexdoc_auth.chk_deadline_firm()
+   691→RETURNS TRIGGER
+   692→LANGUAGE plpgsql
+   693→SECURITY DEFINER
+   694→SET search_path = 'lexdoc_auth'
+   695→AS $$
+   696→BEGIN
+   697→  IF NOT EXISTS (
+   698→    SELECT 1 FROM legal_processes WHERE id = NEW.process_id AND firm_id = NEW.firm_id
+   699→  ) THEN
+   700→    RAISE EXCEPTION 'INTEGRIDADE: process(%) não pertence ao firm(%)', NEW.process_id, NEW.firm_id;
+   701→  END IF;
+   702→  RETURN NEW;
+   703→END;
+   704→$$;
+   705→
+   706→CREATE TRIGGER trg_chk_deadline_firm
+   707→  BEFORE INSERT OR UPDATE ON deadlines
+   708→  FOR EACH ROW EXECUTE FUNCTION lexdoc_auth.chk_deadline_firm();
+   709→
+   710→
+   711→-- ── 4.5 process_notes: process + created_by → mesmo firm ──
+   712→CREATE OR REPLACE FUNCTION lexdoc_auth.chk_process_note_firm()
+   713→RETURNS TRIGGER
+   714→LANGUAGE plpgsql
+   715→SECURITY DEFINER
+   716→SET search_path = 'lexdoc_auth'
+   717→AS $$
+   718→BEGIN
+   719→  IF NOT EXISTS (
+   720→    SELECT 1 FROM legal_processes WHERE id = NEW.process_id AND firm_id = NEW.firm_id
+   721→  ) THEN
+   722→    RAISE EXCEPTION 'INTEGRIDADE: process(%) não pertence ao firm(%)', NEW.process_id, NEW.firm_id;
+   723→  END IF;
+   724→  IF NOT EXISTS (
+   725→    SELECT 1 FROM users WHERE id = NEW.created_by AND firm_id = NEW.firm_id
+   726→  ) THEN
+   727→    RAISE EXCEPTION 'INTEGRIDADE: created_by(%) não pertence ao firm(%)', NEW.created_by, NEW.firm_id;
+   728→  END IF;
+   729→  RETURN NEW;
+   730→END;
+   731→$$;
+   732→
+   733→CREATE TRIGGER trg_chk_process_note_firm
+   734→  BEFORE INSERT OR UPDATE ON process_notes
+   735→  FOR EACH ROW EXECUTE FUNCTION lexdoc_auth.chk_process_note_firm();
+   736→
+   737→
+   738→-- ── 4.6 ai_messages.conversation_id → ai_conversations.firm_id ──
+   739→CREATE OR REPLACE FUNCTION lexdoc_auth.chk_ai_message_firm()
+   740→RETURNS TRIGGER
+   741→LANGUAGE plpgsql
+   742→SECURITY DEFINER
+   743→SET search_path = 'lexdoc_auth'
+   744→AS $$
+   745→BEGIN
+   746→  IF NOT EXISTS (
+   747→    SELECT 1 FROM ai_conversations WHERE id = NEW.conversation_id AND firm_id = NEW.firm_id
+   748→  ) THEN
+   749→    RAISE EXCEPTION 'INTEGRIDADE: conversation(%) não pertence ao firm(%)', NEW.conversation_id, NEW.firm_id;
+   750→  END IF;
+   751→  RETURN NEW;
+   752→END;
+   753→$$;
+   754→
+   755→CREATE TRIGGER trg_chk_ai_message_firm
+   756→  BEFORE INSERT OR UPDATE ON ai_messages
+   757→  FOR EACH ROW EXECUTE FUNCTION lexdoc_auth.chk_ai_message_firm();
+   758→
+   759→
+   760→-- ── 4.7 ai_generations: user + process → mesmo firm ──
+   761→CREATE OR REPLACE FUNCTION lexdoc_auth.chk_ai_generation_firm()
+   762→RETURNS TRIGGER
+   763→LANGUAGE plpgsql
+   764→SECURITY DEFINER
+   765→SET search_path = 'lexdoc_auth'
+   766→AS $$
+   767→BEGIN
+   768→  IF NOT EXISTS (
+   769→    SELECT 1 FROM users WHERE id = NEW.user_id AND firm_id = NEW.firm_id
+   770→  ) THEN
+   771→    RAISE EXCEPTION 'INTEGRIDADE: user(%) não pertence ao firm(%)', NEW.user_id, NEW.firm_id;
+   772→  END IF;
+   773→  IF NEW.process_id IS NOT NULL AND NOT EXISTS (
+   774→    SELECT 1 FROM legal_processes WHERE id = NEW.process_id AND firm_id = NEW.firm_id
+   775→  ) THEN
+   776→    RAISE EXCEPTION 'INTEGRIDADE: process(%) não pertence ao firm(%)', NEW.process_id, NEW.firm_id;
+   777→  END IF;
+   778→  RETURN NEW;
+   779→END;
+   780→$$;
+   781→
+   782→CREATE TRIGGER trg_chk_ai_generation_firm
+   783→  BEFORE INSERT OR UPDATE ON ai_generations
+   784→  FOR EACH ROW EXECUTE FUNCTION lexdoc_auth.chk_ai_generation_firm();
+   785→
+   786→
+   787→-- ── 4.8 refresh_tokens: user → users.firm_id ──
+   788→CREATE OR REPLACE FUNCTION lexdoc_auth.chk_refresh_token_firm()
+   789→RETURNS TRIGGER
+   790→LANGUAGE plpgsql
+   791→SECURITY DEFINER
+   792→SET search_path = 'lexdoc_auth'
+   793→AS $$
+   794→BEGIN
+   795→  IF NOT EXISTS (
+   796→    SELECT 1 FROM users WHERE id = NEW.user_id AND firm_id = NEW.firm_id
+   797→  ) THEN
+   798→    RAISE EXCEPTION 'INTEGRIDADE: user(%) não pertence ao firm(%)', NEW.user_id, NEW.firm_id;
+   799→  END IF;
+   800→  RETURN NEW;
+   801→END;
+   802→$$;
+   803→
+   804→CREATE TRIGGER trg_chk_refresh_token_firm
+   805→  BEFORE INSERT OR UPDATE ON refresh_tokens
+   806→  FOR EACH ROW EXECUTE FUNCTION lexdoc_auth.chk_refresh_token_firm();
+   807→
+   808→
+   809→-- ── 4.9 invitations: invited_by → users.firm_id ──
+   810→CREATE OR REPLACE FUNCTION lexdoc_auth.chk_invitation_firm()
+   811→RETURNS TRIGGER
+   812→LANGUAGE plpgsql
+   813→SECURITY DEFINER
+   814→SET search_path = 'lexdoc_auth'
+   815→AS $$
+   816→BEGIN
+   817→  IF NOT EXISTS (
+   818→    SELECT 1 FROM users WHERE id = NEW.invited_by AND firm_id = NEW.firm_id
+   819→  ) THEN
+   820→    RAISE EXCEPTION 'INTEGRIDADE: invited_by(%) não pertence ao firm(%)', NEW.invited_by, NEW.firm_id;
+   821→  END IF;
+   822→  RETURN NEW;
+   823→END;
+   824→$$;
+   825→
+   826→CREATE TRIGGER trg_chk_invitation_firm
+   827→  BEFORE INSERT OR UPDATE ON invitations
+   828→  FOR EACH ROW EXECUTE FUNCTION lexdoc_auth.chk_invitation_firm();
+   829→
+   830→
+   831→-- ═════════════════════════════════════════════════════════════════════════════════
+   832→-- 5. ROW LEVEL SECURITY (RLS) — Activar em todas as tabelas
+   833→-- ═════════════════════════════════════════════════════════════════════════════════
+   834→-- FORCE ROW LEVEL SECURITY: garante que NENHUMA role bypassa o RLS
+   835→-- (excepto superuser/postgres, que é o que Prisma usa)
+   836→
+   837→ALTER TABLE firms              ENABLE ROW LEVEL SECURITY; ALTER TABLE firms              FORCE ROW LEVEL SECURITY;
+   838→ALTER TABLE users              ENABLE ROW LEVEL SECURITY; ALTER TABLE users              FORCE ROW LEVEL SECURITY;
+   839→ALTER TABLE refresh_tokens     ENABLE ROW LEVEL SECURITY; ALTER TABLE refresh_tokens     FORCE ROW LEVEL SECURITY;
+   840→ALTER TABLE clients            ENABLE ROW LEVEL SECURITY; ALTER TABLE clients            FORCE ROW LEVEL SECURITY;
+   841→ALTER TABLE legal_processes    ENABLE ROW LEVEL SECURITY; ALTER TABLE legal_processes    FORCE ROW LEVEL SECURITY;
+   842→ALTER TABLE process_assignments ENABLE ROW LEVEL SECURITY; ALTER TABLE process_assignments FORCE ROW LEVEL SECURITY;
+   843→ALTER TABLE documents          ENABLE ROW LEVEL SECURITY; ALTER TABLE documents          FORCE ROW LEVEL SECURITY;
+   844→ALTER TABLE deadlines          ENABLE ROW LEVEL SECURITY; ALTER TABLE deadlines          FORCE ROW LEVEL SECURITY;
+   845→ALTER TABLE notes              ENABLE ROW LEVEL SECURITY; ALTER TABLE notes              FORCE ROW LEVEL SECURITY;
+   846→ALTER TABLE knowledge_articles ENABLE ROW LEVEL SECURITY; ALTER TABLE knowledge_articles FORCE ROW LEVEL SECURITY;
+   847→ALTER TABLE process_templates  ENABLE ROW LEVEL SECURITY; ALTER TABLE process_templates  FORCE ROW LEVEL SECURITY;
+   848→ALTER TABLE process_notes      ENABLE ROW LEVEL SECURITY; ALTER TABLE process_notes      FORCE ROW LEVEL SECURITY;
+   849→ALTER TABLE invitations         ENABLE ROW LEVEL SECURITY; ALTER TABLE invitations         FORCE ROW LEVEL SECURITY;
+   850→ALTER TABLE ai_conversations   ENABLE ROW LEVEL SECURITY; ALTER TABLE ai_conversations   FORCE ROW LEVEL SECURITY;
+   851→ALTER TABLE ai_messages        ENABLE ROW LEVEL SECURITY; ALTER TABLE ai_messages        FORCE ROW LEVEL SECURITY;
+   852→ALTER TABLE ai_generations    ENABLE ROW LEVEL SECURITY; ALTER TABLE ai_generations    FORCE ROW LEVEL SECURITY;
+   853→ALTER TABLE audit_logs         ENABLE ROW LEVEL SECURITY; ALTER TABLE audit_logs         FORCE ROW LEVEL SECURITY;
+   854→
+   855→
+   856→-- ═════════════════════════════════════════════════════════════════════════════════
+   857→-- 6. POLÍTICAS RLS — Explícitas por Tabela e por Role
+   858→-- ═════════════════════════════════════════════════════════════════════════════════
+   859→--
+   860→-- PADRÃO DE PERMISSÕES:
+   861→--   ┌─────────────────┬──────────────┬──────────────┬───────────┬────────┐
+   862→--   │ Tabela          │ ADMIN        │ LAWYER       │ ASSISTANT │ CLIENT │
+   863→--   ├─────────────────┼──────────────┼──────────────┼───────────┼────────┤
+   864→--   │ firms           │ R / U        │ R            │ —         │ —      │
+   865→--   │ users           │ R / I / U / D│ R            │ R         │ R (own)│
+   866→--   │ clients         │ R / I / U / D│ R / I / U    │ R / I / U │ R      │
+   867→--   │ processes       │ R / I / U / D│ R / I / U    │ R         │ R      │
+   868→--   │ assignments     │ R / I / D    │ R / I / D    │ R         │ —      │
+   869→--   │ documents       │ R / I / U / D│ R / I / U / D│ R / I / U│ R (pub)│
+   870→--   │ deadlines       │ R / I / U / D│ R / I / U    │ R / I / U │ R      │
+   871→--   │ notes           │ R / I / U / D│ R / I / U / D│ R / I / U / D│ R  │
+   872→--   │ knowledge       │ R / I / U / D│ R / I / U    │ R         │ R      │
+   873→--   │ templates       │ R / I / U / D│ R / I / U    │ R         │ R      │
+   874→--   │ process_notes   │ R / I / D    │ R / I / D    │ R / I     │ R      │
+   875→--   │ invitations     │ R / I / D    │ —            │ —         │ —      │
+   876→--   │ ai_conversations│ R (all) / I / U / D│ R / I / U / D│ R / I / U / D│ R / I / U / D│
+   877→--   │ ai_messages     │ R / I        │ R / I        │ R / I     │ R / I  │
+   878→--   │ ai_generations  │ R (all)      │ R (all)      │ R (own)   │ R (own)│
+   879→--   │ audit_logs      │ R (only)      │ —            │ —         │ —      │
+   880→--   └─────────────────┴──────────────┴──────────────┴───────────┴────────┘
+   881→--
+   882→-- R = Read, I = Insert, U = Update, D = Delete
+   883→-- "own" = apenas os seus próprios registos
+   884→-- "all" = todos do firm
+   885→-- "(pub)" = apenas documentos não-confidenciais
+   886→-- "—" = sem acesso
+   887→--
+   888→-- DOCUMENTOS CONFIDENCIAIS (is_confidential = true):
+   889→--   Apenas ADMIN e LAWYER podem ver, criar, editar, eliminar.
+   890→
+   891→
+   892→-- ── 6.1 FIRMS ──
+   893→CREATE POLICY pol_firms_select ON firms
+   894→  FOR SELECT USING (
+   895→    id = lexdoc_auth.current_firm_id()
+   896→    AND lexdoc_auth.current_user_id() IS NOT NULL
+   897→  );
+   898→CREATE POLICY pol_firms_update ON firms
+   899→  FOR UPDATE USING (
+   900→    id = lexdoc_auth.current_firm_id()
+   901→    AND lexdoc_auth.current_user_role() = 'ADMIN'
+   902→  )
+   903→  WITH CHECK (id = lexdoc_auth.current_firm_id());
+   904→
+   905→
+   906→-- ── 6.2 USERS ──
+   907→CREATE POLICY pol_users_select ON users
+   908→  FOR SELECT USING (
+   909→    firm_id = lexdoc_auth.current_firm_id()
+   910→    AND lexdoc_auth.current_user_id() IS NOT NULL
+   911→  );
+   912→CREATE POLICY pol_users_insert ON users
+   913→  FOR INSERT WITH CHECK (
+   914→    firm_id = lexdoc_auth.current_firm_id()
+   915→    AND lexdoc_auth.current_user_role() = 'ADMIN'
+   916→  );
+   917→CREATE POLICY pol_users_update ON users
+   918→  FOR UPDATE USING (
+   919→    firm_id = lexdoc_auth.current_firm_id()
+   920→    AND lexdoc_auth.current_user_role() = 'ADMIN'
+   921→  )
+   922→  WITH CHECK (firm_id = lexdoc_auth.current_firm_id());
+   923→CREATE POLICY pol_users_delete ON users
+   924→  FOR DELETE USING (
+   925→    id = lexdoc_auth.current_user_id()
+   926→  );
+   927→
+   928→
+   929→-- ── 6.3 REFRESH_TOKENS ──
+   930→CREATE POLICY pol_rt_select ON refresh_tokens
+   931→  FOR SELECT USING (
+   932→    user_id = lexdoc_auth.current_user_id()
+   933→  );
+   934→CREATE POLICY pol_rt_insert ON refresh_tokens
+   935→  FOR INSERT WITH CHECK (
+   936→    user_id = lexdoc_auth.current_user_id()
+   937→    AND firm_id = lexdoc_auth.current_firm_id()
+   938→  );
+   939→CREATE POLICY pol_rt_update ON refresh_tokens
+   940→  FOR UPDATE USING (
+   941→    firm_id = lexdoc_auth.current_firm_id()
+   942→    AND (
+   943→      user_id = lexdoc_auth.current_user_id()
+   944→      OR lexdoc_auth.current_user_role() = 'ADMIN'
+   945→    )
+   946→  );
+   947→CREATE POLICY pol_rt_delete ON refresh_tokens
+   948→  FOR DELETE USING (
+   949→    firm_id = lexdoc_auth.current_firm_id()
+   950→    AND (
+   951→      user_id = lexdoc_auth.current_user_id()
+   952→      OR lexdoc_auth.current_user_role() = 'ADMIN'
+   953→    )
+   954→  );
+   955→
+   956→
+   957→-- ── 6.4 CLIENTS ──
+   958→CREATE POLICY pol_clients_select ON clients
+   959→  FOR SELECT USING (
+   960→    firm_id = lexdoc_auth.current_firm_id()
+   961→    AND lexdoc_auth.current_user_id() IS NOT NULL
+   962→  );
+   963→CREATE POLICY pol_clients_insert ON clients
+   964→  FOR INSERT WITH CHECK (
+   965→    firm_id = lexdoc_auth.current_firm_id()
+   966→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER', 'ASSISTANT')
+   967→  );
+   968→CREATE POLICY pol_clients_update ON clients
+   969→  FOR UPDATE USING (
+   970→    firm_id = lexdoc_auth.current_firm_id()
+   971→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER', 'ASSISTANT')
+   972→  )
+   973→  WITH CHECK (firm_id = lexdoc_auth.current_firm_id());
+   974→CREATE POLICY pol_clients_delete ON clients
+   975→  FOR DELETE USING (
+   976→    firm_id = lexdoc_auth.current_firm_id()
+   977→    AND lexdoc_auth.current_user_role() = 'ADMIN'
+   978→  );
+   979→
+   980→
+   981→-- ── 6.5 LEGAL_PROCESSES ──
+   982→CREATE POLICY pol_lp_select ON legal_processes
+   983→  FOR SELECT USING (
+   984→    firm_id = lexdoc_auth.current_firm_id()
+   985→    AND lexdoc_auth.current_user_id() IS NOT NULL
+   986→  );
+   987→CREATE POLICY pol_lp_insert ON legal_processes
+   988→  FOR INSERT WITH CHECK (
+   989→    firm_id = lexdoc_auth.current_firm_id()
+   990→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+   991→  );
+   992→CREATE POLICY pol_lp_update ON legal_processes
+   993→  FOR UPDATE USING (
+   994→    firm_id = lexdoc_auth.current_firm_id()
+   995→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+   996→  )
+   997→  WITH CHECK (firm_id = lexdoc_auth.current_firm_id());
+   998→CREATE POLICY pol_lp_delete ON legal_processes
+   999→  FOR DELETE USING (
+  1000→    firm_id = lexdoc_auth.current_firm_id()
+  1001→    AND lexdoc_auth.current_user_role() = 'ADMIN'
+  1002→  );
+  1003→
+  1004→
+  1005→-- ── 6.6 PROCESS_ASSIGNMENTS ──
+  1006→CREATE POLICY pol_pa_select ON process_assignments
+  1007→  FOR SELECT USING (
+  1008→    firm_id = lexdoc_auth.current_firm_id()
+  1009→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1010→  );
+  1011→CREATE POLICY pol_pa_insert ON process_assignments
+  1012→  FOR INSERT WITH CHECK (
+  1013→    firm_id = lexdoc_auth.current_firm_id()
+  1014→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1015→  );
+  1016→CREATE POLICY pol_pa_delete ON process_assignments
+  1017→  FOR DELETE USING (
+  1018→    firm_id = lexdoc_auth.current_firm_id()
+  1019→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1020→  );
+  1021→
+  1022→
+  1023→-- ── 6.7 DOCUMENTS (com protecção is_confidential) ──
+  1024→CREATE POLICY pol_doc_select ON documents
+  1025→  FOR SELECT USING (
+  1026→    firm_id = lexdoc_auth.current_firm_id()
+  1027→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1028→    AND (
+  1029→      is_confidential = false
+  1030→      OR lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1031→    )
+  1032→  );
+  1033→CREATE POLICY pol_doc_insert ON documents
+  1034→  FOR INSERT WITH CHECK (
+  1035→    firm_id = lexdoc_auth.current_firm_id()
+  1036→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER', 'ASSISTANT')
+  1037→    AND (
+  1038→      is_confidential = false
+  1039→      OR lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1040→    )
+  1041→  );
+  1042→CREATE POLICY pol_doc_update ON documents
+  1043→  FOR UPDATE USING (
+  1044→    firm_id = lexdoc_auth.current_firm_id()
+  1045→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER', 'ASSISTANT')
+  1046→    AND (
+  1047→      is_confidential = false
+  1048→      OR lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1049→    )
+  1050→  )
+  1051→  -- WITH CHECK avalia contra o NOVO estado da linha (NEW)
+  1052→  -- Impede ASSISTANT de ligar is_confidential = true
+  1053→  WITH CHECK (
+  1054→    firm_id = lexdoc_auth.current_firm_id()
+  1055→    AND (
+  1056→      is_confidential = false
+  1057→      OR lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1058→    )
+  1059→  );
+  1060→CREATE POLICY pol_doc_delete ON documents
+  1061→  FOR DELETE USING (
+  1062→    firm_id = lexdoc_auth.current_firm_id()
+  1063→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1064→  );
+  1065→
+  1066→
+  1067→-- ── 6.8 DEADLINES ──
+  1068→CREATE POLICY pol_dl_select ON deadlines
+  1069→  FOR SELECT USING (
+  1070→    firm_id = lexdoc_auth.current_firm_id()
+  1071→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1072→  );
+  1073→CREATE POLICY pol_dl_insert ON deadlines
+  1074→  FOR INSERT WITH CHECK (
+  1075→    firm_id = lexdoc_auth.current_firm_id()
+  1076→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER', 'ASSISTANT')
+  1077→  );
+  1078→CREATE POLICY pol_dl_update ON deadlines
+  1079→  FOR UPDATE USING (
+  1080→    firm_id = lexdoc_auth.current_firm_id()
+  1081→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER', 'ASSISTANT')
+  1082→  )
+  1083→  WITH CHECK (firm_id = lexdoc_auth.current_firm_id());
+  1084→CREATE POLICY pol_dl_delete ON deadlines
+  1085→  FOR DELETE USING (
+  1086→    firm_id = lexdoc_auth.current_firm_id()
+  1087→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1088→  );
+  1089→
+  1090→
+  1091→-- ── 6.9 NOTES ──
+  1092→CREATE POLICY pol_notes_select ON notes
+  1093→  FOR SELECT USING (
+  1094→    firm_id = lexdoc_auth.current_firm_id()
+  1095→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1096→  );
+  1097→CREATE POLICY pol_notes_insert ON notes
+  1098→  FOR INSERT WITH CHECK (
+  1099→    firm_id = lexdoc_auth.current_firm_id()
+  1100→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1101→  );
+  1102→CREATE POLICY pol_notes_update ON notes
+  1103→  FOR UPDATE USING (
+  1104→    firm_id = lexdoc_auth.current_firm_id()
+  1105→    AND (
+  1106→      created_by_id = lexdoc_auth.current_user_id()
+  1107→      OR lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1108→    )
+  1109→  )
+  1110→  WITH CHECK (firm_id = lexdoc_auth.current_firm_id());
+  1111→CREATE POLICY pol_notes_delete ON notes
+  1112→  FOR DELETE USING (
+  1113→    firm_id = lexdoc_auth.current_firm_id()
+  1114→    AND (
+  1115→      created_by_id = lexdoc_auth.current_user_id()
+  1116→      OR lexdoc_auth.current_user_role() = 'ADMIN'
+  1117→    )
+  1118→  );
+  1119→
+  1120→
+  1121→-- ── 6.10 KNOWLEDGE_ARTICLES ──
+  1122→CREATE POLICY pol_ka_select ON knowledge_articles
+  1123→  FOR SELECT USING (
+  1124→    firm_id = lexdoc_auth.current_firm_id()
+  1125→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1126→  );
+  1127→CREATE POLICY pol_ka_insert ON knowledge_articles
+  1128→  FOR INSERT WITH CHECK (
+  1129→    firm_id = lexdoc_auth.current_firm_id()
+  1130→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1131→  );
+  1132→CREATE POLICY pol_ka_update ON knowledge_articles
+  1133→  FOR UPDATE USING (
+  1134→    firm_id = lexdoc_auth.current_firm_id()
+  1135→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1136→  )
+  1137→  WITH CHECK (firm_id = lexdoc_auth.current_firm_id());
+  1138→CREATE POLICY pol_ka_delete ON knowledge_articles
+  1139→  FOR DELETE USING (
+  1140→    firm_id = lexdoc_auth.current_firm_id()
+  1141→    AND lexdoc_auth.current_user_role() = 'ADMIN'
+  1142→  );
+  1143→
+  1144→
+  1145→-- ── 6.11 PROCESS_TEMPLATES ──
+  1146→CREATE POLICY pol_pt_select ON process_templates
+  1147→  FOR SELECT USING (
+  1148→    firm_id = lexdoc_auth.current_firm_id()
+  1149→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1150→  );
+  1151→CREATE POLICY pol_pt_insert ON process_templates
+  1152→  FOR INSERT WITH CHECK (
+  1153→    firm_id = lexdoc_auth.current_firm_id()
+  1154→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1155→  );
+  1156→CREATE POLICY pol_pt_update ON process_templates
+  1157→  FOR UPDATE USING (
+  1158→    firm_id = lexdoc_auth.current_firm_id()
+  1159→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1160→  )
+  1161→  WITH CHECK (firm_id = lexdoc_auth.current_firm_id());
+  1162→CREATE POLICY pol_pt_delete ON process_templates
+  1163→  FOR DELETE USING (
+  1164→    firm_id = lexdoc_auth.current_firm_id()
+  1165→    AND lexdoc_auth.current_user_role() = 'ADMIN'
+  1166→  );
+  1167→
+  1168→
+  1169→-- ── 6.12 PROCESS_NOTES ──
+  1170→CREATE POLICY pol_pn_select ON process_notes
+  1171→  FOR SELECT USING (
+  1172→    firm_id = lexdoc_auth.current_firm_id()
+  1173→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1174→  );
+  1175→CREATE POLICY pol_pn_insert ON process_notes
+  1176→  FOR INSERT WITH CHECK (
+  1177→    firm_id = lexdoc_auth.current_firm_id()
+  1178→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1179→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER', 'ASSISTANT')
+  1180→  );
+  1181→CREATE POLICY pol_pn_delete ON process_notes
+  1182→  FOR DELETE USING (
+  1183→    firm_id = lexdoc_auth.current_firm_id()
+  1184→    AND lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1185→  );
+  1186→
+  1187→
+  1188→-- ── 6.13 INVITATIONS (só ADMIN) ──
+  1189→CREATE POLICY pol_inv_select ON invitations
+  1190→  FOR SELECT USING (
+  1191→    firm_id = lexdoc_auth.current_firm_id()
+  1192→    AND lexdoc_auth.current_user_role() = 'ADMIN'
+  1193→  );
+  1194→CREATE POLICY pol_inv_insert ON invitations
+  1195→  FOR INSERT WITH CHECK (
+  1196→    firm_id = lexdoc_auth.current_firm_id()
+  1197→    AND lexdoc_auth.current_user_role() = 'ADMIN'
+  1198→  );
+  1199→CREATE POLICY pol_inv_delete ON invitations
+  1200→  FOR DELETE USING (
+  1201→    firm_id = lexdoc_auth.current_firm_id()
+  1202→    AND lexdoc_auth.current_user_role() = 'ADMIN'
+  1203→  );
+  1204→
+  1205→
+  1206→-- ── 6.14 AI_CONVERSATIONS (ADMIN vê todas; outros só as suas) ──
+  1207→CREATE POLICY pol_aic_select ON ai_conversations
+  1208→  FOR SELECT USING (
+  1209→    firm_id = lexdoc_auth.current_firm_id()
+  1210→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1211→    AND (
+  1212→      user_id = lexdoc_auth.current_user_id()
+  1213→      OR lexdoc_auth.current_user_role() = 'ADMIN'
+  1214→    )
+  1215→  );
+  1216→CREATE POLICY pol_aic_insert ON ai_conversations
+  1217→  FOR INSERT WITH CHECK (
+  1218→    firm_id = lexdoc_auth.current_firm_id()
+  1219→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1220→  );
+  1221→CREATE POLICY pol_aic_update ON ai_conversations
+  1222→  FOR UPDATE USING (
+  1223→    firm_id = lexdoc_auth.current_firm_id()
+  1224→    AND (
+  1225→      user_id = lexdoc_auth.current_user_id()
+  1226→      OR lexdoc_auth.current_user_role() = 'ADMIN'
+  1227→    )
+  1228→  )
+  1229→  WITH CHECK (firm_id = lexdoc_auth.current_firm_id());
+  1230→CREATE POLICY pol_aic_delete ON ai_conversations
+  1231→  FOR DELETE USING (
+  1232→    firm_id = lexdoc_auth.current_firm_id()
+  1233→    AND (
+  1234→      user_id = lexdoc_auth.current_user_id()
+  1235→      OR lexdoc_auth.current_user_role() = 'ADMIN'
+  1236→    )
+  1237→  );
+  1238→
+  1239→
+  1240→-- ── 6.15 AI_MESSAGES ──
+  1241→CREATE POLICY pol_aim_select ON ai_messages
+  1242→  FOR SELECT USING (
+  1243→    firm_id = lexdoc_auth.current_firm_id()
+  1244→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1245→  );
+  1246→CREATE POLICY pol_aim_insert ON ai_messages
+  1247→  FOR INSERT WITH CHECK (
+  1248→    firm_id = lexdoc_auth.current_firm_id()
+  1249→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1250→  );
+  1251→
+  1252→
+  1253→-- ── 6.16 AI_GENERATIONS (ADMIN/LAWYER vêem todas; outros só as suas) ──
+  1254→CREATE POLICY pol_aig_select ON ai_generations
+  1255→  FOR SELECT USING (
+  1256→    firm_id = lexdoc_auth.current_firm_id()
+  1257→    AND lexdoc_auth.current_user_id() IS NOT NULL
+  1258→    AND (
+  1259→      user_id = lexdoc_auth.current_user_id()
+  1260→      OR lexdoc_auth.current_user_role() IN ('ADMIN', 'LAWYER')
+  1261→    )
+  1262→  );
+  1263→
+  1264→
+  1265→-- ── 6.17 AUDIT_LOGS (read-only para ADMIN) ──
+  1266→-- Escrita é via application code (Prisma como postgres, bypass RLS)
+  1267→CREATE POLICY pol_al_select ON audit_logs
+  1268→  FOR SELECT USING (
+  1269→    lexdoc_auth.current_user_role() = 'ADMIN'
+  1270→    AND (
+  1271→      firm_id = lexdoc_auth.current_firm_id()
+  1272→      OR firm_id IS NULL   -- Permite ver logs de login antes de definir firm
+  1273→    )
+  1274→  );
+  1275→
+  1276→
+  1277→-- ═════════════════════════════════════════════════════════════════════════════════
+  1278→-- 7. LIMPEZA PERIÓDICA
+  1279→-- ═════════════════════════════════════════════════════════════════════════════════
+  1280→
+  1281→CREATE OR REPLACE FUNCTION lexdoc_auth.cleanup_expired_data()
+  1282→RETURNS void
+  1283→LANGUAGE plpgsql
+  1284→SECURITY DEFINER
+  1285→SET search_path = 'lexdoc_auth'
+  1286→AS $$
+  1287→BEGIN
+  1288→  -- 7.1 Tokens revogados há mais de 30 dias
+  1289→  DELETE FROM refresh_tokens
+  1290→    WHERE revoked_at IS NOT NULL
+  1291→      AND revoked_at < now() - interval '30 days';
+  1292→
+  1293→  -- 7.2 Tokens expirados há mais de 30 dias (nunca revogados)
+  1294→  DELETE FROM refresh_tokens
+  1295→    WHERE revoked_at IS NULL
+  1296→      AND expires_at < now() - interval '30 days';
+  1297→
+  1298→  -- 7.3 Convites já aceites há mais de 30 dias
+  1299→  DELETE FROM invitations
+  1300→    WHERE accepted_at IS NOT NULL
+  1301→      AND accepted_at < now() - interval '30 days';
+  1302→
+  1303→  -- 7.4 Convites expirados e não aceites há mais de 30 dias
+  1304→  DELETE FROM invitations
+  1305→    WHERE accepted_at IS NULL
+  1306→      AND expires_at < now() - interval '30 days';
+  1307→
+  1308→  RAISE NOTICE 'lexdoc_auth.cleanup_expired_data: limpeza concluída em %', now();
+  1309→END;
+  1310→$$;
+  1311→
+  1312→-- ═════════════════════════════════════════════════════════════════════════════════
+  1313→-- AGENDAMENTO COM pg_cron
+  1314→-- ═════════════════════════════════════════════════════════════════════════════════
+  1315→-- PASSOS PARA ACTIVAR:
+  1316→--   1. Supabase Dashboard → Database → Extensions
+  1317→--   2. Procurar "pg_cron" e habilitar
+  1318→--   3. Executar este SELECT no SQL Editor:
+  1319→--
+  1320→-- SELECT cron.schedule(
+  1321→--   'lexdoc-cleanup-daily',
+  1322→--   '0 3 * * *',   -- Todos os dias às 03:00 (Africa/Maputo = UTC+2)
+  1323→--   $$ SELECT lexdoc_auth.cleanup_expired_data(); $$
+  1324→-- );
+  1325→--
+  1326→-- Alternativa: se não usar pg_cron, criar uma API route no backend
+  1327→-- que chama esta função, e agendar via Vercel Cron Jobs ou similar.
+  1328→
+  1329→
+  1330→-- ═════════════════════════════════════════════════════════════════════════════════
+  1331→-- 8. DADOS INICIAIS (SEED)
+  1332→-- ═════════════════════════════════════════════════════════════════════════════════
+  1333→
+  1334→-- 8.1 Escritório padrão
+  1335→INSERT INTO firms (id, name, slug, plan, settings) VALUES
+  1336→  ('550e8400-e29b-41d4-a716-446655440000'::UUID,
+  1337→   'LexDoc — Escritório Principal',
+  1338→   'lexdoc-principal',
+  1339→   'PRO',
+  1340→   '{"language": "pt", "timezone": "Africa/Maputo", "country": "MZ"}'::JSONB)
+  1341→ON CONFLICT (id) DO NOTHING;
+  1342→
+  1343→-- 8.2 Utilizador Admin padrão
+  1344→-- ⚠️ PASSWORD: admin123 — ALTERAR IMEDIATAMENTE APÓS PRIMEIRO LOGIN!
+  1345→-- Hash bcrypt (10 rounds) de "admin123":
+  1346→--   $2a$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJptJ/op0lSsvqNu6GK
+  1347→INSERT INTO users (id, firm_id, email, password_hash, full_name, role, is_active, email_verified) VALUES
+  1348→  ('660e8400-e29b-41d4-a716-446655440001'::UUID,
+  1349→   '550e8400-e29b-41d4-a716-446655440000'::UUID,
+  1350→   'admin@lexdoc.co.mz',
+  1351→   '$2a$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJptJ/op0lSsvqNu6GK',
+  1352→   'Administrador LexDoc',
+  1353→   'ADMIN',
+  1354→   true,
+  1355→   true)
+  1356→ON CONFLICT (email) DO NOTHING;
+  1357→
+  1358→
+  1359→-- ═════════════════════════════════════════════════════════════════════════════════
+  1360→-- 9. VERIFICAÇÃO FINAL
+  1361→-- ═════════════════════════════════════════════════════════════════════════════════
+  1362→
+  1363→-- 9.1 Listar todas as tabelas criadas
+  1364→SELECT 'TABELAS' AS tipo, count(*) AS total
+  1365→FROM information_schema.tables
+  1366→WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+  1367→
+  1368→SELECT table_name AS tabela
+  1369→FROM information_schema.tables
+  1370→WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+  1371→ORDER BY table_name;
+  1372→
+  1373→-- 9.2 Verificar RLS activado
+  1374→SELECT relname AS tabela, rowsecurity AS rls_active, rowforce AS rls_forced
+  1375→FROM pg_class c
+  1376→JOIN pg_namespace n ON n.oid = c.relnamespace
+  1377→WHERE n.nspname = 'public'
+  1378→  AND c.relkind = 'r'
+  1379→  AND relname IN (
+  1380→    'firms','users','refresh_tokens','clients','legal_processes',
+  1381→    'process_assignments','documents','deadlines','notes',
+  1382→    'knowledge_articles','process_templates','process_notes',
+  1383→    'invitations','ai_conversations','ai_messages','ai_generations','audit_logs'
+  1384→  )
+  1385→ORDER BY relname;
+  1386→
+  1387→-- 9.3 Contar políticas RLS
+  1388→SELECT schemaname || '.' || tablename AS tabela, count(*) AS politicas
+  1389→FROM pg_policies
+  1390→WHERE schemaname = 'public'
+  1391→GROUP BY schemaname, tablename
+  1392→ORDER BY count(*) DESC;
+  1393→
+  1394→-- 9.4 Verificar triggers de integridade cross-firm
+  1395→SELECT tgname AS trigger_nome, tgrelid::regclass AS tabela
+  1396→FROM pg_trigger
+  1397→WHERE tgname LIKE 'trg_chk_%'
+  1398→  AND NOT tgisinternal
+  1399→ORDER BY tgrelid::regclass::TEXT, tgname;
+  1400→
+  1401→-- 9.5 Verificar seed data
+  1402→SELECT 'Firms' AS entity, count(*) AS count FROM firms
+  1403→UNION ALL
+  1404→SELECT 'Users', count(*) FROM users;
+  1405→
+  1406→-- ═════════════════════════════════════════════════════════════════════════════════
+  1407→-- FIM DO SCRIPT
+  1408→-- ═════════════════════════════════════════════════════════════════════════════════
+  1409→
