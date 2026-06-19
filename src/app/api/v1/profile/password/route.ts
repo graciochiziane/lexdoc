@@ -113,6 +113,12 @@ export async function PATCH(request: NextRequest) {
       data: { password_hash: newHash },
     });
 
+    // ── Revogar TODOS os refresh tokens (sessões existentes) ──
+    // Segurança: se a password foi comprometida, sessões roubadas são invalidadas
+    await db.refreshToken.deleteMany({
+      where: { user_id: userId },
+    });
+
     // ── Auditoria (sem expor dados sensíveis) ──
     logAudit({
       firm_id: payload.firm_id,

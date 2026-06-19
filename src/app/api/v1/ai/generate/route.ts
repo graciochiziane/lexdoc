@@ -221,7 +221,7 @@ MODELO DE PROCESSO A SEGUIR:
     const zai = await ZAI.create();
     const completion = await zai.chat.completions.create({
       messages: [
-        { role: 'assistant', content: systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
       thinking: { type: 'disabled' },

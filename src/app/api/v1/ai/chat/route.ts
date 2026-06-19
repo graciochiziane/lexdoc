@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
 
     // ── Montar array de mensagens para LLM ──
     const llmMessages = [
-      { role: 'assistant' as const, content: systemPrompt },
+      { role: 'system' as const, content: systemPrompt },
     ];
 
     // Adicionar histórico (excepto a última mensagem do utilizador, que já temos)

@@ -287,7 +287,7 @@ export async function POST(
     const systemPrompt = buildSystemPromptWithRAG(knowledgeArticles);
 
     const llmMessages = [
-      { role: 'assistant' as const, content: systemPrompt },
+      { role: 'system' as const, content: systemPrompt },
       ...historyMessages.map((msg) => ({ role: msg.role as 'user' | 'assistant', content: msg.content })),
     ];
 

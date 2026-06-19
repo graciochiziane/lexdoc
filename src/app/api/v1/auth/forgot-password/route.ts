@@ -92,10 +92,11 @@ export async function POST(request: NextRequest) {
         user_agent: request.headers.get('user-agent') ?? undefined,
       });
 
-      // Log do link para demo (sem serviço de email)
-      const resetLink = `/reset-password?token=${rawToken}`;
-      demoResetLink = resetLink;
-      console.log(`[PASSWORD_RESET] Reset link for ${normalizedEmail}: ${resetLink}`);
+      // Token gerado — em produção enviar via email
+      // Em dev, o link pode ser obtido nos logs do servidor (apenas para debug)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[PASSWORD_RESET][DEV-ONLY] Token gerado para ${normalizedEmail}`);
+      }
     }
 
     // Resposta genérica de sucesso
@@ -103,8 +104,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         message: 'Se existir uma conta com este email, receberá instruções para redefinir a palavra-passe.',
-        // Incluir link para demo purposes
-        ...(demoResetLink ? { reset_link: demoResetLink } : {}),
+        // Em produção, o token é enviado por email (não retornado na resposta)
       },
     });
   } catch (error) {

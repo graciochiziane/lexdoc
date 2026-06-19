@@ -119,42 +119,33 @@ export async function GET(
       },
     }));
 
-    // Buscar notas do processo (tabela raw SQL)
-    const notes = await db.$queryRawUnsafe<Array<{
-      id: string;
-      firm_id: string;
-      entity_type: string;
-      entity_id: string;
-      content: string;
-      is_pinned: number;
-      created_by: string;
-      created_at: string;
-      updated_at: string;
-      user_name: string | null;
-    }>>(
-      `SELECT n.id, n.firm_id, n.entity_type, n.entity_id, n.content, n.is_pinned, n.created_by_id as created_by, n.created_at, n.updated_at, u.full_name as user_name
-       FROM notes n
-       LEFT JOIN users u ON n.created_by_id = u.id
-       WHERE n.firm_id = ? AND n.entity_type = 'process' AND n.entity_id = ?
-       ORDER BY n.created_at DESC
-       LIMIT 20`,
-      auth.payload.firm_id,
-      id,
-    );
+    // Buscar notas do processo (usando Prisma ORM — sem SQL raw)
+    const processNotes = await db.note.findMany({
+      where: {
+        firm_id: auth.payload.firm_id,
+        entity_type: 'process',
+        entity_id: id,
+      },
+      include: {
+        createdBy: { select: { id: true, full_name: true } },
+      },
+      orderBy: { created_at: 'desc' },
+      take: 20,
+    });
 
     // Converter notas em entradas de timeline
-    const noteEntries: TimelineEntry[] = notes.map((note) => ({
+    const noteEntries: TimelineEntry[] = processNotes.map((note) => ({
       id: `note-${note.id}`,
       type: 'note' as const,
       action: 'NOTE_ADDED',
       description: `adicionou uma nota: ${note.content.length > 60 ? note.content.slice(0, 60) + '…' : note.content}`,
-      user_name: note.user_name ?? 'Utilizador',
-      user_id: note.created_by,
-      created_at: note.created_at,
+      user_name: note.createdBy?.full_name ?? 'Utilizador',
+      user_id: note.created_by_id,
+      created_at: note.created_at.toISOString(),
       details: {
         note_id: note.id,
         content: note.content,
-        is_pinned: note.is_pinned === 1,
+        is_pinned: note.is_pinned,
       },
     }));
 

@@ -12,6 +12,7 @@ import {
   hashToken,
 } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { VALID_ROLES } from '@/lib/rbac';
 
 // Fuso horário de Moçambique
@@ -73,6 +74,27 @@ async function generateUniqueSlug(name: string): Promise<string> {
 // ─────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
+    // ── Rate limiting: 3 registos por IP por hora ──
+    const clientIp =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const rateCheck = checkRateLimit(
+      `register:${clientIp}`,
+      3,
+      60 * 60_000, // 1 hora
+    );
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'TOO_MANY_REQUESTS',
+            message: 'Demasiadas tentativas de registo. Tente novamente mais tarde.',
+          },
+        },
+        { status: 429 },
+      );
+    }
+
     // Parsear corpo do pedido
     const body = await request.json();
     const { full_name, email, password, firm_name, role } = body as {
@@ -112,10 +134,8 @@ export async function POST(request: NextRequest) {
       errors.push('Nome do escritório deve ter entre 2 e 255 caracteres.');
     }
 
-    // Validar role se fornecido
-    if (role !== undefined && !VALID_ROLES.includes(role as (typeof VALID_ROLES)[number])) {
-      errors.push('Papel inválido. Valores permitidos: ADMIN, ADVOGADO, SECRETARIO, CLIENT.');
-    }
+    // Role é sempre ignorado no registo público — primeiro utilizador é ADMIN por defeito
+    // Role fornecido pelo cliente nunca é aceite por segurança
 
     if (errors.length > 0) {
       return NextResponse.json(
@@ -133,7 +153,7 @@ export async function POST(request: NextRequest) {
 
     // ── Normalização ──
     const normalizedEmail = email.toLowerCase().trim();
-    const userRole = role || 'ADVOGADO';
+    const userRole = 'ADMIN'; // Primeiro utilizador de um novo escritório é sempre ADMIN
     const slug = await generateUniqueSlug(firm_name);
 
     // ── Verificar se email já existe ──

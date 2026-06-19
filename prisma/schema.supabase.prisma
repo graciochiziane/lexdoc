@@ -1,0 +1,450 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// LEXDOC — Schema para Supabase (PostgreSQL)
+// PARA ACTIVAR: renomear este ficheiro para schema.prisma e apagar o actual
+// Depois: DATABASE_URL=postgresql://postgres... no .env
+// E executar: bun run db:push
+// ═══════════════════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Conexão directa para migrations
+}
+
+// ─────────────────────────────────────────
+// MULTI-TENANCY: ESCRITÓRIO (FIRM)
+// ─────────────────────────────────────────
+model Firm {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  nif         String?
+  oam_number  String?
+  is_active   Boolean  @default(true)
+  plan        String   @default("STARTER")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  users       User[]
+  clients     Client[]
+  processes   LegalProcess[]
+  audit_logs  AuditLog[]
+  invitations Invitation[]
+  notes       Note[]
+  knowledge_articles KnowledgeArticle[]
+  process_templates ProcessTemplate[]
+  ai_conversations AIConversation[]
+  ai_generations   AIGeneration[]
+
+  @@map("firms")
+}
+
+// ─────────────────────────────────────────
+// UTILIZADORES E RBAC
+// ─────────────────────────────────────────
+model User {
+  id                String    @id @default(cuid())
+  firm_id           String
+  email             String    @unique
+  password_hash     String
+  full_name         String
+  role              String    @default("CLIENT")
+  bi_number         String?
+  phone             String?
+  is_active         Boolean   @default(true)
+  email_verified    Boolean   @default(false)
+  failed_login_count Int      @default(0)
+  locked_until      DateTime?
+  mfa_enabled       Boolean   @default(false)
+  mfa_secret        String?
+
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  last_login_at     DateTime?
+
+  firm              Firm      @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+  refresh_tokens    RefreshToken[]
+  audit_logs        AuditLog[]
+  documents_created Document[]     @relation("DocumentCreator")
+  documents_updated Document[]     @relation("DocumentUpdater")
+  process_assignments ProcessAssignment[]
+  notes             Note[]      @relation("NoteCreator")
+  knowledge_articles KnowledgeArticle[] @relation("KnowledgeCreator")
+  process_templates  ProcessTemplate[] @relation("TemplateCreator")
+  ai_conversations   AIConversation[]
+  ai_generations     AIGeneration[]
+
+  @@index([firm_id])
+  @@index([email])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// TOKENS DE AUTENTICAÇÃO
+// ─────────────────────────────────────────
+model RefreshToken {
+  id          String   @id @default(cuid())
+  user_id     String
+  token_hash  String   @unique
+  device_info String?
+  ip_address  String?
+  expires_at  DateTime
+  revoked_at  DateTime?
+  created_at  DateTime @default(now())
+
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token_hash])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────
+// AUDIT TRAIL IMUTÁVEL
+// ─────────────────────────────────────────
+model AuditLog {
+  id           String      @id @default(cuid())
+  firm_id      String?
+  user_id      String?
+  action       String
+  entity_type  String
+  entity_id    String?
+  old_values   String?     @db.Text
+  new_values   String?     @db.Text
+  ip_address   String?
+  user_agent   String?
+  metadata     String?     @db.Text
+  created_at   DateTime    @default(now())
+
+  firm         Firm?       @relation(fields: [firm_id], references: [id])
+  user         User?       @relation(fields: [user_id], references: [id])
+
+  @@index([firm_id])
+  @@index([user_id])
+  @@index([entity_type, entity_id])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────
+// CLIENTES DO ESCRITÓRIO
+// ─────────────────────────────────────────
+model Client {
+  id           String   @id @default(cuid())
+  firm_id      String
+  user_id      String?
+  full_name    String
+  email        String?
+  phone        String?
+  bi_number    String?
+  nif          String?
+  address      String?
+  client_type  String   @default("INDIVIDUAL")
+  is_active    Boolean  @default(true)
+  notes        String?  @db.Text
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  firm         Firm           @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+  processes    LegalProcess[]
+
+  @@index([firm_id])
+  @@map("clients")
+}
+
+// ─────────────────────────────────────────
+// PROCESSOS JURÍDICOS
+// ─────────────────────────────────────────
+model LegalProcess {
+  id              String         @id @default(cuid())
+  firm_id         String
+  client_id       String
+  process_number  String
+  title           String
+  description     String?        @db.Text
+  area            String
+  status          String         @default("ACTIVE")
+  priority        String         @default("MEDIUM")
+  court           String?
+  judge           String?
+  opposing_party  String?
+  opened_at       DateTime       @default(now())
+  closed_at       DateTime?
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+
+  firm            Firm           @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+  client          Client         @relation(fields: [client_id], references: [id])
+  documents       Document[]
+  deadlines       Deadline[]
+  assignments     ProcessAssignment[]
+  process_notes   ProcessNote[]
+
+  @@unique([firm_id, process_number])
+  @@index([firm_id])
+  @@index([client_id])
+  @@map("legal_processes")
+}
+
+// ─────────────────────────────────────────
+// ATRIBUIÇÃO DE PROCESSOS
+// ─────────────────────────────────────────
+model ProcessAssignment {
+  id          String       @id @default(cuid())
+  process_id  String
+  user_id     String
+  role        String
+  assigned_at DateTime     @default(now())
+
+  process     LegalProcess @relation(fields: [process_id], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [user_id], references: [id])
+
+  @@unique([process_id, user_id])
+  @@map("process_assignments")
+}
+
+// ─────────────────────────────────────────
+// DOCUMENTOS
+// ─────────────────────────────────────────
+model Document {
+  id              String          @id @default(cuid())
+  firm_id         String
+  process_id      String?
+  created_by_id   String
+  updated_by_id   String?
+  title           String
+  description     String?         @db.Text
+  file_key        String
+  file_name       String
+  file_size       Int
+  mime_type       String
+  version         Int             @default(1)
+  parent_id       String?
+  status          String          @default("DRAFT")
+  is_confidential Boolean         @default(false)
+  tags            String?         @db.Text
+  ai_summary      String?         @db.Text
+  ai_processed_at DateTime?
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+
+  process         LegalProcess?   @relation(fields: [process_id], references: [id])
+  created_by      User            @relation("DocumentCreator", fields: [created_by_id], references: [id])
+  updated_by      User?           @relation("DocumentUpdater", fields: [updated_by_id], references: [id])
+  versions        Document[]      @relation("DocumentVersions")
+  parent          Document?       @relation("DocumentVersions", fields: [parent_id], references: [id])
+
+  @@index([firm_id])
+  @@index([process_id])
+  @@index([created_by_id])
+  @@map("documents")
+}
+
+// ─────────────────────────────────────────
+// PRAZOS PROCESSUAIS
+// ─────────────────────────────────────────
+model Deadline {
+  id           String       @id @default(cuid())
+  process_id   String
+  title        String
+  description  String?      @db.Text
+  due_date     DateTime
+  reminder_at  DateTime?
+  status       String       @default("PENDING")
+  source       String       @default("MANUAL")
+  ai_extracted Boolean      @default(false)
+  created_at   DateTime     @default(now())
+  updated_at   DateTime     @updatedAt
+
+  process      LegalProcess @relation(fields: [process_id], references: [id], onDelete: Cascade)
+
+  @@index([process_id])
+  @@index([due_date])
+  @@map("deadlines")
+}
+
+// ─────────────────────────────────────────
+// NOTAS / TAREFAS
+// ─────────────────────────────────────────
+model Note {
+  id            String    @id @default(cuid())
+  firm_id       String
+  entity_type   String
+  entity_id     String?
+  content       String    @db.Text
+  is_pinned     Boolean   @default(false)
+  is_completed  Boolean   @default(false)
+  priority      String    @default("low")
+  due_date      DateTime?
+  created_by_id String
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  created_by    User      @relation("NoteCreator", fields: [created_by_id], references: [id])
+  firm          Firm      @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+
+  @@index([firm_id])
+  @@index([entity_type, entity_id])
+  @@index([created_by_id])
+  @@map("notes")
+}
+
+// ─────────────────────────────────────────
+// BASE DE CONHECIMENTO JURÍDICO
+// ─────────────────────────────────────────
+model KnowledgeArticle {
+  id            String   @id @default(cuid())
+  firm_id       String
+  title         String
+  content       String   @db.Text
+  category      String   @default("OUTRO")
+  source        String?
+  tags          String?  @db.Text
+  is_pinned     Boolean  @default(false)
+  view_count    Int      @default(0)
+  created_by_id String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  created_by  User     @relation("KnowledgeCreator", fields: [created_by_id], references: [id])
+  firm        Firm     @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+
+  @@index([firm_id])
+  @@index([category])
+  @@index([created_by_id])
+  @@map("knowledge_articles")
+}
+
+// ─────────────────────────────────────────
+// MODELOS DE PROCESSO
+// ─────────────────────────────────────────
+model ProcessTemplate {
+  id              String   @id @default(cuid())
+  firm_id         String
+  title           String
+  description     String?  @db.Text
+  area            String
+  default_priority String  @default("MEDIUM")
+  checklist_items  String   @db.Text
+  is_active       Boolean  @default(true)
+  created_by_id   String
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  created_by      User     @relation("TemplateCreator", fields: [created_by_id], references: [id])
+  firm            Firm     @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+
+  @@index([firm_id])
+  @@index([area])
+  @@map("process_templates")
+}
+
+// ─────────────────────────────────────────
+// NOTAS DO PROCESSO
+// ─────────────────────────────────────────
+model ProcessNote {
+  id          String   @id @default(cuid())
+  process_id  String
+  content     String   @db.Text
+  created_by  String
+  created_at  DateTime @default(now())
+
+  process     LegalProcess @relation(fields: [process_id], references: [id], onDelete: Cascade)
+
+  @@index([process_id])
+  @@map("process_notes")
+}
+
+// ─────────────────────────────────────────
+// CONVITES
+// ─────────────────────────────────────────
+model Invitation {
+  id          String     @id @default(cuid())
+  firm_id     String
+  email       String
+  role        String
+  token_hash  String     @unique
+  expires_at  DateTime
+  accepted_at DateTime?
+  created_at  DateTime   @default(now())
+
+  firm        Firm       @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+
+  @@index([firm_id])
+  @@map("invitations")
+}
+
+// ─────────────────────────────────────────
+// CONVERSAS IA
+// ─────────────────────────────────────────
+model AIConversation {
+  id           String        @id @default(cuid())
+  firm_id      String
+  user_id      String
+  title        String        @default("Nova Conversa")
+  context_type String?
+  context_id   String?
+  is_active   Boolean       @default(true)
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
+
+  messages    AIMessage[]
+
+  firm        Firm          @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [user_id], references: [id])
+
+  @@index([firm_id])
+  @@index([user_id])
+  @@index([is_active])
+  @@map("ai_conversations")
+}
+
+// ─────────────────────────────────────────
+// MENSAGENS IA
+// ─────────────────────────────────────────
+model AIMessage {
+  id              String          @id @default(cuid())
+  conversation_id String
+  role            String
+  content         String          @db.Text
+  sources         String?         @db.Text
+  knowledge_ids   String?         @db.Text
+  metadata        String?         @db.Text
+  created_at      DateTime        @default(now())
+
+  conversation    AIConversation  @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id])
+  @@index([created_at])
+  @@map("ai_messages")
+}
+
+// ─────────────────────────────────────────
+// GERAÇÕES IA
+// ─────────────────────────────────────────
+model AIGeneration {
+  id              String   @id @default(cuid())
+  firm_id         String
+  user_id         String
+  generation_type String
+  title           String
+  prompt          String   @db.Text
+  result          String   @db.Text
+  template_id     String?
+  process_id      String?
+  metadata        String?  @db.Text
+  created_at      DateTime @default(now())
+
+  firm            Firm     @relation(fields: [firm_id], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [user_id], references: [id])
+
+  @@index([firm_id])
+  @@index([user_id])
+  @@index([generation_type])
+  @@index([created_at])
+  @@map("ai_generations")
+}

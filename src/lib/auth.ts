@@ -9,8 +9,15 @@ import crypto from 'crypto';
 // ─────────────────────────────────────────
 // Configuração JWT
 // ─────────────────────────────────────────
-const JWT_SECRET = process.env.JWT_SECRET || 'lexdoc-super-secret-key-min-32-characters!!';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'lexdoc-refresh-secret-key-min-32-chars!!';
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error('FATAL: JWT_SECRET não definida ou inferior a 32 caracteres. Defina no .env');
+}
+if (!JWT_REFRESH_SECRET || JWT_REFRESH_SECRET.length < 32) {
+  throw new Error('FATAL: JWT_REFRESH_SECRET não definida ou inferior a 32 caracteres. Defina no .env');
+}
 const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES || '15m';
 const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || '7d';
 
