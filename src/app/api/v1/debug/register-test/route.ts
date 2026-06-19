@@ -103,28 +103,25 @@ export async function GET() {
     steps.push({ step: '6. Generate tokens', ok: false, error: msg });
   }
 
-  // Step 7: Create refresh token with explicit UUID
+  // Step 7: Create refresh token using raw SQL
   if (user && firm) {
     try {
       const refreshTokenHash = hashToken('test-refresh-token');
+      const refreshTokenId = randomUUID();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
 
-      await db.refreshToken.create({
-        data: {
-          id: randomUUID(),
-          user_id: user.id,
-          token_hash: refreshTokenHash,
-          expires_at: expiresAt,
-        },
-      });
-      steps.push({ step: '7. Prisma refreshToken.create (explicit UUID)', ok: true });
+      await db.$executeRaw`
+        INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at)
+        VALUES (${refreshTokenId}::uuid, ${user.id}::uuid, ${refreshTokenHash}, ${expiresAt}::timestamptz, now()::timestamptz)
+      `;
+      steps.push({ step: '7. Raw SQL INSERT refresh_tokens', ok: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      steps.push({ step: '7. Prisma refreshToken.create (explicit UUID)', ok: false, error: msg });
+      steps.push({ step: '7. Raw SQL INSERT refresh_tokens', ok: false, error: msg });
     }
   } else {
-    steps.push({ step: '7. Prisma refreshToken.create', ok: false, error: 'Skipped' });
+    steps.push({ step: '7. Raw SQL INSERT refresh_tokens', ok: false, error: 'Skipped' });
   }
 
   // Cleanup: delete test data

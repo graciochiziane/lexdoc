@@ -147,16 +147,13 @@ export async function POST(request: NextRequest) {
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? undefined;
     const userAgent = request.headers.get('user-agent') ?? undefined;
 
-    await db.refreshToken.create({
-      data: {
-        id: randomUUID(),
-        user_id: storedToken.user.id,
-        token_hash: newRefreshTokenHash,
-        expires_at: expiresAt,
-        ip_address: clientIp,
-        device_info: userAgent,
-      },
-    });
+    // Usar executeRaw para evitar Prisma relation populate bloqueado por RLS
+    const refreshTokenId = randomUUID();
+    await db.$executeRaw`
+      INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at)
+      VALUES (${refreshTokenId}::uuid, ${storedToken.user.id}::uuid, ${newRefreshTokenHash}, ${expiresAt}::timestamptz,
+              ${clientIp ?? null}, ${userAgent ?? null}, now()::timestamptz)
+    `;
 
     // ── Log de auditoria ──
     logAudit({
