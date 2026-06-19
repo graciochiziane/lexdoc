@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
@@ -147,7 +147,9 @@ function AppRouter() {
 export default function Home() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppRouter />
+      <Suspense>
+        <AppRouter />
+      </Suspense>
       <Toaster
         position="top-right"
         richColors
