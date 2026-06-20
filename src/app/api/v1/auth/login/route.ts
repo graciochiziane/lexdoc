@@ -217,13 +217,21 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Usar executeRaw para evitar Prisma relation populate bloqueado por RLS
-    const refreshTokenId = randomUUID();
-    const ip = clientIp ?? null;
-    const device = request.headers.get('user-agent') ?? null;
-    await db.$executeRawUnsafe(
-      `INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at) VALUES ('${refreshTokenId}', '${user.id}', '${refreshTokenHash}', '${expiresAt.toISOString()}', ${ip ? `'${ip}'` : 'NULL'}, ${device ? `'${device}'` : 'NULL'}, now())`
-    );
+    // Guardar refresh token com Prisma (seguro, sem SQL injection, funciona com PgBouncer)
+    try {
+      await db.refreshToken.create({
+        data: {
+          id: randomUUID(),
+          user_id: user.id,
+          token_hash: refreshTokenHash,
+          ip_address: clientIp,
+          user_agent: request.headers.get('user-agent') ?? undefined,
+          expires_at: expiresAt,
+        },
+      });
+    } catch (rtError) {
+      console.error('[LOGIN] Aviso: refresh_token não guardado (non-critical):', rtError);
+    }
 
     // Log de auditoria
     logAudit({

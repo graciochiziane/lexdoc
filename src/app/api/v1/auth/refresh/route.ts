@@ -147,13 +147,21 @@ export async function POST(request: NextRequest) {
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? undefined;
     const userAgent = request.headers.get('user-agent') ?? undefined;
 
-    // Usar executeRaw para evitar Prisma relation populate bloqueado por RLS
-    const refreshTokenId = randomUUID();
-    const ip = clientIp ?? null;
-    const device = userAgent ?? null;
-    await db.$executeRawUnsafe(
-      `INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at) VALUES ('${refreshTokenId}', '${storedToken.user.id}', '${newRefreshTokenHash}', '${expiresAt.toISOString()}', ${ip ? `'${ip}'` : 'NULL'}, ${device ? `'${device}'` : 'NULL'}, now())`
-    );
+    // Guardar novo refresh token com Prisma (seguro, funciona com PgBouncer)
+    try {
+      await db.refreshToken.create({
+        data: {
+          id: randomUUID(),
+          user_id: storedToken.user.id,
+          token_hash: newRefreshTokenHash,
+          ip_address: clientIp,
+          user_agent: userAgent,
+          expires_at: expiresAt,
+        },
+      });
+    } catch (rtError) {
+      console.error('[REFRESH] Aviso: novo refresh_token não guardado (non-critical):', rtError);
+    }
 
     // ── Log de auditoria ──
     logAudit({

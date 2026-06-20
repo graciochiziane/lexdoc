@@ -9,8 +9,10 @@ import { NextRequest, NextResponse } from 'next/server';
 const PUBLIC_PATHS = [
   '/api/v1/auth/login',
   '/api/v1/auth/register',
+  '/api/v1/auth/refresh',
   '/api/v1/auth/forgot-password',
   '/api/v1/auth/reset-password',
+  '/api/v1/auth/logout',
   '/api/v1/invitations/',
   '/api/v1/health',
 ];
