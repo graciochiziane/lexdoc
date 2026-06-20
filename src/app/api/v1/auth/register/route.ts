@@ -216,18 +216,21 @@ export async function POST(request: NextRequest) {
 
     // ── Hash e guardar refresh token ──
     const refreshTokenHash = hashToken(refreshToken);
+    const refreshTokenExpires = new Date();
+    refreshTokenExpires.setDate(refreshTokenExpires.getDate() + 7);
 
-    // ── Guardar refresh token (opcional — não bloqueia o registo se falhar) ──
-    const refreshTokenId = randomUUID();
-    const ip = request.headers.get('x-forwarded-for') ?? null;
-    const device = request.headers.get('user-agent') ?? null;
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
+    // Guardar refresh token com Prisma (seguro, sem SQL injection, funciona com PgBouncer e SQLite)
     try {
-      await db.$executeRawUnsafe(
-        `INSERT INTO public.refresh_tokens (id, user_id, token_hash, expires_at, ip_address, device_info, created_at) VALUES ('${refreshTokenId}', '${user.id}', '${refreshTokenHash}', '${expiresAt.toISOString()}', ${ip ? `'${ip}'` : 'NULL'}, ${device ? `'${device}'` : 'NULL'}, now())`
-      );
+      await db.refreshToken.create({
+        data: {
+          id: randomUUID(),
+          user_id: user.id,
+          token_hash: refreshTokenHash,
+          ip_address: request.headers.get('x-forwarded-for') ?? undefined,
+          user_agent: request.headers.get('user-agent') ?? undefined,
+          expires_at: refreshTokenExpires,
+        },
+      });
     } catch (rtError) {
       console.error('[REGISTER] Aviso: refresh_token não guardado (non-critical):', rtError);
     }

@@ -88,13 +88,22 @@ export function logAudit(payload: AuditLogPayload): void {
 
       const id = randomUUID();
 
-      // Usar executeRawUnsafe para evitar PgBouncer prepared statement issues
-      const firmId = payload.firm_id ?? null;
-      const userId = payload.user_id ?? null;
-      const entityId = payload.entity_id ?? null;
-      await db.$executeRawUnsafe(
-        `INSERT INTO public.audit_logs (id, firm_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address, user_agent, metadata, created_at) VALUES ('${id}', ${firmId ? `'${firmId}'` : 'NULL'}, ${userId ? `'${userId}'` : 'NULL'}, '${payload.action}', '${payload.entity_type}', ${entityId ? `'${entityId}'` : 'NULL'}, ${redactedOld ? `'${redactedOld.replace(/'/g, "''")}'` : 'NULL'}, ${redactedNew ? `'${redactedNew.replace(/'/g, "''")}'` : 'NULL'}, ${payload.ip_address ? `'${payload.ip_address}'` : 'NULL'}, ${payload.user_agent ? `'${payload.user_agent.replace(/'/g, "''")}'` : 'NULL'}, ${serializedMeta ? `'${serializedMeta.replace(/'/g, "''")}'` : 'NULL'}, now())`
-      );
+      // Guardar com Prisma (seguro, funciona com PgBouncer e SQLite)
+      await db.auditLog.create({
+        data: {
+          id,
+          firm_id: payload.firm_id,
+          user_id: payload.user_id,
+          action: payload.action,
+          entity_type: payload.entity_type,
+          entity_id: payload.entity_id,
+          old_values: redactedOld,
+          new_values: redactedNew,
+          ip_address: payload.ip_address,
+          user_agent: payload.user_agent,
+          metadata: serializedMeta,
+        },
+      });
     } catch {
       // Silencioso — nunca propagar erros de auditoria
     }
