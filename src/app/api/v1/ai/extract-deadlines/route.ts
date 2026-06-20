@@ -4,11 +4,11 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
-import ZAI from 'z-ai-web-dev-sdk';
 import { authenticateRequest } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
 import { db } from '@/lib/db';
+import { chatWithLLM, getProviderInfo } from '@/lib/llm';
 
 process.env.TZ = 'Africa/Maputo';
 
@@ -181,17 +181,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Chamar LLM para extrair prazos ──
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'assistant', content: EXTRACTION_PROMPT },
-        { role: 'user', content: `Analisa o seguinte texto jurídico e extrai todos os prazos:\n\n${text.trim()}` },
-      ],
-      thinking: { type: 'disabled' },
+    // ── Chamar LLM via adapter unificado (Gemini ou ZAI) ──
+    const providerInfo = getProviderInfo();
+    const completion = await chatWithLLM([
+      { role: 'system', content: EXTRACTION_PROMPT },
+      { role: 'user', content: `Analisa o seguinte texto jurídico e extrai todos os prazos:\n\n${text.trim()}` },
+    ], {
+      temperature: 0.3,
+      maxTokens: 2048,
     });
 
-    const rawResponse = completion?.choices?.[0]?.message?.content ?? '{"deadlines":[]}';
+    const rawResponse = completion.content ?? '{"deadlines":[]}';
 
     // ── Parsear resposta ──
     const extractionResult = safeJsonParse(rawResponse);

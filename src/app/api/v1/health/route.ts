@@ -5,6 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getProviderInfo, isGeminiAvailable } from '@/lib/llm';
 
 export async function GET() {
   const checks: Record<string, { ok: boolean; detail?: string }> = {};
@@ -52,6 +53,13 @@ export async function GET() {
   if (missingEnvs.length > 0) {
     checks.env = { ok: false, detail: `Missing: ${missingEnvs.join(', ')}` };
   }
+
+  // ── AI Provider ──
+  const providerInfo = getProviderInfo();
+  checks.ai_provider = {
+    ok: true,
+    detail: `active: ${providerInfo.provider} (${providerInfo.model})`,
+  };
 
   const allOk = Object.values(checks).every((c) => c.ok);
 

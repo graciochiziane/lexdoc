@@ -7,12 +7,12 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
-import ZAI from 'z-ai-web-dev-sdk';
 import { authenticateRequest } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { buildLexAssistGenerationPrompt } from '@/lib/lexassist-prompt';
+import { chatWithLLM, getProviderInfo } from '@/lib/llm';
 
 process.env.TZ = 'Africa/Maputo';
 
@@ -217,17 +217,17 @@ MODELO DE PROCESSO A SEGUIR:
 
     userPrompt += `\n\nINSTRUÇÃO: Gera o documento completo seguindo a estrutura obrigatória para o tipo "${TYPE_LABELS[generationType]}". Inclui campos de personalização entre colchetes [ ] onde aplicável.`;
 
-    // ── Chamar LLM ──
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      thinking: { type: 'disabled' },
+    // ── Chamar LLM via adapter unificado (Gemini ou ZAI) ──
+    const providerInfo = getProviderInfo();
+    const completion = await chatWithLLM([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ], {
+      temperature: 0.6,
+      maxTokens: 8192,
     });
 
-    const generatedContent = completion?.choices?.[0]?.message?.content
+    const generatedContent = completion.content
       ?? 'Erro: Não foi possível gerar o documento. Tente novamente.';
 
     // ── Guardar geração na base de dados ──
@@ -265,6 +265,8 @@ MODELO DE PROCESSO A SEGUIR:
         result_length: generatedContent.length,
         has_process: !!process_id,
         has_template: !!template_id,
+        llm_provider: providerInfo.provider,
+        llm_model: providerInfo.model,
       },
       ip_address: request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? null,
     });

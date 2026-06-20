@@ -5,7 +5,6 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
-import ZAI from 'z-ai-web-dev-sdk';
 import { authenticateRequest } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
@@ -13,6 +12,7 @@ import { db } from '@/lib/db';
 import { searchKnowledgeArticles } from '@/lib/rag-search';
 import { buildLexAssistPromptWithRAG } from '@/lib/lexassist-prompt';
 import { parsePagination, buildPaginationMeta, calcSkip } from '@/lib/pagination';
+import { chatWithLLM, getProviderInfo } from '@/lib/llm';
 
 process.env.TZ = 'Africa/Maputo';
 
@@ -229,15 +229,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Chamar LLM via z-ai-web-dev-sdk ──
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: llmMessages as any,
-      thinking: { type: 'disabled' },
+    // ── Chamar LLM via adapter unificado (Gemini ou ZAI) ──
+    const providerInfo = getProviderInfo();
+    const completion = await chatWithLLM(llmMessages, {
+      temperature: 0.7,
+      maxTokens: 4096,
     });
 
-    let aiMessageContent = completion?.choices?.[0]?.message?.content
-      ?? 'Desculpe, não consegui processar a sua mensagem. Tente novamente.';
+    let aiMessageContent = completion.content || 'Desculpe, não consegui processar a sua mensagem. Tente novamente.';
 
     // ── Governança V2.0: Validação pós-LLM (Zero Confusão Lusófana) ──
     const contamination = detectPortugueseContamination(aiMessageContent);
@@ -289,6 +288,8 @@ export async function POST(request: NextRequest) {
         response_length: aiMessageContent.length,
         knowledge_articles_used: knowledgeArticles.length,
         is_new_conversation: isNewConversation,
+        llm_provider: providerInfo.provider,
+        llm_model: providerInfo.model,
         governance_v2: true,
         lusophone_contamination_detected: contamination.length > 0,
         lusophone_terms_found: contamination.length > 0 ? contamination.map((c) => c.found) : undefined,

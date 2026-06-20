@@ -4,10 +4,10 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
-import ZAI from 'z-ai-web-dev-sdk';
 import { authenticateRequest } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
+import { chatWithLLM, getProviderInfo } from '@/lib/llm';
 
 process.env.TZ = 'Africa/Maputo';
 
@@ -131,20 +131,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Construir prompt e chamar LLM ──
+    // ── Construir prompt e chamar LLM via adapter unificado ──
     const analysisType = type as AnalysisType;
     const systemPrompt = buildAnalysisPrompt(analysisType);
+    const providerInfo = getProviderInfo();
 
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: text.trim() },
-      ],
-      thinking: { type: 'disabled' },
+    const completion = await chatWithLLM([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: text.trim() },
+    ], {
+      temperature: 0.5,
+      maxTokens: 4096,
     });
 
-    const rawAnalysis = completion?.choices?.[0]?.message?.content ?? 'Não foi possível analisar o documento. Tente novamente.';
+    const rawAnalysis = completion.content ?? 'Não foi possível analisar o documento. Tente novamente.';
 
     // ── Tentar extrair secções da resposta ──
     const summary = extractSection(rawAnalysis, 'Resumo');
@@ -170,6 +170,8 @@ export async function POST(request: NextRequest) {
         analysis_type: type,
         text_length: text.length,
         analysis_length: rawAnalysis.length,
+        llm_provider: providerInfo.provider,
+        llm_model: providerInfo.model,
       },
       ip_address: request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? null,
     });
