@@ -185,6 +185,7 @@ export async function POST(request: NextRequest) {
     // ── Guardar mensagem do utilizador ──
     await db.aIMessage.create({
       data: {
+        firm_id: firmId,
         conversation_id: conversationId,
         role: 'user',
         content: userMessage,
@@ -263,6 +264,7 @@ export async function POST(request: NextRequest) {
 
     await db.aIMessage.create({
       data: {
+        firm_id: firmId,
         conversation_id: conversationId,
         role: 'assistant',
         content: aiMessageContent,

@@ -6,12 +6,12 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
-import ZAI from 'z-ai-web-dev-sdk';
 import { authenticateRequest } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { searchKnowledgeArticles, type KnowledgeSearchResult } from '@/lib/rag-search';
+import { chatWithLLM, getProviderInfo } from '@/lib/llm';
 
 process.env.TZ = 'Africa/Maputo';
 
@@ -266,6 +266,7 @@ export async function POST(
     // ── Guardar mensagem do utilizador ──
     await db.aIMessage.create({
       data: {
+        firm_id: firmId,
         conversation_id: id,
         role: 'user',
         content: userMessage,
@@ -291,15 +292,34 @@ export async function POST(
       ...historyMessages.map((msg) => ({ role: msg.role as 'user' | 'assistant', content: msg.content })),
     ];
 
-    // ── Chamar LLM ──
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: llmMessages as any,
-      thinking: { type: 'disabled' },
+    // ── Chamar LLM via adapter unificado (Gemini ou ZAI) ──
+    const providerInfo = getProviderInfo();
+    const completion = await chatWithLLM(llmMessages, {
+      temperature: 0.7,
+      maxTokens: 4096,
     });
 
-    const aiMessageContent = completion?.choices?.[0]?.message?.content
+    let aiMessageContent = completion.content
       ?? 'Desculpe, não consegui processar a sua mensagem. Tente novamente.';
+
+    // ── Governança V2.0: Validação pós-LLM (Zero Confusão Lusófana) ──
+    const PORTUGUESE_CONTAMINATION_TERMS: Array<{ term: RegExp; correct: string }> = [
+      { term: /\bfreguesia\b/gi, correct: 'Localidade / Posto Administrativo' },
+      { term: /\bconcelho\b/gi, correct: 'Distrito' },
+    ];
+    const contamination: Array<{ found: string; correct: string }> = [];
+    for (const { term, correct } of PORTUGUESE_CONTAMINATION_TERMS) {
+      const matches = aiMessageContent.match(term);
+      if (matches) {
+        for (const match of matches) {
+          contamination.push({ found: match, correct });
+        }
+      }
+    }
+    if (contamination.length > 0) {
+      const corrections = contamination.map((c) => `"${c.found}" → "${c.correct}"`).join('; ');
+      aiMessageContent += '\n\n---\n⚠️ **AVISO DE GOVERNANÇA V2.0**\nCorrecções sugeridas: ' + corrections + '.';
+    }
 
     // ── Guardar resposta ──
     const knowledgeIds = knowledgeArticles.map((a) => a.id);
@@ -313,6 +333,7 @@ export async function POST(
 
     await db.aIMessage.create({
       data: {
+        firm_id: firmId,
         conversation_id: id,
         role: 'assistant',
         content: aiMessageContent,
@@ -338,6 +359,9 @@ export async function POST(
         response_length: aiMessageContent.length,
         knowledge_articles_used: knowledgeArticles.length,
         is_new_conversation: false,
+        llm_provider: providerInfo.provider,
+        llm_model: providerInfo.model,
+        lusophone_contamination_detected: contamination.length > 0,
       },
       ip_address: request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? null,
     });

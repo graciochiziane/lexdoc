@@ -101,6 +101,7 @@ export function AIChatPanel() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -141,9 +142,16 @@ export function AIChatPanel() {
       setIsLoading(true);
 
       try {
-        const response = await aiApi.chat({ message: trimmed });
+        const response = await aiApi.chat({
+          message: trimmed,
+          conversation_id: conversationId ?? undefined,
+        });
 
         if (response.success && response.data) {
+          // Guardar conversation_id para multi-turn
+          if (response.data.conversation_id && !conversationId) {
+            setConversationId(response.data.conversation_id);
+          }
           const assistantMessage: ChatMessage = {
             id: crypto.randomUUID(),
             role: 'assistant',
@@ -161,7 +169,7 @@ export function AIChatPanel() {
         setIsLoading(false);
       }
     },
-    [isLoading],
+    [isLoading, conversationId],
   );
 
   // ── Handler do formulário ──
@@ -188,6 +196,7 @@ export function AIChatPanel() {
   const handleClearChat = useCallback(() => {
     setMessages([]);
     setError(null);
+    setConversationId(null);
   }, []);
 
   // ── Quick prompt click ──

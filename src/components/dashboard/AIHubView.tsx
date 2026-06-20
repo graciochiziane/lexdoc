@@ -84,45 +84,48 @@ const QUICK_PROMPTS = [
 ];
 
 const DOC_TYPES = [
-  { value: 'contrato', label: 'Contrato' },
+  { value: 'contract', label: 'Contrato' },
+  { value: 'petition', label: 'Petição' },
   { value: 'peticao-inicial', label: 'Petição Inicial' },
   { value: 'contestacao', label: 'Contestação' },
   { value: 'contrato-trabalho', label: 'Contrato de Trabalho' },
   { value: 'procuracao', label: 'Procuração Forense' },
-  { value: 'parecer-juridico', label: 'Parecer Jurídico' },
+  { value: 'legal_opinion', label: 'Parecer Jurídico' },
   { value: 'notificacao', label: 'Notificação' },
   { value: 'requerimento', label: 'Requerimento' },
   { value: 'recurso', label: 'Recurso' },
-  { value: 'resumo', label: 'Resumo Jurídico' },
-  { value: 'personalizado', label: 'Personalizado' },
+  { value: 'summary', label: 'Resumo Jurídico' },
+  { value: 'custom_document', label: 'Personalizado' },
 ];
 
 const TYPE_BADGE_COLORS: Record<string, string> = {
-  contrato: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
+  contract: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
+  petition: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
   'peticao-inicial': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
   contestacao: 'bg-red-500/15 text-red-400 border-red-500/25',
   'contrato-trabalho': 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
   procuracao: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/25',
-  'parecer-juridico': 'bg-violet-500/15 text-violet-400 border-violet-500/25',
+  legal_opinion: 'bg-violet-500/15 text-violet-400 border-violet-500/25',
   notificacao: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
   requerimento: 'bg-teal-500/15 text-teal-400 border-teal-500/25',
   recurso: 'bg-rose-500/15 text-rose-400 border-rose-500/25',
-  resumo: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
-  personalizado: 'bg-gray-500/15 text-gray-400 border-gray-500/25',
+  summary: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
+  custom_document: 'bg-gray-500/15 text-gray-400 border-gray-500/25',
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  contrato: 'Contrato',
+  contract: 'Contrato',
+  petition: 'Petição',
   'peticao-inicial': 'Petição Inicial',
   contestacao: 'Contestação',
   'contrato-trabalho': 'Contrato de Trabalho',
   procuracao: 'Procuração Forense',
-  'parecer-juridico': 'Parecer Jurídico',
+  legal_opinion: 'Parecer Jurídico',
   notificacao: 'Notificação',
   requerimento: 'Requerimento',
   recurso: 'Recurso',
-  resumo: 'Resumo Jurídico',
-  personalizado: 'Personalizado',
+  summary: 'Resumo Jurídico',
+  custom_document: 'Personalizado',
 };
 
 // ─────────────────────────────────────────
