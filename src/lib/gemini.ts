@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // LEXDOC — Google Gemini Integration Service
-// Usa @google/generative-ai SDK com Gemini 2.0 Flash
+// Usa @google/generative-ai SDK com Gemini 2.5 Flash
 // ═══════════════════════════════════════════════════════════════
 
 import { GoogleGenerativeAI, type Content, type Part } from '@google/generative-ai';
@@ -9,7 +9,7 @@ import { GoogleGenerativeAI, type Content, type Part } from '@google/generative-
 // Configuração
 // ─────────────────────────────────────────
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-preview-05-20';
 const GEMINI_MAX_TOKENS = parseInt(process.env.GEMINI_MAX_TOKENS || '8192', 10);
 
 // Singleton do cliente

@@ -39,7 +39,7 @@ export function getProviderInfo(): { provider: 'gemini' | 'zai'; model: string; 
   return {
     provider: geminiAvailable ? 'gemini' : 'zai',
     model: geminiAvailable
-      ? (process.env.GEMINI_MODEL || 'gemini-2.0-flash')
+      ? (process.env.GEMINI_MODEL || 'gemini-2.5-flash-preview-05-20')
       : 'z-ai-default',
     available: true, // ZAI está sempre disponível no sandbox
   };
