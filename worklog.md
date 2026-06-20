@@ -1354,3 +1354,24 @@ Stage Summary:
 - **Estado actual**: App funcional com SQLite — login + registo + dashboard operacionais
 - **Credenciais admin**: graciochiziane@gmail.com / admin123
 - **Para Supabase**: Schema PostgreSQL preservado, necessita `?pgbouncer=true` ou pooler session-mode para deploy em Vercel
+---
+Task ID: 1
+Agent: Main Orchestrator
+Task: Fix Vercel deployment configuration + create production deployment guide
+
+Work Log:
+- Analysed full project state: schema, auth, AI routes, LLM adapter, build config
+- Identified root cause of Vercel deployment failures: output:"standalone" + cp commands in build script
+- Removed "output: standalone" from next.config.ts (Vercel has its own build system)
+- Simplified build script from "next build && cp -r ..." to just "next build"
+- Simplified start script from standalone server.js to "next start"
+- Updated Content-Security-Policy headers to allow Google Gemini API (generativelanguage.googleapis.com) and Google Fonts
+- Created .env.example with all required production env vars documented
+- Committed and pushed: 3c13e4d
+
+Stage Summary:
+- Vercel build configuration fixed — removed Docker/standalone artifacts
+- CSP headers updated for Gemini API compatibility
+- .env.example created with DATABASE_URL, JWT_SECRET, JWT_REFRESH_SECRET, GEMINI_API_KEY, GEMINI_MODEL
+- Ready for production deployment following the step-by-step guide
+
