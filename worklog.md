@@ -1375,3 +1375,25 @@ Stage Summary:
 - .env.example created with DATABASE_URL, JWT_SECRET, JWT_REFRESH_SECRET, GEMINI_API_KEY, GEMINI_MODEL
 - Ready for production deployment following the step-by-step guide
 
+---
+Task ID: 2
+Agent: Main Orchestrator
+Task: Fix critical auth bugs (login + session restore) for Vercel production
+
+Work Log:
+- Investigated why register works but login fails on production
+- Found Bug 1: /api/v1/auth/refresh NOT in middleware PUBLIC_PATHS — session restore blocked with 401
+- Found Bug 2: $executeRawUnsafe in login endpoint (no try/catch) — crashes on user-agent with special chars
+- Found Bug 3: $executeRawUnsafe in refresh endpoint (no try/catch) — same issue
+- Fixed middleware: added /auth/refresh and /auth/logout to PUBLIC_PATHS
+- Fixed login: replaced $executeRawUnsafe with Prisma refreshToken.create() + try/catch
+- Fixed refresh: replaced $executeRawUnsafe with Prisma refreshToken.create() + try/catch
+- Lint: 0 errors, 1 warning (pre-existing)
+- Committed and pushed: e3ca7d5
+
+Stage Summary:
+- 3 critical auth bugs fixed in 1 commit
+- Root cause of "register works but cant login again": middleware blocking refresh endpoint
+- All $executeRawUnsafe calls in auth routes now replaced with safe Prisma queries
+- Code ready for Vercel deployment with Supabase
+
