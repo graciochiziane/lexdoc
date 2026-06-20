@@ -1397,3 +1397,27 @@ Stage Summary:
 - All $executeRawUnsafe calls in auth routes now replaced with safe Prisma queries
 - Code ready for Vercel deployment with Supabase
 
+---
+Task ID: 3
+Agent: Main Orchestrator
+Task: Create backup branch + reactivate sandbox with Z.ai SDK
+
+Work Log:
+- Created production-backup branch on GitHub
+- Modified schema locally to SQLite (provider + removed @db.Uuid, @db.Timestamptz, @db.Text)
+- Schema NOT committed to main — production branch keeps PostgreSQL schema
+- Removed GEMINI_API_KEY from .env (Z.ai SDK takes over as fallback)
+- Fixed remaining executeRawUnsafe in register, audit.ts, invitations/accept
+- Eliminated ALL executeRawUnsafe calls from the entire project
+- Tested full auth flow: Register ✅, Refresh Token ✅, Login ✅
+- Zero runtime errors
+- Pushed fixes to GitHub: ef0ed5f
+
+Stage Summary:
+- Branch production-backup created on GitHub as safety net
+- Sandbox running with SQLite + Z.ai SDK (fallback AI)
+- All auth routes use safe Prisma queries (no SQL injection)
+- Register, login, refresh token all working end-to-end
+- Production schema on GitHub (main) = PostgreSQL for Supabase
+- Local schema = SQLite for sandbox testing
+
