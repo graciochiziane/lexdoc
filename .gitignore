@@ -60,3 +60,4 @@ db/*.db
 *.db-journal
 *.db-wal
 *.db-shm
+tool-results/
