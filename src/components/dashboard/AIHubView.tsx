@@ -74,6 +74,7 @@ interface ChatMessage {
   sources?: string[];
   knowledge_articles_used?: Array<{ id: string; title: string; category: string }>;
   timestamp: Date;
+  isStreaming?: boolean;
 }
 
 const QUICK_PROMPTS = [
@@ -395,7 +396,7 @@ function AssistantChatTab() {
     }
   }, [activeConvId, handleNewConversation]);
 
-  // Send message
+  // Send message (STREAMING)
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || isLoading) return;
@@ -407,36 +408,48 @@ function AssistantChatTab() {
       content: trimmed,
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, userMsg]);
+    const asstId = crypto.randomUUID();
+    const asstMsg: ChatMessage = {
+      id: asstId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isStreaming: true,
+    };
+    setMessages((prev) => [...prev, userMsg, asstMsg]);
     setInputValue('');
     setIsLoading(true);
 
+    let fullContent = '';
+    let sources: string[] = [];
+
     try {
-      const res = await aiApi.chat({
+      for await (const event of aiApi.chatStream({
         message: trimmed,
         conversation_id: activeConvId ?? undefined,
-      });
-      if (res.success && res.data) {
-        const assistantMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: res.data.message,
-          sources: res.data.sources,
-          knowledge_articles_used: res.data.knowledge_articles_used,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, assistantMsg]);
-
-        // Update conversation id if this is a new conversation
-        if (res.data.conversation_id && !activeConvId) {
-          setActiveConvId(res.data.conversation_id);
-          void loadConversations();
+      })) {
+        if (event.type === 'init') {
+          if (event.conversation_id && !activeConvId) {
+            setActiveConvId(event.conversation_id);
+            void loadConversations();
+          }
+          if (event.sources) sources = event.sources;
+        } else if (event.type === 'chunk') {
+          fullContent += event.content;
+          setMessages((prev) => prev.map((m) => m.id === asstId ? { ...m, content: fullContent } : m));
+        } else if (event.type === 'done') {
+          fullContent = event.full_content || fullContent;
+          setMessages((prev) => prev.map((m) => m.id === asstId ? { ...m, content: fullContent, isStreaming: false, sources } : m));
+        } else if (event.type === 'error') {
+          setError(event.message || 'Erro ao gerar resposta.');
+          setMessages((prev) => prev.map((m) => m.id === asstId ? { ...m, isStreaming: false, content: fullContent || 'Não foi possível gerar resposta.' } : m));
         }
-      } else {
-        setError(res.error?.message ?? 'Erro ao comunicar com o assistente.');
       }
+      // Fallback: marcar streaming como terminado
+      setMessages((prev) => prev.map((m) => m.id === asstId ? { ...m, isStreaming: false, sources: m.sources?.length ? m.sources : (sources.length ? sources : undefined) } : m));
     } catch {
       setError('Erro de conexão. Verifique a sua internet e tente novamente.');
+      setMessages((prev) => prev.map((m) => m.id === asstId ? { ...m, isStreaming: false, content: fullContent || 'Erro de conexão.' } : m));
     } finally {
       setIsLoading(false);
     }
@@ -611,6 +624,11 @@ function AssistantChatTab() {
                 }`}>
                   {msg.role === 'user' ? (
                     msg.content
+                  ) : msg.isStreaming && msg.content ? (
+                    <span>
+                      <MarkdownContent>{msg.content}</MarkdownContent>
+                      <motion.span className="inline-block w-0.5 h-4 bg-emerald-500 ml-0.5 align-middle rounded-sm" animate={{ opacity: [1, 0] }} transition={{ duration: 0.8, repeat: Infinity, ease: 'steps(2)' }} />
+                    </span>
                   ) : (
                     <MarkdownContent>{msg.content}</MarkdownContent>
                   )}
@@ -645,8 +663,8 @@ function AssistantChatTab() {
             </motion.div>
           ))}
 
-          {/* Typing indicator */}
-          {isLoading && <TypingIndicator />}
+          {/* Typing indicator (only when no streaming message visible) */}
+          {isLoading && !messages.some((m) => m.isStreaming) && <TypingIndicator />}
 
           {/* Error */}
           {error && (

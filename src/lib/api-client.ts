@@ -989,9 +989,52 @@ export interface ExtractedDeadline {
 }
 
 export const aiApi = {
-  // Enhanced chat with RAG + memory
+  // Enhanced chat with RAG + memory (non-streaming)
   chat: (data: { message: string; context?: string; conversation_id?: string }) =>
     apiFetch<{ message: string; sources: string[]; conversation_id: string; knowledge_articles_used?: Array<{ id: string; title: string; category: string }> }>('/ai/chat', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Streaming chat (SSE) — returns an async iterator of events
+  chatStream: async function* (data: { message: string; context?: string; conversation_id?: string }) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE}/ai/chat/stream`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: { message: 'Erro de conexão' } }));
+      throw new Error(err?.error?.message || 'Erro no stream');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('Stream não disponível');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr) {
+            try {
+              yield JSON.parse(jsonStr);
+            } catch {
+              // Ignorar JSON inválido
+            }
+          }
+        }
+      }
+    }
+  },
 
   // List conversations
   listConversations: (params?: string) =>

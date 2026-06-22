@@ -4,7 +4,7 @@
 // Provider selection: GEMINI_API_KEY presente → usa Gemini, senão ZAI
 // ═══════════════════════════════════════════════════════════════
 
-import { chatWithGemini, isGeminiAvailable, type GeminiMessage } from '@/lib/gemini';
+import { chatWithGemini, streamGemini, isGeminiAvailable, type GeminiMessage } from '@/lib/gemini';
 
 // ─────────────────────────────────────────
 // Tipos
@@ -94,5 +94,41 @@ export async function chatWithLLM(
       model: 'z-ai-default',
       tokens_used: undefined, // ZAI não retorna token count
     };
+  }
+}
+
+// ─────────────────────────────────────────
+// Streaming unificado
+// ─────────────────────────────────────────
+
+/**
+ * Stream de respostas do LLM (provider detectado automaticamente).
+ * Retorna um async generator de chunks de texto.
+ */
+export async function* streamLLM(
+  messages: LLMMessage[],
+  options?: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+  }
+): AsyncGenerator<string> {
+  const provider = getActiveProvider();
+
+  if (provider === 'gemini') {
+    yield* streamGemini(messages as GeminiMessage[], options);
+  } else {
+    // ZAI fallback: sem streaming nativo — retorna a resposta completa como um chunk
+    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+    const zai = await ZAI.create();
+
+    const completion = await zai.chat.completions.create({
+      messages: messages as any,
+      thinking: { type: 'disabled' },
+    });
+
+    const content = completion?.choices?.[0]?.message?.content
+      ?? 'Erro: Não foi possível gerar resposta. Tente novamente.';
+    yield content;
   }
 }

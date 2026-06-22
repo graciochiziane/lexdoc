@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-// LEXDOC — Painel de Chat IA (LexAssistent)
-// Chat flutuante com glassmorphism, prompts rápidos, animações
+// LEXDOC — Painel de Chat IA (LexAssistent) — STREAMING v2.0
+// Chat flutuante com glassmorphism, streaming em tempo real, prompts rápidos
 // ═══════════════════════════════════════════════════════════════
 
 'use client';
@@ -18,7 +18,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-// ScrollArea removed — using native overflow instead for chat messages
 import { Badge } from '@/components/ui/badge';
 import { aiApi } from '@/lib/api-client';
 import { MarkdownContent } from '@/components/shared/MarkdownRenderer';
@@ -32,32 +31,17 @@ interface ChatMessage {
   content: string;
   sources?: string[];
   timestamp: Date;
+  isStreaming?: boolean;
 }
 
 // ─────────────────────────────────────────
 // Prompts rápidos
 // ─────────────────────────────────────────
 const QUICK_PROMPTS = [
-  {
-    label: 'Calcular prazo processual',
-    prompt: 'Como calcular prazo processual?',
-    icon: '⏱️',
-  },
-  {
-    label: 'Draftar petição inicial',
-    prompt: 'Draftar uma petição inicial',
-    icon: '📝',
-  },
-  {
-    label: 'Código Civil Moçambicano',
-    prompt: 'Explicar o Código Civil Moçambicano',
-    icon: '📚',
-  },
-  {
-    label: 'Lei do Trabalho',
-    prompt: 'Principais alterações da Lei do Trabalho',
-    icon: '⚖️',
-  },
+  { label: 'Calcular prazo processual', prompt: 'Como calcular prazo processual?', icon: '⏱️' },
+  { label: 'Draftar petição inicial', prompt: 'Draftar uma petição inicial', icon: '📝' },
+  { label: 'Código Civil Moçambicano', prompt: 'Explicar o Código Civil Moçambicano', icon: '📚' },
+  { label: 'Lei do Trabalho', prompt: 'Principais alterações da Lei do Trabalho', icon: '⚖️' },
 ];
 
 // ─────────────────────────────────────────
@@ -72,23 +56,24 @@ function TypingIndicator() {
         </AvatarFallback>
       </Avatar>
       <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3">
-        <motion.span
-          className="size-2 rounded-full bg-emerald-400"
-          animate={{ y: [0, -6, 0] }}
-          transition={{ duration: 0.6, repeat: Infinity, delay: 0 }}
-        />
-        <motion.span
-          className="size-2 rounded-full bg-emerald-400"
-          animate={{ y: [0, -6, 0] }}
-          transition={{ duration: 0.6, repeat: Infinity, delay: 0.15 }}
-        />
-        <motion.span
-          className="size-2 rounded-full bg-emerald-400"
-          animate={{ y: [0, -6, 0] }}
-          transition={{ duration: 0.6, repeat: Infinity, delay: 0.3 }}
-        />
+        <motion.span className="size-2 rounded-full bg-emerald-400" animate={{ y: [0, -6, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0 }} />
+        <motion.span className="size-2 rounded-full bg-emerald-400" animate={{ y: [0, -6, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.15 }} />
+        <motion.span className="size-2 rounded-full bg-emerald-400" animate={{ y: [0, -6, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.3 }} />
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Cursor piscante para streaming
+// ─────────────────────────────────────────
+function StreamingCursor() {
+  return (
+    <motion.span
+      className="inline-block w-0.5 h-4 bg-emerald-500 ml-0.5 align-middle rounded-sm"
+      animate={{ opacity: [1, 0] }}
+      transition={{ duration: 0.8, repeat: Infinity, ease: 'steps(2)' }}
+    />
   );
 }
 
@@ -102,10 +87,12 @@ export function AIChatPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isAborted, setIsAborted] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef(false);
 
   // ── Scroll para o fundo quando há novas mensagens ──
   useEffect(() => {
@@ -121,13 +108,15 @@ export function AIChatPanel() {
     }
   }, [isOpen]);
 
-  // ── Enviar mensagem ──
+  // ── Enviar mensagem com STREAMING ──
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isLoading) return;
 
       setError(null);
+      abortRef.current = false;
+      setIsAborted(false);
 
       // Adicionar mensagem do utilizador
       const userMessage: ChatMessage = {
@@ -137,40 +126,104 @@ export function AIChatPanel() {
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, userMessage]);
+      // Criar mensagem do assistente vazia (será preenchida via streaming)
+      const assistantId = crypto.randomUUID();
+      const assistantMessage: ChatMessage = {
+        id: assistantId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        isStreaming: true,
+      };
+
+      setMessages((prev) => [...prev, userMessage, assistantMessage]);
       setInputValue('');
       setIsLoading(true);
 
+      let fullContent = '';
+      let sources: string[] = [];
+
       try {
-        const response = await aiApi.chat({
+        // Usar streaming SSE
+        for await (const event of aiApi.chatStream({
           message: trimmed,
           conversation_id: conversationId ?? undefined,
-        });
+        })) {
+          if (abortRef.current) break;
 
-        if (response.success && response.data) {
-          // Guardar conversation_id para multi-turn
-          if (response.data.conversation_id && !conversationId) {
-            setConversationId(response.data.conversation_id);
+          if (event.type === 'init') {
+            // Recebeu conversation_id e sources
+            if (event.conversation_id && !conversationId) {
+              setConversationId(event.conversation_id);
+            }
+            if (event.sources) {
+              sources = event.sources;
+            }
+          } else if (event.type === 'chunk') {
+            // Recebeu fragmento de texto
+            fullContent += event.content;
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, content: fullContent }
+                  : msg,
+              ),
+            );
+          } else if (event.type === 'done') {
+            // Streaming completo
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, content: event.full_content || fullContent, isStreaming: false, sources }
+                  : msg,
+              ),
+            );
+          } else if (event.type === 'error') {
+            setError(event.message || 'Erro ao gerar resposta.');
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, isStreaming: false, content: fullContent || 'Não foi possível gerar resposta.' }
+                  : msg,
+              ),
+            );
           }
-          const assistantMessage: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: response.data.message,
-            sources: response.data.sources,
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, assistantMessage]);
-        } else {
-          setError(response.error?.message ?? 'Erro ao comunicar com o assistente.');
         }
-      } catch {
-        setError('Erro de conexão. Verifique a sua internet e tente novamente.');
+
+        // Fallback: se o loop terminou sem evento 'done'
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? { ...msg, isStreaming: false, sources: msg.sources?.length ? msg.sources : (sources.length ? sources : undefined) }
+              : msg,
+          ),
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erro de conexão. Tente novamente.';
+        setError(msg);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, isStreaming: false, content: fullContent || 'Erro de conexão. Verifique a sua internet.' }
+              : m,
+          ),
+        );
       } finally {
         setIsLoading(false);
       }
     },
     [isLoading, conversationId],
   );
+
+  // ── Parar streaming ──
+  const handleStop = useCallback(() => {
+    abortRef.current = true;
+    setIsAborted(true);
+    setIsLoading(false);
+    setMessages((prev) =>
+      prev.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)),
+    );
+  }, []);
 
   // ── Handler do formulário ──
   const handleSubmit = useCallback(
@@ -181,7 +234,7 @@ export function AIChatPanel() {
     [inputValue, sendMessage],
   );
 
-  // ── Handler do Enter (Shift+Enter para nova linha) ──
+  // ── Handler do Enter ──
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -194,9 +247,12 @@ export function AIChatPanel() {
 
   // ── Limpar conversa ──
   const handleClearChat = useCallback(() => {
+    abortRef.current = true;
     setMessages([]);
     setError(null);
     setConversationId(null);
+    setIsLoading(false);
+    setIsAborted(false);
   }, []);
 
   // ── Quick prompt click ──
@@ -209,7 +265,7 @@ export function AIChatPanel() {
 
   return (
     <>
-      {/* ── Botão flutuante (acima do FAB) ── */}
+      {/* ── Botão flutuante ── */}
       <AnimatePresence>
         {!isOpen && (
           <motion.button
@@ -223,12 +279,10 @@ export function AIChatPanel() {
             aria-label="Abrir assistente IA"
           >
             <Bot className="size-6 group-hover:scale-110 transition-transform" />
-            {/* Badge indicador */}
             <span className="absolute -top-1 -right-1 flex size-4">
               <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
               <span className="relative inline-flex size-4 rounded-full bg-emerald-400 border-2 border-background" />
             </span>
-            {/* Tooltip */}
             <motion.span
               initial={{ opacity: 0, x: 4 }}
               animate={{ opacity: 1, x: 0 }}
@@ -283,7 +337,6 @@ export function AIChatPanel() {
                   </p>
                 </div>
               </div>
-
               <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
@@ -308,145 +361,116 @@ export function AIChatPanel() {
             </div>
 
             {/* ── Área de mensagens ── */}
-            <div
-              ref={scrollRef}
-              className="flex-1 overflow-y-auto"
-            >
-                <div className="flex flex-col">
-                  {/* Estado vazio — Prompts rápidos */}
-                  {messages.length === 0 && !isLoading && (
-                    <div className="flex flex-col items-center justify-center p-6 text-center flex-1">
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30 flex items-center justify-center mb-4"
-                      >
-                        <MessageSquare className="size-7 text-emerald-600 dark:text-emerald-400" />
-                      </motion.div>
-                      <motion.h4
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.15 }}
-                        className="text-sm font-semibold text-foreground mb-1"
-                      >
-                        Olá! Sou o LexAssistent
-                      </motion.h4>
-                      <motion.p
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                        className="text-xs text-muted-foreground mb-6 max-w-[280px]"
-                      >
-                        O seu assistente jurídico virtual para direito moçambicano. Como posso ajudar?
-                      </motion.p>
-
-                      {/* Quick prompts */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.25 }}
-                        className="w-full space-y-2"
-                      >
-                        {QUICK_PROMPTS.map((qp) => (
-                          <button
-                            key={qp.prompt}
-                            onClick={() => handleQuickPrompt(qp.prompt)}
-                            className="w-full flex items-center gap-3 rounded-xl border border-border/50 bg-muted/30 hover:bg-muted/60 hover:border-emerald-300/50 dark:hover:border-emerald-700/50 px-3.5 py-2.5 text-left transition-all duration-200 active:scale-[0.98] group"
-                          >
-                            <span className="text-lg shrink-0">{qp.icon}</span>
-                            <span className="text-xs font-medium text-foreground/80 group-hover:text-foreground transition-colors">
-                              {qp.label}
-                            </span>
-                          </button>
-                        ))}
-                      </motion.div>
-                    </div>
-                  )}
-
-                  {/* Mensagens */}
-                  {messages.map((msg) => (
+            <div ref={scrollRef} className="flex-1 overflow-y-auto">
+              <div className="flex flex-col">
+                {/* Estado vazio — Prompts rápidos */}
+                {messages.length === 0 && !isLoading && (
+                  <div className="flex flex-col items-center justify-center p-6 text-center flex-1">
                     <motion.div
-                      key={msg.id}
-                      initial={{ opacity: 0, y: 8 }}
+                      initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className={`flex items-start gap-3 px-4 py-3 ${
-                        msg.role === 'user' ? 'flex-row-reverse' : ''
+                      transition={{ delay: 0.1 }}
+                      className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30 flex items-center justify-center mb-4"
+                    >
+                      <MessageSquare className="size-7 text-emerald-600 dark:text-emerald-400" />
+                    </motion.div>
+                    <motion.h4 initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }} className="text-sm font-semibold text-foreground mb-1">
+                      Olá! Sou o LexAssistent
+                    </motion.h4>
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="text-xs text-muted-foreground mb-6 max-w-[280px]">
+                      O seu assistente jurídico virtual para direito moçambicano. Como posso ajudar?
+                    </motion.p>
+                    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="w-full space-y-2">
+                      {QUICK_PROMPTS.map((qp) => (
+                        <button
+                          key={qp.prompt}
+                          onClick={() => handleQuickPrompt(qp.prompt)}
+                          className="w-full flex items-center gap-3 rounded-xl border border-border/50 bg-muted/30 hover:bg-muted/60 hover:border-emerald-300/50 dark:hover:border-emerald-700/50 px-3.5 py-2.5 text-left transition-all duration-200 active:scale-[0.98] group"
+                        >
+                          <span className="text-lg shrink-0">{qp.icon}</span>
+                          <span className="text-xs font-medium text-foreground/80 group-hover:text-foreground transition-colors">
+                            {qp.label}
+                          </span>
+                        </button>
+                      ))}
+                    </motion.div>
+                  </div>
+                )}
+
+                {/* Mensagens */}
+                {messages.map((msg) => (
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={`flex items-start gap-3 px-4 py-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                  >
+                    {msg.role === 'assistant' ? (
+                      <Avatar className="size-8 shrink-0 mt-0.5">
+                        <AvatarFallback className="bg-gradient-to-br from-emerald-400 to-teal-500 text-white text-[10px] font-bold">
+                          LA
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <Avatar className="size-8 shrink-0 mt-0.5">
+                        <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
+                          EU
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+
+                    <div
+                      className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed break-words overflow-hidden ${
+                        msg.role === 'user'
+                          ? 'bg-primary text-primary-foreground rounded-tr-sm whitespace-pre-wrap'
+                          : 'bg-muted/60 text-foreground rounded-tl-sm'
                       }`}
                     >
-                      {/* Avatar */}
-                      {msg.role === 'assistant' ? (
-                        <Avatar className="size-8 shrink-0 mt-0.5">
-                          <AvatarFallback className="bg-gradient-to-br from-emerald-400 to-teal-500 text-white text-[10px] font-bold">
-                            LA
-                          </AvatarFallback>
-                        </Avatar>
+                      {msg.role === 'user' ? (
+                        msg.content
+                      ) : msg.isStreaming || (msg.content === '' && isLoading) ? (
+                        <span className="flex items-start">
+                          {msg.content ? (
+                            <>
+                              <MarkdownContent>{msg.content}</MarkdownContent>
+                              <StreamingCursor />
+                            </>
+                          ) : (
+                            <TypingIndicator />
+                          )}
+                        </span>
                       ) : (
-                        <Avatar className="size-8 shrink-0 mt-0.5">
-                          <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
-                            EU
-                          </AvatarFallback>
-                        </Avatar>
+                        <MarkdownContent>{msg.content}</MarkdownContent>
                       )}
+                    </div>
+                  </motion.div>
+                ))}
 
-                      {/* Content */}
-                      <div
-                        className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed break-words overflow-hidden ${
-                          msg.role === 'user'
-                            ? 'bg-primary text-primary-foreground rounded-tr-sm whitespace-pre-wrap'
-                            : 'bg-muted/60 text-foreground rounded-tl-sm'
-                        }`}
-                      >
-                        {msg.role === 'user' ? (
-                          msg.content
-                        ) : (
-                          <MarkdownContent>{msg.content}</MarkdownContent>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
+                {/* Sources */}
+                {messages.length > 0 && !messages[messages.length - 1]?.isStreaming && messages[messages.length - 1]?.role === 'assistant' && messages[messages.length - 1]?.sources && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-4 pb-2">
+                    <div className="flex flex-wrap gap-1.5 ml-11">
+                      {messages[messages.length - 1].sources!.map((source, i) => (
+                        <Badge key={i} variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
+                          {source}
+                        </Badge>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
 
-                  {/* Sources */}
-                  {messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && messages[messages.length - 1]?.sources && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="px-4 pb-2"
-                    >
-                      <div className="flex flex-wrap gap-1.5 ml-11">
-                        {messages[messages.length - 1].sources!.map((source, i) => (
-                          <Badge
-                            key={i}
-                            variant="outline"
-                            className="text-[9px] px-1.5 py-0 h-4 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20"
-                          >
-                            {source}
-                          </Badge>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
+                {/* Error */}
+                {error && (
+                  <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="px-4 pb-2">
+                    <div className="ml-11 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                      {error}
+                    </div>
+                  </motion.div>
+                )}
 
-                  {/* Typing indicator */}
-                  {isLoading && <TypingIndicator />}
-
-                  {/* Error */}
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="px-4 pb-2"
-                    >
-                      <div className="ml-11 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 px-3 py-2 text-xs text-red-600 dark:text-red-400">
-                        {error}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Ref para scroll */}
-                  <div ref={messagesEndRef} />
-                </div>
+                <div ref={messagesEndRef} />
+              </div>
             </div>
 
             {/* ── Input area ── */}
@@ -463,14 +487,26 @@ export function AIChatPanel() {
                   style={{ fieldSizing: 'fixed' }}
                   className="resize-none overflow-y-auto rounded-xl border-border/60 bg-muted/30 pr-12 min-h-[42px] max-h-[120px] text-sm placeholder:text-muted-foreground/50 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-400/50"
                 />
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={!inputValue.trim() || isLoading}
-                  className="absolute right-2 bottom-2 size-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md disabled:opacity-40 disabled:shadow-none transition-all active:scale-[0.92]"
-                >
-                  <Send className="size-3.5" />
-                </Button>
+                {isLoading ? (
+                  <Button
+                    type="button"
+                    size="icon"
+                    onClick={handleStop}
+                    className="absolute right-2 bottom-2 size-8 rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-md transition-all active:scale-[0.92]"
+                    title="Parar geração"
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={!inputValue.trim()}
+                    className="absolute right-2 bottom-2 size-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md disabled:opacity-40 disabled:shadow-none transition-all active:scale-[0.92]"
+                  >
+                    <Send className="size-3.5" />
+                  </Button>
+                )}
               </form>
               <p className="text-[9px] text-muted-foreground/50 mt-2 text-center">
                 LexAssistent pode cometer erros. Verifique informações importantes.

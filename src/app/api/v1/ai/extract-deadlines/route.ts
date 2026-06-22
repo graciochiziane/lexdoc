@@ -212,6 +212,7 @@ export async function POST(request: NextRequest) {
             if (!isNaN(dueDate.getTime())) {
               const created = await db.deadline.create({
                 data: {
+                  firm_id: firmId,
                   process_id: process_id,
                   title: deadline.title || 'Prazo extraído pela IA',
                   description: deadline.description || null,
