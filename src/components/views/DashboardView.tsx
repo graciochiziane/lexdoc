@@ -109,7 +109,7 @@ const NAV_ITEMS: Array<{
   roles?: string[];
 }> = [
   { id: 'painel', icon: LayoutDashboard, label: 'Painel' },
-  { id: 'plataforma', icon: Globe, label: 'Gestão da Plataforma', roles: ['SUPER_ADMIN'] },
+  { id: 'plataforma', icon: Globe, label: 'Gestão da Plataforma', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { id: 'ia', icon: Bot, label: 'Centro de IA' },
   { id: 'tarefas', icon: CheckSquare, label: 'Tarefas' },
   { id: 'processos', icon: Briefcase, label: 'Processos' },
