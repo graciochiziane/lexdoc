@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
+import { db } from '@/lib/db';
 import { chatWithLLM, getProviderInfo } from '@/lib/llm';
 
 process.env.TZ = 'Africa/Maputo';
@@ -160,12 +161,32 @@ export async function POST(request: NextRequest) {
       full_analysis: rawAnalysis,
     };
 
-    // ── Auditoria (sem conteúdo do documento — sem PII) ──
+    // ── Guardar análise na base de dados ──
+    const analysisGenType = `analysis_${type}` as string;
+    const generation = await db.aIGeneration.create({
+      data: {
+        firm_id: firmId,
+        user_id: userId,
+        generation_type: analysisGenType,
+        title: `Análise: ${TYPE_LABELS[analysisType]}`,
+        prompt: text.trim().substring(0, 10000),
+        result: rawAnalysis,
+        metadata: JSON.stringify({
+          analysis_type: type,
+          text_length: text.length,
+          structured: analysisData,
+        }),
+      },
+    });
+
+    // ── Auditoria ──
     logAudit({
       firm_id: firmId,
       user_id: userId,
       action: 'AI_DOCUMENT_ANALYSIS',
-      entity_type: 'ai_assistant',
+      entity_type: 'ai_generation',
+      entity_id: generation.id,
+      new_values: { generation_type: analysisGenType, title: generation.title },
       metadata: {
         analysis_type: type,
         text_length: text.length,

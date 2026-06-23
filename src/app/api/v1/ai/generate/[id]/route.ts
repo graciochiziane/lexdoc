@@ -21,6 +21,17 @@ const TYPE_LABELS: Record<string, string> = {
   summary: 'Resumo Jurídico',
   document: 'Documento',
   custom_document: 'Documento Personalizado',
+  'peticao-inicial': 'Petição Inicial',
+  contestacao: 'Contestação',
+  'contrato-trabalho': 'Contrato de Trabalho',
+  procuracao: 'Procuração Forense',
+  notificacao: 'Notificação',
+  requerimento: 'Requerimento',
+  recurso: 'Recurso',
+  'analysis_contract': 'Análise de Contrato',
+  'analysis_petition': 'Análise de Petição',
+  'analysis_legal_opinion': 'Análise de Parecer',
+  'analysis_general': 'Análise Geral',
 };
 
 // ─────────────────────────────────────────

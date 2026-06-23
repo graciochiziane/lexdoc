@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     // ── Validar body ──
     const body = await request.json().catch(() => null);
-    const { message, context, conversation_id } = body ?? {};
+    const { message, context, conversation_id, context_type, context_id } = body ?? {};
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return new Response(
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     } else {
       const title = message.trim().substring(0, 60) + (message.trim().length > 60 ? '...' : '');
       const conv = await db.aIConversation.create({
-        data: { firm_id: firmId, user_id: userId, title, context_type: null, context_id: null },
+        data: { firm_id: firmId, user_id: userId, title, context_type: context_type ?? null, context_id: context_id ?? null },
       });
       conversationId = conv.id;
       isNewConversation = true;
@@ -101,12 +101,13 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Carregar histórico (últimas 10) ──
-    const historyMessages = await db.aIMessage.findMany({
+    const historyRows = await db.aIMessage.findMany({
       where: { conversation_id: conversationId },
-      orderBy: { created_at: 'asc' },
+      orderBy: { created_at: 'desc' },
       take: 10,
       select: { role: true, content: true },
     });
+    const historyMessages = historyRows.reverse();
 
     // ── RAG ──
     const knowledgeArticles = await searchKnowledgeArticles(firmId, message, 3);
@@ -185,24 +186,28 @@ export async function POST(request: NextRequest) {
             controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
 
             // Guardar mensagem do assistente (silêncio seguro)
-            void db.aIMessage.create({
-              data: {
-                firm_id: firmId,
-                conversation_id: conversationId,
-                role: 'assistant',
-                content: fullContent,
-                sources: JSON.stringify(sources),
-                knowledge_ids: JSON.stringify(knowledgeArticles.map((a) => a.id)),
-                metadata: JSON.stringify({
-                  knowledge_count: knowledgeArticles.length,
-                  has_history: historyMessages.length > 1,
-                  safe_silence: true,
-                  governance_audit: governance.audit_details,
-                }),
-                confidence_score: governance.confidence_score,
-                nivel_governanca_accionado: governance.nivel_governanca_accionado,
-              },
-            });
+            try {
+              await db.aIMessage.create({
+                data: {
+                  firm_id: firmId,
+                  conversation_id: conversationId,
+                  role: 'assistant',
+                  content: fullContent,
+                  sources: JSON.stringify(sources),
+                  knowledge_ids: JSON.stringify(knowledgeArticles.map((a) => a.id)),
+                  metadata: JSON.stringify({
+                    knowledge_count: knowledgeArticles.length,
+                    has_history: historyMessages.length > 1,
+                    safe_silence: true,
+                    governance_audit: governance.audit_details,
+                  }),
+                  confidence_score: governance.confidence_score,
+                  nivel_governanca_accionado: governance.nivel_governanca_accionado,
+                },
+              });
+            } catch (dbErr) {
+              console.error('[AI Chat Stream] Erro ao guardar mensagem (safe silence):', dbErr);
+            }
 
             // Auditoria — Silêncio Seguro accionado
             logAudit({
@@ -248,26 +253,30 @@ export async function POST(request: NextRequest) {
             });
             controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
 
-            // Guardar mensagem completa do assistente (fire-and-forget)
-            void db.aIMessage.create({
-              data: {
-                firm_id: firmId,
-                conversation_id: conversationId,
-                role: 'assistant',
-                content: fullContent,
-                sources: JSON.stringify(sources),
-                knowledge_ids: JSON.stringify(knowledgeArticles.map((a) => a.id)),
-                metadata: JSON.stringify({
-                  knowledge_count: knowledgeArticles.length,
-                  has_history: historyMessages.length > 1,
-                  governance_audit: governance.audit_details,
-                }),
-                confidence_score: governance.confidence_score,
-                nivel_governanca_accionado: governance.nivel_governanca_accionado,
-              },
-            });
+            // Guardar mensagem completa do assistente
+            try {
+              await db.aIMessage.create({
+                data: {
+                  firm_id: firmId,
+                  conversation_id: conversationId,
+                  role: 'assistant',
+                  content: fullContent,
+                  sources: JSON.stringify(sources),
+                  knowledge_ids: JSON.stringify(knowledgeArticles.map((a) => a.id)),
+                  metadata: JSON.stringify({
+                    knowledge_count: knowledgeArticles.length,
+                    has_history: historyMessages.length > 1,
+                    governance_audit: governance.audit_details,
+                  }),
+                  confidence_score: governance.confidence_score,
+                  nivel_governanca_accionado: governance.nivel_governanca_accionado,
+                },
+              });
+            } catch (dbErr) {
+              console.error('[AI Chat Stream] Erro ao guardar mensagem:', dbErr);
+            }
 
-            // Auditoria (fire-and-forget)
+            // Auditoria
             logAudit({
               firm_id: firmId,
               user_id: userId,

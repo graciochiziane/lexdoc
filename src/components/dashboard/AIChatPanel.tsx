@@ -248,12 +248,18 @@ export function AIChatPanel() {
   // ── Limpar conversa ──
   const handleClearChat = useCallback(() => {
     abortRef.current = true;
+
+    // Desactivar conversa no backend para não ficar órfã
+    if (conversationId) {
+      aiApi.deleteConversation(conversationId).catch(() => {});
+    }
+
     setMessages([]);
     setError(null);
     setConversationId(null);
     setIsLoading(false);
     setIsAborted(false);
-  }, []);
+  }, [conversationId]);
 
   // ── Quick prompt click ──
   const handleQuickPrompt = useCallback(

@@ -274,12 +274,13 @@ export async function POST(
     });
 
     // ── Carregar histórico (últimas 10 mensagens) ──
-    const historyMessages = await db.aIMessage.findMany({
+    const historyRows = await db.aIMessage.findMany({
       where: { conversation_id: id },
-      orderBy: { created_at: 'asc' },
+      orderBy: { created_at: 'desc' },
       take: 10,
       select: { role: true, content: true },
     });
+    const historyMessages = historyRows.reverse();
 
     // ── RAG: Pesquisar base de conhecimento ──
     const knowledgeArticles = await searchKnowledgeArticles(firmId, message, 3);
