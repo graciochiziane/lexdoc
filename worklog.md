@@ -4,12 +4,12 @@
 
 ## Estado Actual (25 Jun 2026)
 
-**Branch principal:** `main` (commit `2b29559`)
+**Branch principal:** `main` (commit `c01de70`)
 **Branch backup:** `backup/postgres-fix-working-2026-06-22` (commit `63620e7`)
 **Hosting:** Vercel (lexdoc-blue.vercel.app)
 **Database:** Supabase PostgreSQL (eu-west-3, PgBouncer port 6543)
 **AI Provider:** Google Gemini 2.5 Flash (com fallback ZAI automático)
-**Super Admin:** Implementado nesta sessão (bootstrap + painel de gestão)
+**Super Admin:** Implementado (bootstrap SQL + painel de gestão + audit trail)
 
 ---
 
@@ -68,7 +68,7 @@ POST /api/v1/ai/chat/stream
     │   └─ Se falhar → fallback ZAI automático
     └─ ZAI: fallback — single chunk
   ↓ SSE events: init → chunk* → done
-  ↓ fire-and-forget: db.aIMessage.create + logAudit
+  ↓ await db.aIMessage.create (garantia de persistência)
 ```
 
 ---
@@ -130,12 +130,19 @@ POST /api/v1/ai/chat/stream
 ## Como usar o Super Admin
 
 ### Promoção (first-time):
-1. Login como ADMIN (Grácio)
-2. Ir a **"Gestão da Plataforma"** na sidebar
-3. Clicar **"Promover Conta"**
-4. A página recarrega automaticamente com o novo role
+1. Executar SQL directo no Supabase para promover o ADMIN pretendido:
+   ```sql
+   UPDATE users SET role = 'SUPER_ADMIN' WHERE email = 'admin@firm.co.mz';
+   ```
+2. Ou usar o endpoint de emergência: `POST /api/v1/platform/bootstrap` (só funciona se 0 SUPER_ADMINs existirem)
 
-### Gestão da Plataforma (após promoção):
+### Promoção de outros utilizadores:
+1. Login como SUPER_ADMIN
+2. Ir a **"Gestão da Plataforma"** → **"Utilizadores"**
+3. Alterar o role de um ADMIN para SUPER_ADMIN
+4. Acção registada com audit trail completo (IP, email, role anterior)
+
+### Gestão da Plataforma:
 1. A tab **"Gestão da Plataforma"** aparece com 4 sub-tabs
 2. **Visão Geral** — estatísticas globais, distribuições, recentes
 3. **Escritórios** — listar, pesquisar, ver detalhes, desactivar
@@ -227,3 +234,110 @@ ALTER TABLE ai_messages ADD COLUMN confidence_score DOUBLE PRECISION;
 ALTER TABLE ai_messages ADD COLUMN nivel_governanca_accionado TEXT;
 CREATE INDEX idx_ai_messages_confidence_score ON ai_messages(confidence_score);
 ```
+
+---
+
+### Sessão 6 — Hardening Segurança + Locale + Persistência IA (23 Jun 2026)
+
+**4 commits:** `d91d38e` → `e30523c` → `b2eb6b0` → `c01de70`
+
+#### 6a. Correcção do ciclo viciado de bootstrap (d91d38e → e30523c)
+
+**Problema:** A tab "Gestão da Plataforma" só era visível para SUPER_ADMIN, mas a promoção a SUPER_ADMIN só era possível via essa tab — ciclo viciado.
+
+**Solução final (e30523c):**
+1. **Removido BootstrapBanner do UI** — Promoção a SUPER_ADMIN agora só via SQL directo pelo owner, ou via painel por outro SUPER_ADMIN existente.
+2. **Tab visível só para SUPER_ADMIN** — Revertido d91d38e. Bootstrap endpoint mantido como fallback emergência (só se 0 SUPER_ADMINs na plataforma).
+3. **SUPER_ADMIN pode promover outros ADMINs** via painel de gestão.
+4. **Audit trail dedicado** — Acção `SUPER_ADMIN_PROMOTED` regista: IP, User-Agent, email do alvo, role anterior.
+
+**Arquivos:**
+- `src/app/api/v1/platform/users/[id]/route.ts` — Adicionada lógica de promoção SUPER_ADMIN com audit trail
+- `src/components/dashboard/PlatformAdminPanel.tsx` — Removido BootstrapBanner, limpo 77 linhas
+- `src/components/views/DashboardView.tsx` — Tab "plataforma" restrita a SUPER_ADMIN
+
+#### 6b. Correcção de locale IANA inválido (b2eb6b0)
+
+**Problema:** `pt-MOZ` não é uma tag IANA BCP 47 válida (ISO 3166-1 usa `MZ`, não `MOZ`).
+
+**Solução:** Substituído `pt-MOZ` → `pt-MZ` em GovernanceTab.tsx e PlatformAdminPanel.tsx.
+
+**Verificação:** Nenhum `pt-MOZ` remanescente em ficheiros `.ts`/`.tsx`.
+
+#### 6c. Garantir persistência de dados gerados pela IA (c01de70)
+
+**Problema crítico:** Mensagens do assistente IA e análises de documentos não eram persistidas na base de dados — usavam `void db.aIMessage.create()` (fire-and-forget) e a rota `analyze` não guardava resultado nenhum.
+
+**Solução (7 ficheiros):**
+1. **`stream/route.ts`** — `void` → `await` em ambos os caminhos (safe silence + normal). Histórico corrigido (`orderBy desc` + `reverse()`). `context_type`/`context_id` aceites do body.
+2. **`chat/route.ts`** — Mesma correcção do histórico (desc + reverse).
+3. **`conversations/[id]/route.ts`** — Mesma correcção do histórico.
+4. **`analyze/route.ts`** — Análises agora guardadas como `AIGeneration` na BD (antes não eram persistidas).
+5. **`generate/list/route.ts`** — `TYPE_LABELS` expandido com `analysis_contract`, `analysis_petition`, `analysis_legal_opinion`, `analysis_general`.
+6. **`generate/[id]/route.ts`** — Mesma expansão de `TYPE_LABELS`.
+7. **`AIChatPanel.tsx`** — Limpar conversa agora desactiva no backend (`aiApi.deleteConversation`) para evitar conversas órfãs.
+
+---
+
+## Auditoria das 2 Últimas Actualizações (23 Jun 2026)
+
+### Actualização 1: Hardening Segurança + Locale (d91d38e, e30523c, b2eb6b0)
+
+| Item | Estado | Notas |
+|------|--------|-------|
+| **Push ao GitHub** | ✅ OK | `git log origin/main..HEAD` vazio — tudo pushed |
+| **Lint** | ✅ 0 erros | 1 warning pré-existente (RegisterForm.tsx React Compiler) |
+| **Segurança — Self-mod** | ✅ Bloqueado | Linha 129-133: `target.id === auth.payload.sub` → 403 |
+| **Segurança — Promoção** | ✅ Restrita | Linha 149-156: só SUPER_ADMIN pode atribuir SUPER_ADMIN |
+| **Segurança — Hierarquia** | ✅ `canManageRole()` | Papéis inferiores usam validação hierárquica |
+| **Audit trail** | ✅ `SUPER_ADMIN_PROMOTED` | Inclui IP, User-Agent, email do alvo, role anterior |
+| **Locale pt-MOZ→pt-MZ** | ✅ Corrigido | Nenhum pt-MOZ em código-fonte; pt-MZ é IANA válido |
+| **Bootstrap endpoint** | ✅ Mantido | Fallback emergência, só se 0 SUPER_ADMINs |
+| **Efficiência** | ⚠️ Menor | Linha 209: query extra para email (podia ser no select inicial) |
+
+### Actualização 2: Persistência IA (c01de70)
+
+| Item | Estado | Notas |
+|------|--------|-------|
+| **Push ao GitHub** | ✅ OK | Commit c01de70 em origin/main |
+| **Lint** | ✅ 0 erros | — |
+| **stream: await create** | ✅ Corrigido | Linhas 190 e 258: ambos `await db.aIMessage.create()` |
+| **chat: await create** | ✅ Corrigido | Linha 266: `await db.aIMessage.create()` |
+| **conversations: await create** | ✅ Corrigido | Linhas 267 e 335: ambos `await` |
+| **Histórico desc+reverse** | ✅ Corrigido | Todos os 3 endpoints usam `orderBy desc + reverse()` |
+| **analyze → AIGeneration** | ✅ Novo | Linha 166: `db.aIGeneration.create()` com `analysis_${type}` |
+| **TYPE_LABELS expandido** | ✅ Sincronizado | Ambos generate/list e generate/[id] têm 4 tipos analysis_* |
+| **Clear chat → backend** | ✅ Corrigido | `handleClearChat` chama `aiApi.deleteConversation()` |
+| **context_type/id** | ✅ Aceites | Destructurados do body e passados ao create |
+
+### Alinhamento Supabase
+
+| Item | Estado | Detalhes |
+|------|--------|----------|
+| **Schema Prisma** | ✅ Alinhado | Todos os campos usados no código existem no schema |
+| **Migration pendente** | ⚠️ CRÍTICO | `confidence_score` e `nivel_governanca_accionado` precisam ser adicionados à tabela `ai_messages` no Supabase |
+| **SQL necessário** | Documentado | Ver "Deploy necessário no Supabase" na Sessão 5 |
+| **Impacto se não aplicado** | Bloqueante | `db.aIMessage.create()` com esses campos falha — mensagens do assistente não serão guardadas no Vercel |
+
+### Alinhamento Vercel
+
+| Item | Estado | Detalhes |
+|------|--------|----------|
+| **App Router** | ✅ Compatível | Todas as rotas são API routes serverless |
+| **Env vars** | ✅ Documentadas | 6 variáveis em .env.example |
+| **Sem filesystem** | ✅ Compatível | Nenhuma operação de filesystem |
+| **Rate limiter** | ⚠️ Conhecido | Em memória, reseta em cold start (pre-existing) |
+
+### Teste de Prova (Browser)
+
+| Item | Estado | Detalhes |
+|------|--------|----------|
+| **Renderização** | ✅ OK | Login page carrega sem erros |
+| **Dev server** | ✅ 200 | Todas as respostas 200, sem erros no log |
+| **Console errors** | ✅ Nenhum | Dev log limpo |
+
+### Riscos e Recomendações (prioridade)
+
+1. **🔴 CRÍTICO:** Aplicar migration SQL no Supabase (`confidence_score`, `nivel_governanca_accionado`, índice). Sem isto, o AI chat streaming falha ao guardar mensagens no Vercel.
+2. **🟡 MENOR:** O query extra em `users/[id]/route.ts` linha 209 (busca email já disponível no select da linha 179). Não é bug, apenas ineficiência.
+3. **🟡 CONHECIDO:** `logAudit()` é fire-and-forget (não awaited). Em Vercel serverless, a resposta pode ser enviada antes do audit ser escrito. Pre-existing.
