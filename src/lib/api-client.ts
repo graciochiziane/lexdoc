@@ -1152,3 +1152,51 @@ export const processNotesApi = {
   create: (processId: string, data: { content: string }) =>
     apiFetch<ProcessNoteRecord>(`/processes/${processId}/notes`, { method: 'POST', body: JSON.stringify(data) }),
 };
+
+// ─────────────────────────────────────────
+// API de Plataforma (SUPER_ADMIN)
+// ─────────────────────────────────────────
+interface PlatformStats {
+  firms: { total: number; active: number; inactive: number };
+  users: { total: number; active: number; inactive: number; by_role: { role: string; count: number }[] };
+  clients: { total: number };
+  processes: { total: number; active: number; closed: number };
+  documents: { total: number };
+  deadlines: { total: number; pending: number };
+  ai: { conversations: number; generations: number };
+  plans: { plan: string; count: number }[];
+  recent: {
+    users: { id: string; email: string; full_name: string; role: string; created_at: string; firm: { name: string } }[];
+    firms: { id: string; name: string; plan: string; is_active: boolean; created_at: string }[];
+  };
+}
+
+interface PlatformFirm {
+  id: string; name: string; slug: string; nif: string | null; oam_number: string | null;
+  is_active: boolean; plan: string; created_at: string; updated_at: string;
+  _count: { users: number; clients: number; processes: number; documents: number; ai_conversations: number };
+}
+
+interface PlatformUser {
+  id: string; email: string; full_name: string; role: string; phone: string | null;
+  is_active: boolean; email_verified: boolean; mfa_enabled: boolean;
+  last_login_at: string | null; created_at: string;
+  firm: { id: string; name: string; plan: string };
+}
+
+export const platformApi = {
+  bootstrap: () =>
+    apiFetch<{ message: string; user: { id: string; email: string; role: string; firm_id: string; full_name: string } }>('/platform/bootstrap', { method: 'POST' }),
+  stats: () =>
+    apiFetch<PlatformStats>('/platform/stats'),
+  listFirms: (params?: string) =>
+    apiFetch<PlatformFirm[]>(`/platform/firms${params ? `?${params}` : ''}`),
+  getFirm: (id: string) =>
+    apiFetch<PlatformFirm & { users: { id: string; email: string; full_name: string; role: string; is_active: boolean; last_login_at: string | null; created_at: string }[] }>(`/platform/firms/${id}`),
+  deactivateFirm: (id: string) =>
+    apiFetch<{ message: string }>(`/platform/firms/${id}`, { method: 'DELETE' }),
+  listUsers: (params?: string) =>
+    apiFetch<PlatformUser[]>(`/platform/users${params ? `?${params}` : ''}`),
+  updateUser: (id: string, data: { role?: string; is_active?: boolean }) =>
+    apiFetch<PlatformUser>(`/platform/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+};

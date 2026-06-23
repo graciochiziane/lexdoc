@@ -36,6 +36,7 @@ import {
   FileCode2,
   Settings2,
   Bot,
+  Globe,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Card, CardContent } from '@/components/ui/card';
@@ -68,6 +69,7 @@ import { OnboardingGuide } from '@/components/dashboard/OnboardingGuide';
 import { KeyboardShortcutsDialog } from '@/components/dashboard/KeyboardShortcutsDialog';
 import { TaskManager } from '@/components/dashboard/TaskManager';
 import { NotificationsCenter } from '@/components/dashboard/NotificationsCenter';
+import { PlatformAdminPanel } from '@/components/dashboard/PlatformAdminPanel';
 import { KnowledgeView } from '@/components/dashboard/KnowledgeView';
 import { AIChatPanel } from '@/components/dashboard/AIChatPanel';
 import { AIHubView } from '@/components/dashboard/AIHubView';
@@ -80,6 +82,7 @@ import { WidgetSettings } from '@/components/dashboard/WidgetSettings';
 // ─────────────────────────────────────────
 type DashboardTab =
   | 'painel'
+  | 'plataforma'
   | 'ia'
   | 'tarefas'
   | 'processos'
@@ -106,6 +109,7 @@ const NAV_ITEMS: Array<{
   roles?: string[];
 }> = [
   { id: 'painel', icon: LayoutDashboard, label: 'Painel' },
+  { id: 'plataforma', icon: Globe, label: 'Gestão da Plataforma', roles: ['SUPER_ADMIN'] },
   { id: 'ia', icon: Bot, label: 'Centro de IA' },
   { id: 'tarefas', icon: CheckSquare, label: 'Tarefas' },
   { id: 'processos', icon: Briefcase, label: 'Processos' },
@@ -117,9 +121,9 @@ const NAV_ITEMS: Array<{
   { id: 'prazos', icon: Calendar, label: 'Prazos' },
   { id: 'calendario', icon: CalendarDays, label: 'Calendário' },
   { id: 'utilizadores', icon: UserCog, label: 'Utilizadores', roles: ['ADMIN', 'ADVOGADO'] },
-  { id: 'convites', icon: UserPlus, label: 'Convites', roles: ['ADMIN'] },
-  { id: 'relatorios', icon: BarChart3, label: 'Relatórios', roles: ['ADMIN', 'ADVOGADO'] },
-  { id: 'auditoria', icon: Shield, label: 'Auditoria', roles: ['ADMIN', 'ADVOGADO'] },
+  { id: 'convites', icon: UserPlus, label: 'Convites', roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { id: 'relatorios', icon: BarChart3, label: 'Relatórios', roles: ['ADMIN', 'ADVOGADO', 'SUPER_ADMIN'] },
+  { id: 'auditoria', icon: Shield, label: 'Auditoria', roles: ['ADMIN', 'ADVOGADO', 'SUPER_ADMIN'] },
 ];
 
 // ─────────────────────────────────────────
@@ -141,6 +145,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   auditoria: 'Trilha de Auditoria',
   convites: 'Gestão de Convites',
   relatorios: 'Relatórios e Análises',
+  plataforma: 'Gestão da Plataforma',
   notificacoes: 'Centro de Notificações',
 };
 
@@ -315,6 +320,8 @@ export function DashboardView() {
         return <InvitationsView />;
       case 'relatorios':
         return <ReportsView />;
+      case 'plataforma':
+        return <PlatformAdminPanel />;
       case 'notificacoes':
         return <NotificationsCenter />;
       default:

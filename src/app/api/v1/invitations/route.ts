@@ -9,7 +9,7 @@ import crypto from 'crypto';
 import { db } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-auth';
 import { logAudit } from '@/lib/audit';
-import { VALID_ROLES } from '@/lib/rbac';
+import { hasRole, VALID_ROLES } from '@/lib/rbac';
 import { parsePagination, buildPaginationMeta, calcSkip } from '@/lib/pagination';
 
 // Fuso horário de Moçambique
@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
 
   const { payload, req } = auth;
 
-  // Apenas ADMIN pode criar convites
-  if (payload.role !== 'ADMIN') {
+  // Apenas ADMIN (ou SUPER_ADMIN) pode criar convites
+  if (!hasRole(payload.role, ['ADMIN'])) {
     return NextResponse.json(
       {
         success: false,
@@ -182,8 +182,8 @@ export async function GET(request: NextRequest) {
 
   const { payload } = auth;
 
-  // Apenas ADMIN pode ver convites
-  if (payload.role !== 'ADMIN') {
+  // Apenas ADMIN (ou SUPER_ADMIN) pode ver convites
+  if (!hasRole(payload.role, ['ADMIN'])) {
     return NextResponse.json(
       {
         success: false,

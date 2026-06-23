@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateRequest } from '@/lib/api-auth';
 import { logAudit } from '@/lib/audit';
+import { hasRole } from '@/lib/rbac';
 
 // Fuso horário de Moçambique
 process.env.TZ = 'Africa/Maputo';
@@ -24,8 +25,8 @@ export async function PATCH(
 
   const { payload, req } = authResult;
 
-  // Apenas ADMIN pode desactivar utilizadores
-  if (payload.role !== 'ADMIN') {
+  // Apenas ADMIN (ou SUPER_ADMIN) pode desactivar utilizadores
+  if (!hasRole(payload.role, ['ADMIN'])) {
     return NextResponse.json(
       {
         success: false,
