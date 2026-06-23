@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2, Users, ShieldCheck, Crown, TrendingUp,
   FileText, Clock, Bot, Search, ChevronDown, ChevronUp,
-  Eye, Ban, UserCog, RefreshCw, AlertTriangle, CheckCircle2,
+  Eye, Ban, UserCog, AlertTriangle, CheckCircle2,
   Globe, BarChart3, Mail, Calendar, Scale,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +18,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/stores/auth.store';
 import { platformApi } from '@/lib/api-client';
-import type { ApiResponse } from '@/lib/api-client';
 import { GovernanceTab } from '@/components/dashboard/GovernanceTab';
 
 // ─────────────────────────────────────────
@@ -65,65 +64,6 @@ const SUB_TABS: { id: SubTab; label: string; icon: React.ElementType }[] = [
 // ─────────────────────────────────────────
 function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse rounded-md bg-muted ${className}`} />;
-}
-
-// ─────────────────────────────────────────
-// Bootstrap Banner (promover ADMIN → SUPER_ADMIN)
-// ─────────────────────────────────────────
-function BootstrapBanner() {
-  const { user, setAuth, accessToken, refreshToken } = useAuthStore();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handlePromote = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/v1/platform/bootstrap', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const data = await res.json() as ApiResponse<{ message: string; user: { id: string; email: string; role: string; firm_id: string; full_name: string } }>;
-      if (data.success && data.data) {
-        setAuth(accessToken, refreshToken, {
-          ...user!,
-          role: data.data.user.role,
-        });
-      } else if (data.error) {
-        setError(data.error.message);
-      }
-    } catch {
-      setError('Erro de ligação ao servidor.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Card className="border-purple-500/30 bg-purple-500/5">
-      <CardContent className="p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-purple-500/15 flex items-center justify-center shrink-0">
-          <Crown className="size-6 text-purple-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-foreground">Tornar-se Super Administrador</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Como administrador, pode promover a sua conta para gerir toda a plataforma —
-            todos os escritórios, utilizadores e configurações.
-          </p>
-          {error && <p className="text-sm text-red-400 mt-2">{error}</p>}
-        </div>
-        <Button
-          onClick={handlePromote}
-          disabled={loading}
-          className="bg-purple-600 hover:bg-purple-700 text-white shrink-0"
-        >
-          {loading ? <RefreshCw className="size-4 animate-spin mr-2" /> : <Crown className="size-4 mr-2" />}
-          Promover Conta
-        </Button>
-      </CardContent>
-    </Card>
-  );
 }
 
 // ─────────────────────────────────────────
@@ -533,7 +473,7 @@ function UsersTab() {
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" size="sm" onClick={() => setEditingUser(null)}>Cancelar</Button>
                   <Button size="sm" onClick={handleRoleChange} disabled={saving || newRole === editingUser.role}>
-                    {saving ? <RefreshCw className="size-4 animate-spin" /> : <CheckCircle2 className="size-4 mr-1" />}
+                    {saving ? <UserCog className="size-4 animate-spin" /> : <CheckCircle2 className="size-4 mr-1" />}
                     Guardar
                   </Button>
                 </div>
@@ -567,9 +507,7 @@ export function PlatformAdminPanel() {
             Gestão da Plataforma
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {isSuperAdmin
-              ? 'Visão e controlo completo de todos os escritórios e utilizadores.'
-              : 'Promova a sua conta para aceder à gestão da plataforma.'}
+            Visão e controlo completo de todos os escritórios, utilizadores e governança IA.
           </p>
         </div>
         {isSuperAdmin && (
@@ -580,12 +518,8 @@ export function PlatformAdminPanel() {
         )}
       </div>
 
-      {/* Bootstrap Banner (only for ADMIN) */}
-      {!isSuperAdmin && <BootstrapBanner />}
-
-      {/* Sub-tabs (only for SUPER_ADMIN) */}
-      {isSuperAdmin && (
-        <>
+      {/* Sub-tabs */}
+      <>
           <div className="flex gap-1 p-1 bg-muted/50 rounded-lg w-fit">
             {SUB_TABS.map(tab => (
               <button
@@ -618,7 +552,6 @@ export function PlatformAdminPanel() {
             </motion.div>
           </AnimatePresence>
         </>
-      )}
     </div>
   );
 }

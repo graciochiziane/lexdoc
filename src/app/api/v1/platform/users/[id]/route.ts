@@ -143,7 +143,18 @@ export async function PATCH(
           { status: 400 },
         );
       }
-      if (!canManageRole(auth.payload.role, role)) {
+
+      // SUPER_ADMIN pode atribuir qualquer papel (incluindo SUPER_ADMIN a outros)
+      // mas usa canManageRole para papéis inferiores como salvaguarda hierárquica
+      if (role === 'SUPER_ADMIN') {
+        // Só SUPER_ADMIN pode promover outros a SUPER_ADMIN
+        if (auth.payload.role !== 'SUPER_ADMIN') {
+          return NextResponse.json(
+            { success: false, error: { code: 'FORBIDDEN', message: 'Sem permissão para atribuir este papel.' } },
+            { status: 403 },
+          );
+        }
+      } else if (!canManageRole(auth.payload.role, role)) {
         return NextResponse.json(
           { success: false, error: { code: 'FORBIDDEN', message: 'Sem permissão para atribuir este papel.' } },
           { status: 403 },
@@ -178,16 +189,26 @@ export async function PATCH(
       },
     });
 
+    // Audit trail — acção dedicada para promoção a SUPER_ADMIN
+    const isSuperAdminPromotion = role === 'SUPER_ADMIN' && target.role !== 'SUPER_ADMIN';
+
     logAudit({
       firm_id: target.firm_id,
       user_id: auth.payload.sub,
-      action: 'PLATFORM_USER_UPDATED',
+      action: isSuperAdminPromotion ? 'SUPER_ADMIN_PROMOTED' : 'PLATFORM_USER_UPDATED',
       entity_type: 'User',
       entity_id: id,
       old_values: { role: target.role, is_active: target.is_active },
-      new_values: changes,
+      new_values: isSuperAdminPromotion
+        ? { ...changes, promoted_by: auth.payload.sub, promoted_at: new Date().toISOString() }
+        : changes,
       ip_address: request.headers.get('x-forwarded-for') ?? undefined,
       user_agent: request.headers.get('user-agent') ?? undefined,
+      metadata: isSuperAdminPromotion ? {
+        target_user_id: id,
+        target_user_email: (await db.user.findUnique({ where: { id }, select: { email: true } }))?.email,
+        previous_role: target.role,
+      } : undefined,
     });
 
     return NextResponse.json({ success: true, data: user });
