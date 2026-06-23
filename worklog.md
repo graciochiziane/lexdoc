@@ -2,7 +2,7 @@
 
 ---
 
-## Estado Actual (24 Jun 2026)
+## Estado Actual (25 Jun 2026)
 
 **Branch principal:** `main` (commit `2b29559`)
 **Branch backup:** `backup/postgres-fix-working-2026-06-22` (commit `63620e7`)
@@ -136,7 +136,94 @@ POST /api/v1/ai/chat/stream
 4. A página recarrega automaticamente com o novo role
 
 ### Gestão da Plataforma (após promoção):
-1. A tab **"Gestão da Plataforma"** aparece com 3 sub-tabs
+1. A tab **"Gestão da Plataforma"** aparece com 4 sub-tabs
 2. **Visão Geral** — estatísticas globais, distribuições, recentes
 3. **Escritórios** — listar, pesquisar, ver detalhes, desactivar
 4. **Utilizadores** — listar, pesquisar, filtrar por role, alterar papel, activar/desactivar
+5. **Governança IA** — métricas do Silêncio Seguro, distribuição de scores, análise de fontes
+
+---
+
+### Sessão 5 — Silêncio Seguro + Governança IA (25 Jun 2026)
+
+**Problema identificado:** O Nível 4 da Governança V2.0 ("Silêncio Seguro") era apenas uma instrução no prompt do LLM — sem threshold numérico, sem métrica, sem forma de medir em produção. O LLM podia ignorar a instrução e alucinar.
+
+**Solução implementada:** Motor de Silêncio Seguro como gate programático no backend, ANTES da chamada ao LLM.
+
+**Arquivos criados (3):**
+
+1. **`src/lib/safe-silence.ts`** — Motor de confiança do RAG:
+   - `evaluateSafeSilence(ragResults)` — calcula score normalizado (0–100), determina nível de governança
+   - 5 níveis: `NENHUM` (RAG vazio) → `SILENCIO_SEGURO` (bloqueado) → `CAUTELAR` (disclaimer) → `CONFIANTE` → `ALTA_CONFIANCA` (fonte MZ oficial)
+   - Threshold: score < 8 = bloqueio automático (resposta de "informação insuficiente")
+   - Detecção de fontes moçambicanas vs penalizadas (portuguesas)
+   - `getCautelarPromptSuffix()` — injecta instruções extra-conservadoras no prompt
+   - `GOVERNANCE_LEVEL_CONFIG` — labels, cores e descrições para UI
+
+2. **`src/app/api/v1/platform/governance/route.ts`** — API de métricas de governança (SUPER_ADMIN):
+   - Filtros por período: 24h, 7d (default), 30d, 90d
+   - Summary: total respostas, taxa silêncio seguro, score médio, cobertura governança
+   - Distribuição por nível (NENHUM → ALTA_CONFIANCA)
+   - Distribuição por faixa de score (0–9 Crítico até 75–100 Alto)
+   - Análise de fontes: moçambicanas, penalizadas, sem fonte
+   - Tendência diária (últimos 14 dias) via SQL raw com `FILTER (WHERE ...)`
+   - Registo recente: últimas 20 respostas com dados de governança
+
+3. **`src/components/dashboard/GovernanceTab.tsx`** — Tab de monitorização no SuperAdmin:
+   - Seletor de período (24h/7d/30d/90d) + botão refresh
+   - 4 stat cards: Total Respostas, Taxa Silêncio Seguro, Score Médio, Cobertura Governança
+   - Gráfico de barras horizontais: distribuição por nível
+   - Gráfico de barras horizontais: distribuição por faixa de score
+   - Análise de fontes com badges coloridos
+   - Tendência diária (barras empilhadas: total vs silêncio seguro)
+   - Tabela expansível de registo recente com badges de nível
+
+**Arquivos modificados (4):**
+
+1. **`prisma/schema.prisma`** — Adicionado a `AIMessage`:
+   - `confidence_score Float?` — score de confiança (0–100)
+   - `nivel_governanca_accionado String?` — nível de governança accionado
+   - Índice em `confidence_score` para queries analíticas
+
+2. **`src/app/api/v1/ai/chat/stream/route.ts`** — Gate de Silêncio Seguro integrado:
+   - Após RAG, chama `evaluateSafeSilence()` antes do LLM
+   - Se `should_block_llm = true`: envia resposta de silêncio seguro como chunk único, sem chamar LLM
+   - Se nível `CAUTELAR`: injecta `getCautelarPromptSuffix()` no prompt do sistema
+   - Evento `init` SSE agora inclui `governance: { confidence_score, nivel, should_block }`
+   - Evento `done` SSE inclui `governance: { confidence_score, nivel, blocked }`
+   - Mensagens guardadas com `confidence_score` e `nivel_governanca_accionado`
+   - Auditoria: `AI_CHAT_SAFE_SILENCE` para bloqueios, `AI_CHAT_STREAM` com campos extras para normais
+
+3. **`src/lib/api-client.ts`** — Adicionado:
+   - Tipos: `GovernanceNivelDist`, `GovernanceDailyTrend`, `GovernanceRecentEntry`, `GovernanceData`
+   - Método: `platformApi.governance(period?)` → `GET /api/v1/platform/governance`
+
+4. **`src/components/dashboard/PlatformAdminPanel.tsx`** — Adicionado:
+   - Import de `Scale` (ícone) e `GovernanceTab`
+   - Tipo `SubTab` agora inclui `'governance'`
+   - Tab "Governança IA" com ícone Scale
+   - Render: `{activeTab === 'governance' && <GovernanceTab />}`
+
+**Como funciona o Silêncio Seguro:**
+1. Utilizador envia mensagem
+2. RAG pesquisa base de conhecimento → retorna artigos com scores
+3. `evaluateSafeSilence()` analisa: score máximo, fontes moçambicanas, fontes penalizadas
+4. Se score normalizado < 8 (ou fonte só portuguesa): **bloqueia LLM**, retorna resposta de insuficiência
+5. Se score 8–25 (CAUTELAR): LLM responde mas com prompt extra-conservador
+6. Se score > 25: resposta normal com fontes RAG
+7. Todas as respostas registam `confidence_score` e `nivel_governanca_accionado`
+
+**Paradoxo do alarme:** Se a taxa de silêncio seguro for muito baixa (< 5%), é sinal de alarme — significa que o sistema nunca admite limitação.
+
+**Verificação:**
+- ✅ `bun run lint` — 0 erros (1 warning pré-existente)
+- ✅ `GET / 200` — compilação e renderização bem-sucedida
+- ⚠️ Browser verification não possível (restrição de firewall no sandbox)
+- ⚠️ `db:push` não executável (Supabase remoto) — schema pronto para deploy
+
+**Deploy necessário no Supabase:**
+```sql
+ALTER TABLE ai_messages ADD COLUMN confidence_score DOUBLE PRECISION;
+ALTER TABLE ai_messages ADD COLUMN nivel_governanca_accionado TEXT;
+CREATE INDEX idx_ai_messages_confidence_score ON ai_messages(confidence_score);
+```
