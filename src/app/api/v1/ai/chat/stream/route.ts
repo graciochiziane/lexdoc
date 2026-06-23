@@ -1,8 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
-// LEXDOC — AI Chat Streaming API (SSE)
+// LEXDOC — AI Chat Streaming API (SSE) v3.0
 // POST /api/v1/ai/chat/stream — Streaming de respostas do assistente
-// Retorna text/event-stream com chunks em tempo real
-// Integração com Silêncio Seguro (Governança V2.0 — Nível 4)
+// System Orchestrator v3.0 — RAG Hierárquico (OURO → PRATA → BRONZE)
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest } from 'next/server';
@@ -10,15 +9,15 @@ import { authenticateRequest } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
 import { db } from '@/lib/db';
-import { searchKnowledgeArticles } from '@/lib/rag-search';
-import { buildLexAssistPromptWithRAG } from '@/lib/lexassist-prompt';
+import { hierarchicalSearch, TIER_LABELS } from '@/lib/rag-hierarchical';
+import { orchestratePrompt } from '@/lib/lexassist-orchestrator';
 import { streamLLM, getProviderInfo } from '@/lib/llm';
-import { evaluateSafeSilence, getCautelarPromptSuffix } from '@/lib/safe-silence';
+import { llmFallbackSearch } from '@/lib/web-safe-mode';
 
 process.env.TZ = 'Africa/Maputo';
 
 // ─────────────────────────────────────────
-// POST — Streaming chat
+// POST — Streaming chat (System Orchestrator v3.0)
 // ─────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
@@ -109,25 +108,52 @@ export async function POST(request: NextRequest) {
     });
     const historyMessages = historyRows.reverse();
 
-    // ── RAG ──
-    const knowledgeArticles = await searchKnowledgeArticles(firmId, message, 3);
+    // ════════════════════════════════════════════════════════════
+    // SYSTEM ORCHESTRATOR v3.0 — Pipeline Completo
+    // ════════════════════════════════════════════════════════════
 
-    // ── ═══ SILÊNCIO SEGURO — Gate de Governança V2.0 ═══ ──
-    const governance = evaluateSafeSilence(knowledgeArticles);
+    // Passo 1: Query Rewriter + RAG Hierárquico (OURO → PRATA → BRONZE)
+    const searchResult = await hierarchicalSearch(firmId, message);
 
-    // Preparar prompt do sistema (com possível sufixo cautelar)
-    let systemPrompt = buildLexAssistPromptWithRAG(
-      knowledgeArticles.map((a) => ({ title: a.title, content: a.content, source: a.source, category: a.category })),
+    // Passo 2: Se NENHUMA camada, tentar Bronze com LLM fallback (Internet Safe Mode)
+    let webResults: Array<{ title: string; snippet: string; url: string }> | undefined;
+    if (searchResult.activeTier === 'NENHUMA') {
+      const webSearch = await llmFallbackSearch(message, searchResult.rewrittenQuery.detectedAreas);
+      if (webSearch.hasResults && webSearch.results.length > 0) {
+        webResults = webSearch.results.map(r => ({ title: r.title, snippet: r.snippet, url: r.url }));
+        // Actualizar searchResult para reflectir Bronze com web
+        searchResult.activeTier = 'BRONZE';
+        searchResult.confidenceScore = 10;
+      }
+    }
+
+    // Passo 3: Orquestrar prompt baseado na camada activa
+    const orchestration = orchestratePrompt(
+      searchResult.activeTier,
+      searchResult.results.map(a => ({ title: a.title, content: a.content, source: a.source, category: a.category })),
+      searchResult.confidenceScore,
+      webResults,
     );
 
-    // Se modo cautelar, injectar sufixo extra
-    if (governance.nivel_governanca_accionado === 'CAUTELAR') {
-      systemPrompt += getCautelarPromptSuffix();
+    // Fontes para o evento init
+    const sources = searchResult.results
+      .filter(a => a.source)
+      .map(a => a.source as string);
+    if (sources.length === 0 && webResults) {
+      for (const w of webResults) {
+        if (w.url && !w.url.startsWith('lexdoc://')) sources.push(w.url);
+      }
     }
+    if (sources.length === 0) {
+      sources.push('Legislação moçambicana vigente', 'Código de Processo Civil de Moçambique');
+    }
+
+    // Tier info para o evento init
+    const tierInfo = TIER_LABELS[searchResult.activeTier];
 
     // ── Montar mensagens para LLM ──
     const llmMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: orchestration.systemPrompt },
     ];
     for (const msg of historyMessages) {
       if (msg.role === 'user' || msg.role === 'assistant') {
@@ -136,12 +162,6 @@ export async function POST(request: NextRequest) {
     }
 
     const providerInfo = getProviderInfo();
-    const sources = knowledgeArticles
-      .filter((a) => a.source)
-      .map((a) => a.source as string);
-    if (sources.length === 0) {
-      sources.push('Legislação moçambicana vigente', 'Código de Processo Civil de Moçambique');
-    }
 
     // ── Criar stream SSE ──
     const encoder = new TextEncoder();
@@ -149,43 +169,51 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         let fullContent = '';
 
-        // Enviar metadata inicial (conversation_id, sources, governance)
+        // Enviar metadata inicial (v3.0 — com tier info)
         const initEvent = JSON.stringify({
           type: 'init',
           conversation_id: conversationId,
           sources,
           is_new: isNewConversation,
-          governance: {
-            confidence_score: governance.confidence_score,
-            nivel: governance.nivel_governanca_accionado,
-            should_block: governance.should_block_llm,
+          orchestrator: {
+            version: '3.0',
+            tier: searchResult.activeTier,
+            tier_label: tierInfo.label,
+            tier_emoji: tierInfo.emoji,
+            confidence: orchestration.confidence,
+            confidence_score: orchestration.numericScore,
+            should_block: orchestration.shouldBlock,
+            query_rewrite: {
+              areas_detected: searchResult.rewrittenQuery.detectedAreas,
+              legal_terms_found: searchResult.rewrittenQuery.legalTerms.length,
+            },
+            search_audit: searchResult.allTiers,
           },
         });
         controller.enqueue(encoder.encode(`data: ${initEvent}\n\n`));
 
         try {
-          // ═══ SILÊNCIO SEGURO: Bloquear LLM se score abaixo do threshold ═══
-          if (governance.should_block_llm && governance.safe_response) {
-            // Enviar resposta de silêncio seguro como um único chunk
-            const safeContent = governance.safe_response;
-            const chunkEvent = JSON.stringify({ type: 'chunk', content: safeContent });
+          // ═══ BLOQUEIO: Resposta de informação insuficiente ═══
+          if (orchestration.shouldBlock && orchestration.blockResponse) {
+            const blockContent = orchestration.blockResponse;
+            const chunkEvent = JSON.stringify({ type: 'chunk', content: blockContent });
             controller.enqueue(encoder.encode(`data: ${chunkEvent}\n\n`));
-            fullContent = safeContent;
+            fullContent = blockContent;
 
-            // Evento de conclusão
             const doneEvent = JSON.stringify({
               type: 'done',
               full_content: fullContent,
-              knowledge_ids: knowledgeArticles.map((a) => a.id),
-              governance: {
-                confidence_score: governance.confidence_score,
-                nivel: governance.nivel_governanca_accionado,
+              knowledge_ids: searchResult.results.map(a => a.id),
+              orchestrator: {
+                tier: searchResult.activeTier,
+                confidence: orchestration.confidence,
+                confidence_score: orchestration.numericScore,
                 blocked: true,
               },
             });
             controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
 
-            // Guardar mensagem do assistente (silêncio seguro)
+            // Guardar mensagem do assistente (bloqueio)
             try {
               await db.aIMessage.create({
                 data: {
@@ -194,60 +222,62 @@ export async function POST(request: NextRequest) {
                   role: 'assistant',
                   content: fullContent,
                   sources: JSON.stringify(sources),
-                  knowledge_ids: JSON.stringify(knowledgeArticles.map((a) => a.id)),
+                  knowledge_ids: JSON.stringify(searchResult.results.map(a => a.id)),
                   metadata: JSON.stringify({
-                    knowledge_count: knowledgeArticles.length,
-                    has_history: historyMessages.length > 1,
+                    orchestrator_version: '3.0',
+                    tier: searchResult.activeTier,
+                    confidence: orchestration.confidence,
+                    search_tiers: searchResult.allTiers,
+                    query_areas: searchResult.rewrittenQuery.detectedAreas,
+                    web_used: !!webResults,
                     safe_silence: true,
-                    governance_audit: governance.audit_details,
                   }),
-                  confidence_score: governance.confidence_score,
-                  nivel_governanca_accionado: governance.nivel_governanca_accionado,
+                  confidence_score: orchestration.numericScore,
+                  nivel_governanca_accionado: searchResult.activeTier,
                 },
               });
             } catch (dbErr) {
-              console.error('[AI Chat Stream] Erro ao guardar mensagem (safe silence):', dbErr);
+              console.error('[AI Chat Stream v3] Erro ao guardar mensagem (bloqueio):', dbErr);
             }
 
-            // Auditoria — Silêncio Seguro accionado
+            // Auditoria
             logAudit({
               firm_id: firmId,
               user_id: userId,
-              action: 'AI_CHAT_SAFE_SILENCE',
+              action: 'AI_CHAT_BLOCKED',
               entity_type: 'ai_assistant',
               entity_id: conversationId,
               metadata: {
                 query_length: message.length,
                 response_length: fullContent.length,
-                knowledge_articles_used: knowledgeArticles.length,
-                confidence_score: governance.confidence_score,
-                nivel_governanca_accionado: governance.nivel_governanca_accionado,
+                tier: searchResult.activeTier,
+                confidence: orchestration.confidence,
+                confidence_score: orchestration.numericScore,
                 is_new_conversation: isNewConversation,
-                trigger_reason: governance.audit_details.trigger_reason,
-                has_mozambican_source: governance.has_mozambican_source,
-                has_penalized_source: governance.has_penalized_source,
-                raw_top_score: governance.raw_top_score,
+                search_tiers: searchResult.allTiers,
+                detected_areas: searchResult.rewrittenQuery.detectedAreas,
                 llm_provider: 'none',
                 llm_model: 'none',
                 blocked: true,
+                orchestrator_version: '3.0',
               },
             });
           } else {
-            // ═══ Fluxo normal — LLM com score de confiança ═══
+            // ═══ FLUXO NORMAL — LLM com prompt orquestrado ═══
             for await (const chunk of streamLLM(llmMessages, { temperature: 0.7, maxTokens: 4096 })) {
               fullContent += chunk;
               const chunkEvent = JSON.stringify({ type: 'chunk', content: chunk });
               controller.enqueue(encoder.encode(`data: ${chunkEvent}\n\n`));
             }
 
-            // Evento de conclusão
             const doneEvent = JSON.stringify({
               type: 'done',
               full_content: fullContent,
-              knowledge_ids: knowledgeArticles.map((a) => a.id),
-              governance: {
-                confidence_score: governance.confidence_score,
-                nivel: governance.nivel_governanca_accionado,
+              knowledge_ids: searchResult.results.map(a => a.id),
+              orchestrator: {
+                tier: searchResult.activeTier,
+                confidence: orchestration.confidence,
+                confidence_score: orchestration.numericScore,
                 blocked: false,
               },
             });
@@ -262,18 +292,23 @@ export async function POST(request: NextRequest) {
                   role: 'assistant',
                   content: fullContent,
                   sources: JSON.stringify(sources),
-                  knowledge_ids: JSON.stringify(knowledgeArticles.map((a) => a.id)),
+                  knowledge_ids: JSON.stringify(searchResult.results.map(a => a.id)),
                   metadata: JSON.stringify({
-                    knowledge_count: knowledgeArticles.length,
+                    orchestrator_version: '3.0',
+                    tier: searchResult.activeTier,
+                    confidence: orchestration.confidence,
+                    search_tiers: searchResult.allTiers,
+                    query_areas: searchResult.rewrittenQuery.detectedAreas,
+                    query_legal_terms: searchResult.rewrittenQuery.legalTerms,
+                    web_used: !!webResults,
                     has_history: historyMessages.length > 1,
-                    governance_audit: governance.audit_details,
                   }),
-                  confidence_score: governance.confidence_score,
-                  nivel_governanca_accionado: governance.nivel_governanca_accionado,
+                  confidence_score: orchestration.numericScore,
+                  nivel_governanca_accionado: searchResult.activeTier,
                 },
               });
             } catch (dbErr) {
-              console.error('[AI Chat Stream] Erro ao guardar mensagem:', dbErr);
+              console.error('[AI Chat Stream v3] Erro ao guardar mensagem:', dbErr);
             }
 
             // Auditoria
@@ -286,15 +321,19 @@ export async function POST(request: NextRequest) {
               metadata: {
                 query_length: message.length,
                 response_length: fullContent.length,
-                knowledge_articles_used: knowledgeArticles.length,
+                knowledge_articles_used: searchResult.results.length,
                 is_new_conversation: isNewConversation,
                 llm_provider: providerInfo.provider,
                 llm_model: providerInfo.model,
                 streaming: true,
-                confidence_score: governance.confidence_score,
-                nivel_governanca_accionado: governance.nivel_governanca_accionado,
-                has_mozambican_source: governance.has_mozambican_source,
-                has_penalized_source: governance.has_penalized_source,
+                orchestrator_version: '3.0',
+                tier: searchResult.activeTier,
+                confidence: orchestration.confidence,
+                confidence_score: orchestration.numericScore,
+                search_tiers: searchResult.allTiers,
+                detected_areas: searchResult.rewrittenQuery.detectedAreas,
+                query_legal_terms_count: searchResult.rewrittenQuery.legalTerms.length,
+                web_used: !!webResults,
                 blocked: false,
               },
             });
@@ -317,7 +356,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[AI Chat Stream] Erro:', error);
+    console.error('[AI Chat Stream v3] Erro:', error);
     return new Response(
       JSON.stringify({
         success: false,
