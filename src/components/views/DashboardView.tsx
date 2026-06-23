@@ -148,6 +148,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
 // Tradução de papéis
 // ─────────────────────────────────────────
 const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Super Administrador',
   ADMIN: 'Administrador',
   ADVOGADO: 'Advogado',
   SECRETARIO: 'Secretário(a)',
@@ -155,6 +156,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_BADGE_COLORS: Record<string, string> = {
+  SUPER_ADMIN: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
   ADMIN: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
   ADVOGADO: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
   SECRETARIO: 'bg-amber-500/15 text-amber-400 border-amber-500/25',

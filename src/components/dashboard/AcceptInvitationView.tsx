@@ -39,6 +39,7 @@ interface AcceptInvitationViewProps {
 }
 
 const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Super Administrador',
   ADMIN: 'Administrador',
   ADVOGADO: 'Advogado',
   SECRETARIO: 'Secretário(a)',

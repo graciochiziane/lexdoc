@@ -59,6 +59,7 @@ interface MemberItem {
 
 // Rótulos e descrições
 const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Super Administrador',
   ADMIN: 'Administrador',
   ADVOGADO: 'Advogado',
   SECRETARIO: 'Secretário(a)',
@@ -66,6 +67,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
+  SUPER_ADMIN: 'Acesso total à plataforma — gere todos os escritórios e utilizadores',
   ADMIN: 'Acesso total ao escritório e gestão de membros',
   ADVOGADO: 'Gestão de processos, clientes e documentos',
   SECRETARIO: 'Visualização e edição de processos e documentos',
@@ -73,6 +75,7 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
 };
 
 const ROLE_COLORS: Record<string, string> = {
+  SUPER_ADMIN: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
   ADMIN: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   ADVOGADO: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   SECRETARIO: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
