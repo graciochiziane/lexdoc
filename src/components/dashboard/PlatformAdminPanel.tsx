@@ -25,7 +25,7 @@ import { GovernanceTab } from '@/components/dashboard/GovernanceTab';
 // ─────────────────────────────────────────
 const fmt = (d: string | null) => {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('pt-MOZ', {
+  return new Date(d).toLocaleDateString('pt-MZ', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });

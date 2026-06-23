@@ -28,7 +28,7 @@ import { platformApi, type GovernanceData } from '@/lib/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const fmt = (d: string) =>
-  new Date(d).toLocaleDateString('pt-MOZ', {
+  new Date(d).toLocaleDateString('pt-MZ', {
     day: '2-digit',
     month: '2-digit',
     hour: '2-digit',
@@ -285,7 +285,7 @@ export function GovernanceTab() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-foreground">
-                {summary.total_responses.toLocaleString('pt-MOZ')}
+                {summary.total_responses.toLocaleString('pt-MZ')}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {summary.with_governance_data} com dados de governança
@@ -556,7 +556,7 @@ export function GovernanceTab() {
                       : 0;
                   const barHeight = Math.max(totalHeight, 2);
                   const dateStr = new Date(day.date).toLocaleDateString(
-                    'pt-MOZ',
+                    'pt-MZ',
                     { day: '2-digit', month: '2-digit' }
                   );
                   return (
