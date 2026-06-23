@@ -39,7 +39,7 @@ export function getProviderInfo(): { provider: 'gemini' | 'zai'; model: string; 
   return {
     provider: geminiAvailable ? 'gemini' : 'zai',
     model: geminiAvailable
-      ? (process.env.GEMINI_MODEL || 'gemini-2.5-flash-preview-05-20')
+      ? (process.env.GEMINI_MODEL || 'gemini-2.5-flash')
       : 'z-ai-default',
     available: true, // ZAI está sempre disponível no sandbox
   };
@@ -64,37 +64,43 @@ export async function chatWithLLM(
   const provider = getActiveProvider();
 
   if (provider === 'gemini') {
-    // Usar Google Gemini
-    const response = await chatWithGemini(
-      messages as GeminiMessage[],
-      options
-    );
-    return {
-      content: response.content,
-      provider: 'gemini',
-      model: response.model,
-      tokens_used: response.tokens_used,
-    };
-  } else {
-    // Fallback: usar z-ai-web-dev-sdk
-    const ZAI = (await import('z-ai-web-dev-sdk')).default;
-    const zai = await ZAI.create();
-
-    const completion = await zai.chat.completions.create({
-      messages: messages as any,
-      thinking: { type: 'disabled' },
-    });
-
-    const content = completion?.choices?.[0]?.message?.content
-      ?? 'Erro: Não foi possível gerar resposta. Tente novamente.';
-
-    return {
-      content,
-      provider: 'zai',
-      model: 'z-ai-default',
-      tokens_used: undefined, // ZAI não retorna token count
-    };
+    // Usar Google Gemini (com fallback para ZAI em caso de erro)
+    try {
+      const response = await chatWithGemini(
+        messages as GeminiMessage[],
+        options
+      );
+      return {
+        content: response.content,
+        provider: 'gemini',
+        model: response.model,
+        tokens_used: response.tokens_used,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.warn(`[LLM] Gemini falhou, a fazer fallback para ZAI. Erro: ${errMsg}`);
+      // Continua para o bloco ZAI abaixo
+    }
   }
+
+  // ZAI fallback (ou caminho padrão se Gemini não configurado)
+  const ZAI = (await import('z-ai-web-dev-sdk')).default;
+  const zai = await ZAI.create();
+
+  const completion = await zai.chat.completions.create({
+    messages: messages as any,
+    thinking: { type: 'disabled' },
+  });
+
+  const content = completion?.choices?.[0]?.message?.content
+    ?? 'Erro: Não foi possível gerar resposta. Tente novamente.';
+
+  return {
+    content,
+    provider: 'zai',
+    model: 'z-ai-default',
+    tokens_used: undefined,
+  };
 }
 
 // ─────────────────────────────────────────
@@ -116,9 +122,18 @@ export async function* streamLLM(
   const provider = getActiveProvider();
 
   if (provider === 'gemini') {
-    yield* streamGemini(messages as GeminiMessage[], options);
-  } else {
-    // ZAI fallback: sem streaming nativo — retorna a resposta completa como um chunk
+    try {
+      yield* streamGemini(messages as GeminiMessage[], options);
+      return; // Sucesso — sair
+    } catch (error) {
+      // Gemini falhou (ex: geofencing, quota, modelo indisponível) → fallback para ZAI
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.warn(`[LLM] Gemini falhou, a fazer fallback para ZAI. Erro: ${errMsg}`);
+    }
+  }
+
+  // ZAI fallback: sem streaming nativo — retorna a resposta completa como um chunk
+  try {
     const ZAI = (await import('z-ai-web-dev-sdk')).default;
     const zai = await ZAI.create();
 
@@ -130,5 +145,8 @@ export async function* streamLLM(
     const content = completion?.choices?.[0]?.message?.content
       ?? 'Erro: Não foi possível gerar resposta. Tente novamente.';
     yield content;
+  } catch (zaiError) {
+    const errMsg = zaiError instanceof Error ? zaiError.message : String(zaiError);
+    throw new Error(`Todos os providers LLM falharam. Gemini: ${errMsg}`);
   }
 }
