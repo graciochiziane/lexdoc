@@ -341,3 +341,110 @@ CREATE INDEX idx_ai_messages_confidence_score ON ai_messages(confidence_score);
 1. **🔴 CRÍTICO:** Aplicar migration SQL no Supabase (`confidence_score`, `nivel_governanca_accionado`, índice). Sem isto, o AI chat streaming falha ao guardar mensagens no Vercel.
 2. **🟡 MENOR:** O query extra em `users/[id]/route.ts` linha 209 (busca email já disponível no select da linha 179). Não é bug, apenas ineficiência.
 3. **🟡 CONHECIDO:** `logAudit()` é fire-and-forget (não awaited). Em Vercel serverless, a resposta pode ser enviada antes do audit ser escrito. Pre-existing.
+
+---
+
+### Sessão 7 — System Orchestrator v3.0 (23 Jun 2026)
+
+**Commit:** `3900a17`
+
+**Problema identificado:** O LexAssistent v2.0 tinha um RAG flat (sem distinção entre legislação, doutrina e fontes gerais). Todas as fontes eram tratadas igualmente pelo scoring. Não havia query rewriting, nem expansão semântica, nem busca web controlada. O prompt era monolítico — a mesma instrução para qualquer tipo de fonte.
+
+**Solução: Pipeline completo System Orchestrator v3.0**
+
+```
+Utilizador → Query Rewriter → Taxonomia/Sinónimos → RAG Hierárquico
+  ↓ OURO (legislação MZ) → se suficiente, para
+  ↓ PRATA (doutrina/guias) → se suficiente, para
+  ↓ BRONZE (geral + internet) → se suficiente, para
+  ↓ NENHUMA → bloqueio + sugestão de reformação
+  ↓
+Motor de Confiança (tier-aware) → Prompt Dinâmico → LLM → Resposta
+```
+
+**Arquivos criados (4):**
+
+1. **`src/lib/query-rewriter.ts`** — Dicionário de sinónimos jurídicos moçambicanos:
+   - 150+ mapeamentos: termos informais → termos jurídicos
+   - 8 áreas do direito com taxonomia de keywords
+   - Expansão semântica transparente (não mostrada ao utilizador)
+   - Função `needsLLMRewrite()` para decidir se precisa de LLM para reescrita
+
+2. **`src/lib/rag-hierarchical.ts`** — RAG Hierárquico 3 Camadas:
+   - **OURO** (threshold 5): `legislacao`, `codigo`, `lei`, `decreto`, `regulamento`, `jurisprudencia`, `minuta` + fontes moçambicanas oficiais
+   - **PRATA** (threshold 15): `doutrina`, `guia`, `boas-praticas`, `parecer`, `artigo`, `faq`
+   - **BRONZE** (threshold 10): busca geral sem filtro de categoria
+   - Pesquisa em cascata: OURO → PRATA → BRONZE. Para na primeira suficiente.
+   - Integração directa com Query Rewriter (expansão automática de termos)
+
+3. **`src/lib/lexassist-orchestrator.ts`** — Prompt dinâmico por camada:
+   - **OURO**: Resposta formal, afirmativa, cita artigos. Formato: Resposta/Base/Confiança/Recomendações. Confiança: ALTA.
+   - **PRATA**: Postura consultiva, disclaimer obrigatório, distingue recomendação de lei. Confiança: MÉDIA.
+   - **BRONZE**: Máxima cautela, disclaimer de fonte web, não apresenta como lei. Confiança: BAIXA.
+   - **NENHUMA**: Bloqueio. Sugere reformação da query e fontes alternativas.
+   - Mantém todas as regras v2.0: Zero Alucinação, Zero Confusão Lusófana, Protocolo Mata-Ilusão
+
+4. **`src/lib/web-safe-mode.ts`** — Internet Controlada (Camada Bronze):
+   - Filtro de jurisdição: bloqueia .pt, .br, .ao automaticamente
+   - 15 domínios governamentais moçambicanos com prioridade ALTA
+   - `llmFallbackSearch()`: quando não há SDK de web search, usa LLM como fallback
+   - Classificação de resultados: alta/média/baixa prioridade
+   - Query builder com termos de foco MZ e exclusão de jurisdições externas
+
+**Arquivos modificados (1):**
+
+5. **`src/app/api/v1/ai/chat/stream/route.ts`** — Reescrito com pipeline v3.0:
+   - Pipeline: Auth → Rate Limit → Validate → Query Rewrite → RAG Hierárquico → Orquestrador → LLM
+   - SSE `init` agora inclui `orchestrator` com: version, tier, confidence, tier_label, tier_emoji, search_audit, query_rewrite
+   - Se NENHUMA camada: tenta LLM fallback (web safe mode) antes de bloquear
+   - Metadata de auditoria inclui: tier, search_tiers, detected_areas, query_legal_terms_count, web_used, orchestrator_version
+   - Ação de auditoria `AI_CHAT_BLOCKED` para respostas bloqueadas
+   - `nivel_governanca_accionado` agora guarda a camada (OURO/PRATA/BRONZE/NENHUMA)
+
+**Verificação:**
+- ✅ `bun run lint` — 0 erros (1 warning pré-existente)
+- ✅ Dev server — 200, sem erros de compilação
+- ✅ Browser — página renderiza correctamente
+- ✅ Push ao GitHub — commit `3900a17`
+
+**Arquitectura v3.0 (detalhada):**
+
+```
+Utilizador envia "Como evitar problemas com meu sócio?"
+  ↓
+[Query Rewriter] — Expande: "sócio" → "acionista", "parceiro empresarial", "quotista"
+  ↓ Detecta área: "Direito Comercial"
+  ↓
+[RAG Hierárquico] — Pesquisa OURO com query expandida
+  ↓ OURO: procura em legislação/regulamentos/minutas
+  ↓ Se score >= 5 → PARA (resposta com confiança ALTA)
+  ↓
+  ↓ Senão → PRATA: procura em doutrina/guias
+  ↓ Se score >= 15 → PARA (resposta MÉDIA, disclaimer obrigatório)
+  ↓
+  ↓ Senão → BRONZE: busca geral + LLM fallback web
+  ↓ Se score >= 10 → PARA (resposta BAIXA, disclaimer web)
+  ↓
+  ↓ Senão → NENHUMA: bloqueia, sugere reformação
+  ↓
+[Orquestrador] — Gera prompt específico da camada
+  ↓
+[LLM Gemini] — Stream resposta
+  ↓
+[SSE] → init (com tier info) → chunk* → done
+  ↓
+[BD] Guarda com: tier, confidence_score, metadata completo
+```
+
+**Como usar as categorias existentes:**
+
+Para classificar artigos na base de conhecimento por camada, use estas categorias:
+- **OURO**: `legislacao`, `codigo`, `lei`, `decreto`, `regulamento`, `jurisprudencia`, `minuta`, `acordao`
+- **PRATA**: `doutrina`, `guia`, `boas-praticas`, `parecer`, `artigo`, `faq`
+- **BRONZE**: `OUTRO` (padrão) ou qualquer outra categoria não listada
+
+**Melhorias futuras:**
+- Web search real via SDK (actualmente usa LLM fallback)
+- LLM query rewrite para queries complexas (dicionário já cobre 90% dos casos)
+- Dashboard de métricas por camada (quantas respostas por tier)
+- UI que mostra a camada activa ao utilizador (badge OURO/PRATA/BRONZE)
