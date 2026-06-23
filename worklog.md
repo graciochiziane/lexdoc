@@ -2,12 +2,13 @@
 
 ---
 
-## Estado Actual (22 Jun 2026)
+## Estado Actual (23 Jun 2026)
 
-**Branch principal:** `main` (commit `e3f4b08`)
+**Branch principal:** `main` (commit `2b29559`)
 **Branch backup:** `backup/postgres-fix-working-2026-06-22` (commit `63620e7`)
 **Hosting:** Vercel (lexdoc-blue.vercel.app)
 **Database:** Supabase PostgreSQL (eu-west-3, PgBouncer port 6543)
+**AI Provider:** Google Gemini 2.5 Flash (com fallback ZAI automático)
 
 ---
 
@@ -26,6 +27,17 @@
 5. **`src/components/dashboard/AIHubView.tsx`** — Chat tab actualizado para streaming com cursor animado.
 6. **`src/app/api/v1/ai/extract-deadlines/route.ts`** — Bug fix: adicionado `firm_id` em falta no `db.deadline.create`.
 
+### Sessão 3 — Integração Gemini API Key + Fallback (commit 2b29559)
+1. **`src/lib/gemini.ts`** — Actualizado modelo padrão de `gemini-2.5-flash-preview-05-20` (deprecated) para `gemini-2.5-flash`.
+2. **`src/lib/llm.ts`** — Adicionado fallback automático Gemini→ZAI em `streamLLM()` e `chatWithLLM()`. Se Gemini falhar (geofencing, quota, modelo), tenta ZAI antes de reportar erro.
+3. **`.env.example`** — Actualizado `GEMINI_MODEL` para `gemini-2.5-flash`.
+
+**Testes realizados (curl):**
+- ✅ Registro e login via API
+- ✅ AI streaming: `init` → `chunk` → `done` (SSE)
+- ✅ Fallback ZAI funcional quando Gemini indisponível
+- ⚠️ Gemini não testável no sandbox (geofencing — "User location is not supported")
+
 ---
 
 ## Variáveis de Ambiente Necessárias no Vercel
@@ -36,7 +48,8 @@
 | `DIRECT_URL` | Recomendada | Conexão directa (porta 5432) para migrations |
 | `JWT_SECRET` | ✅ | Mínimo 32 caracteres |
 | `JWT_REFRESH_SECRET` | ✅ | Mínimo 32 caracteres |
-| `GEMINI_API_KEY` | Para IA | Google AI Studio |
+| `GEMINI_API_KEY` | ✅ Para IA | Google AI Studio — `AIzaSy...` |
+| `GEMINI_MODEL` | Opcional | Padrão: `gemini-2.5-flash` |
 
 ---
 
@@ -51,6 +64,7 @@ POST /api/v1/ai/chat/stream
   ↓ buildLexAssistPromptWithRAG (V2.0 Governance)
   ↓ streamLLM()
     ├─ Gemini: streamGemini() — native streaming
+    │   └─ Se falhar → fallback ZAI automático
     └─ ZAI: fallback — single chunk
   ↓ SSE events: init → chunk* → done
   ↓ fire-and-forget: db.aIMessage.create + logAudit
