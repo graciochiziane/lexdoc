@@ -1,13 +1,15 @@
 // ═══════════════════════════════════════════════════════════════
-// LEXDOC — LLM Adapter Unificado
-// Provider principal: Google Gemini
-// Fallback: ZAI (apenas no sandbox — precisa de .z-ai-config)
-// Retry automático para erros transitórios do Gemini (503, 429)
+// LEXDOC — LLM Adapter (Google Gemini)
+// Provider: Gemini 2.0 Flash (estável, menos 503 que 2.5)
+// Retry automático para erros transitórios (503, 429)
 // ═══════════════════════════════════════════════════════════════
 
 import { chatWithGemini, streamGemini, isGeminiAvailable, type GeminiMessage } from '@/lib/gemini';
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+
+// ─────────────────────────────────────────
+// Modelo padrão
+// ─────────────────────────────────────────
+const DEFAULT_MODEL = 'gemini-3.1-flash-lite';
 
 // ─────────────────────────────────────────
 // Tipos
@@ -19,7 +21,7 @@ export interface LLMMessage {
 
 export interface LLMResponse {
   content: string;
-  provider: 'gemini' | 'zai';
+  provider: 'gemini';
   model: string;
   tokens_used?: {
     prompt: number;
@@ -28,25 +30,7 @@ export interface LLMResponse {
 }
 
 // ─────────────────────────────────────────
-// ZAI availability check
-// ─────────────────────────────────────────
-
-/**
- * Verifica se o ZAI SDK pode funcionar neste ambiente.
- * O ZAI precisa de .z-ai-config no projecto, home, ou /etc.
- * No Vercel este ficheiro não existe, logo o ZAI não está disponível.
- */
-function isZaiAvailable(): boolean {
-  const paths = [
-    join(process.cwd(), '.z-ai-config'),
-    join(process.env.HOME || '/root', '.z-ai-config'),
-    '/etc/.z-ai-config',
-  ];
-  return paths.some((p) => existsSync(p));
-}
-
-// ─────────────────────────────────────────
-// Retry helper
+// Retry helpers
 // ─────────────────────────────────────────
 
 /** Verifica se um erro é transitório e justifica retry */
@@ -64,40 +48,48 @@ function isTransientError(error: unknown): boolean {
   );
 }
 
-/** Sleep promisificado */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ─────────────────────────────────────────
-// Provider detection
+// Provider info
 // ─────────────────────────────────────────
 
-/** Detectar qual provider usar baseado nas env vars */
-export function getActiveProvider(): 'gemini' | 'zai' {
-  return isGeminiAvailable() ? 'gemini' : 'zai';
+/** Modelo activo */
+export function getActiveProvider(): 'gemini' {
+  return 'gemini';
 }
 
-/** Info sobre o provider activo (para logging/health) */
-export function getProviderInfo(): { provider: 'gemini' | 'zai'; model: string; available: boolean; zai_fallback: boolean } {
-  const geminiAvailable = isGeminiAvailable();
-  const zaiAvailable = isZaiAvailable();
+/** Info sobre o provider (para logging/health) */
+export function getProviderInfo(): { provider: 'gemini'; model: string; available: boolean } {
   return {
-    provider: geminiAvailable ? 'gemini' : 'zai',
-    model: geminiAvailable
-      ? (process.env.GEMINI_MODEL || 'gemini-2.5-flash')
-      : 'z-ai-default',
-    available: geminiAvailable || zaiAvailable,
-    zai_fallback: zaiAvailable,
+    provider: 'gemini',
+    model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
+    available: isGeminiAvailable(),
   };
 }
 
+/** Mensagem de erro amigável baseada no erro do Gemini */
+function friendlyError(errorMsg: string): string {
+  if (errorMsg.includes('503') || errorMsg.includes('high demand')) {
+    return 'O serviço de IA está temporariamente sobrecarregado. Por favor, tente novamente em alguns segundos.';
+  }
+  if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+    return 'Limite de uso da IA atingido. Aguarde um momento antes de tentar novamente.';
+  }
+  if (errorMsg.includes('API key')) {
+    return 'Chave de API do Gemini inválida ou em falta.';
+  }
+  return 'Não foi possível obter resposta da IA. Tente novamente.';
+}
+
 // ─────────────────────────────────────────
-// Chat unificado
+// Chat
 // ─────────────────────────────────────────
 
 /**
- * Enviar mensagens para o LLM (provider detectado automaticamente).
+ * Enviar mensagens para o Gemini.
  * Formato OpenAI-compatible: role + content.
  */
 export async function chatWithLLM(
@@ -108,84 +100,42 @@ export async function chatWithLLM(
     topP?: number;
   }
 ): Promise<LLMResponse> {
-  const provider = getActiveProvider();
-  let geminiError: string | null = null;
+  if (!isGeminiAvailable()) {
+    throw new Error('GEMINI_API_KEY não configurada. Defina nas variáveis de ambiente.');
+  }
+
+  let lastError: string | null = null;
   const maxRetries = 2;
 
-  if (provider === 'gemini') {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await chatWithGemini(
-          messages as GeminiMessage[],
-          options
-        );
-        return {
-          content: response.content,
-          provider: 'gemini',
-          model: response.model,
-          tokens_used: response.tokens_used,
-        };
-      } catch (error) {
-        geminiError = error instanceof Error ? error.message : String(error);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await chatWithGemini(messages as GeminiMessage[], options);
+      return {
+        content: response.content,
+        provider: 'gemini',
+        model: response.model,
+        tokens_used: response.tokens_used,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
 
-        if (isTransientError(error) && attempt < maxRetries) {
-          console.warn(`[LLM] Gemini erro transitório (tentativa ${attempt}/${maxRetries}): ${geminiError}`);
-          await sleep(1000 * attempt); // backoff: 1s, 2s
-          continue;
-        }
-        console.warn(`[LLM] Gemini falhou definitivamente. Erro: ${geminiError}`);
+      if (isTransientError(error) && attempt < maxRetries) {
+        console.warn(`[LLM] Gemini erro transitório (${attempt}/${maxRetries}): ${lastError}`);
+        await sleep(1000 * attempt);
+        continue;
       }
     }
   }
 
-  // ZAI fallback (apenas se disponível neste ambiente)
-  if (isZaiAvailable()) {
-    try {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default;
-      const zai = await ZAI.create();
-
-      const completion = await zai.chat.completions.create({
-        messages: messages as any,
-        thinking: { type: 'disabled' },
-      });
-
-      const content = completion?.choices?.[0]?.message?.content
-        ?? 'Erro: Não foi possível gerar resposta. Tente novamente.';
-
-      return {
-        content,
-        provider: 'zai',
-        model: 'z-ai-default',
-        tokens_used: undefined,
-      };
-    } catch (zaiError) {
-      const zaiErrMsg = zaiError instanceof Error ? zaiError.message : String(zaiError);
-      const parts = ['Todos os providers LLM falharam:'];
-      if (geminiError) parts.push(`  Gemini: ${geminiError}`);
-      parts.push(`  ZAI: ${zaiErrMsg}`);
-      throw new Error(parts.join('\n'));
-    }
-  }
-
-  // Sem fallback disponível — mensagem amigável
-  if (geminiError) {
-    if (geminiError.includes('503') || geminiError.includes('high demand')) {
-      throw new Error(
-        'O serviço de IA está temporariamente sobrecarregado. Por favor, tente novamente em alguns segundos.'
-      );
-    }
-    throw new Error(`Erro do Gemini: ${geminiError}`);
-  }
-
-  throw new Error('Nenhum provider de IA disponível. Configure GEMINI_API_KEY nas variáveis de ambiente.');
+  throw new Error(friendlyError(lastError ?? 'Erro desconhecido'));
 }
 
 // ─────────────────────────────────────────
-// Streaming unificado
+// Streaming
 // ─────────────────────────────────────────
 
 /**
- * Stream de respostas do LLM (provider detectado automaticamente).
+ * Stream de respostas do Gemini.
  * Retorna um async generator de chunks de texto.
  */
 export async function* streamLLM(
@@ -196,61 +146,27 @@ export async function* streamLLM(
     topP?: number;
   }
 ): AsyncGenerator<string> {
-  const provider = getActiveProvider();
-  let geminiError: string | null = null;
+  if (!isGeminiAvailable()) {
+    throw new Error('GEMINI_API_KEY não configurada. Defina nas variáveis de ambiente.');
+  }
+
+  let lastError: string | null = null;
   const maxRetries = 2;
 
-  if (provider === 'gemini') {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        yield* streamGemini(messages as GeminiMessage[], options);
-        return; // Sucesso — sair
-      } catch (error) {
-        geminiError = error instanceof Error ? error.message : String(error);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      yield* streamGemini(messages as GeminiMessage[], options);
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
 
-        if (isTransientError(error) && attempt < maxRetries) {
-          console.warn(`[LLM] Gemini erro transitório (tentativa ${attempt}/${maxRetries}): ${geminiError}`);
-          await sleep(1000 * attempt);
-          continue;
-        }
-        console.warn(`[LLM] Gemini falhou definitivamente. Erro: ${geminiError}`);
+      if (isTransientError(error) && attempt < maxRetries) {
+        console.warn(`[LLM] Gemini erro transitório (${attempt}/${maxRetries}): ${lastError}`);
+        await sleep(1000 * attempt);
+        continue;
       }
     }
   }
 
-  // ZAI fallback (apenas se disponível neste ambiente)
-  if (isZaiAvailable()) {
-    try {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default;
-      const zai = await ZAI.create();
-
-      const completion = await zai.chat.completions.create({
-        messages: messages as any,
-        thinking: { type: 'disabled' },
-      });
-
-      const content = completion?.choices?.[0]?.message?.content
-        ?? 'Erro: Não foi possível gerar resposta. Tente novamente.';
-      yield content;
-      return;
-    } catch (zaiError) {
-      const zaiErrMsg = zaiError instanceof Error ? zaiError.message : String(zaiError);
-      const parts = ['Todos os providers LLM falharam:'];
-      if (geminiError) parts.push(`  Gemini: ${geminiError}`);
-      parts.push(`  ZAI: ${zaiErrMsg}`);
-      throw new Error(parts.join('\n'));
-    }
-  }
-
-  // Sem fallback disponível — mensagem amigável
-  if (geminiError) {
-    if (geminiError.includes('503') || geminiError.includes('high demand')) {
-      throw new Error(
-        'O serviço de IA está temporariamente sobrecarregado. Por favor, tente novamente em alguns segundos.'
-      );
-    }
-    throw new Error(`Erro do Gemini: ${geminiError}`);
-  }
-
-  throw new Error('Nenhum provider de IA disponível. Configure GEMINI_API_KEY nas variáveis de ambiente.');
+  throw new Error(friendlyError(lastError ?? 'Erro desconhecido'));
 }
