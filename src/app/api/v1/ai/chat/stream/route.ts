@@ -2,6 +2,7 @@
 // LEXDOC — AI Chat Streaming API (SSE)
 // POST /api/v1/ai/chat/stream — Streaming de respostas do assistente
 // Retorna text/event-stream com chunks em tempo real
+// Integração com Silêncio Seguro (Governança V2.0 — Nível 4)
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest } from 'next/server';
@@ -12,6 +13,7 @@ import { db } from '@/lib/db';
 import { searchKnowledgeArticles } from '@/lib/rag-search';
 import { buildLexAssistPromptWithRAG } from '@/lib/lexassist-prompt';
 import { streamLLM, getProviderInfo } from '@/lib/llm';
+import { evaluateSafeSilence, getCautelarPromptSuffix } from '@/lib/safe-silence';
 
 process.env.TZ = 'Africa/Maputo';
 
@@ -108,9 +110,19 @@ export async function POST(request: NextRequest) {
 
     // ── RAG ──
     const knowledgeArticles = await searchKnowledgeArticles(firmId, message, 3);
-    const systemPrompt = buildLexAssistPromptWithRAG(
+
+    // ── ═══ SILÊNCIO SEGURO — Gate de Governança V2.0 ═══ ──
+    const governance = evaluateSafeSilence(knowledgeArticles);
+
+    // Preparar prompt do sistema (com possível sufixo cautelar)
+    let systemPrompt = buildLexAssistPromptWithRAG(
       knowledgeArticles.map((a) => ({ title: a.title, content: a.content, source: a.source, category: a.category })),
     );
+
+    // Se modo cautelar, injectar sufixo extra
+    if (governance.nivel_governanca_accionado === 'CAUTELAR') {
+      systemPrompt += getCautelarPromptSuffix();
+    }
 
     // ── Montar mensagens para LLM ──
     const llmMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
@@ -136,64 +148,148 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         let fullContent = '';
 
-        // Enviar metadata inicial (conversation_id, sources)
+        // Enviar metadata inicial (conversation_id, sources, governance)
         const initEvent = JSON.stringify({
           type: 'init',
           conversation_id: conversationId,
           sources,
           is_new: isNewConversation,
+          governance: {
+            confidence_score: governance.confidence_score,
+            nivel: governance.nivel_governanca_accionado,
+            should_block: governance.should_block_llm,
+          },
         });
         controller.enqueue(encoder.encode(`data: ${initEvent}\n\n`));
 
         try {
-          // Stream do LLM
-          for await (const chunk of streamLLM(llmMessages, { temperature: 0.7, maxTokens: 4096 })) {
-            fullContent += chunk;
-            const chunkEvent = JSON.stringify({ type: 'chunk', content: chunk });
+          // ═══ SILÊNCIO SEGURO: Bloquear LLM se score abaixo do threshold ═══
+          if (governance.should_block_llm && governance.safe_response) {
+            // Enviar resposta de silêncio seguro como um único chunk
+            const safeContent = governance.safe_response;
+            const chunkEvent = JSON.stringify({ type: 'chunk', content: safeContent });
             controller.enqueue(encoder.encode(`data: ${chunkEvent}\n\n`));
-          }
+            fullContent = safeContent;
 
-          // Evento de conclusão
-          const doneEvent = JSON.stringify({
-            type: 'done',
-            full_content: fullContent,
-            knowledge_ids: knowledgeArticles.map((a) => a.id),
-          });
-          controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
+            // Evento de conclusão
+            const doneEvent = JSON.stringify({
+              type: 'done',
+              full_content: fullContent,
+              knowledge_ids: knowledgeArticles.map((a) => a.id),
+              governance: {
+                confidence_score: governance.confidence_score,
+                nivel: governance.nivel_governanca_accionado,
+                blocked: true,
+              },
+            });
+            controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
 
-          // Guardar mensagem completa do assistente (fire-and-forget)
-          void db.aIMessage.create({
-            data: {
+            // Guardar mensagem do assistente (silêncio seguro)
+            void db.aIMessage.create({
+              data: {
+                firm_id: firmId,
+                conversation_id: conversationId,
+                role: 'assistant',
+                content: fullContent,
+                sources: JSON.stringify(sources),
+                knowledge_ids: JSON.stringify(knowledgeArticles.map((a) => a.id)),
+                metadata: JSON.stringify({
+                  knowledge_count: knowledgeArticles.length,
+                  has_history: historyMessages.length > 1,
+                  safe_silence: true,
+                  governance_audit: governance.audit_details,
+                }),
+                confidence_score: governance.confidence_score,
+                nivel_governanca_accionado: governance.nivel_governanca_accionado,
+              },
+            });
+
+            // Auditoria — Silêncio Seguro accionado
+            logAudit({
               firm_id: firmId,
-              conversation_id: conversationId,
-              role: 'assistant',
-              content: fullContent,
-              sources: JSON.stringify(sources),
-              knowledge_ids: JSON.stringify(knowledgeArticles.map((a) => a.id)),
-              metadata: JSON.stringify({
-                knowledge_count: knowledgeArticles.length,
-                has_history: historyMessages.length > 1,
-              }),
-            },
-          });
+              user_id: userId,
+              action: 'AI_CHAT_SAFE_SILENCE',
+              entity_type: 'ai_assistant',
+              entity_id: conversationId,
+              metadata: {
+                query_length: message.length,
+                response_length: fullContent.length,
+                knowledge_articles_used: knowledgeArticles.length,
+                confidence_score: governance.confidence_score,
+                nivel_governanca_accionado: governance.nivel_governanca_accionado,
+                is_new_conversation: isNewConversation,
+                trigger_reason: governance.audit_details.trigger_reason,
+                has_mozambican_source: governance.has_mozambican_source,
+                has_penalized_source: governance.has_penalized_source,
+                raw_top_score: governance.raw_top_score,
+                llm_provider: 'none',
+                llm_model: 'none',
+                blocked: true,
+              },
+            });
+          } else {
+            // ═══ Fluxo normal — LLM com score de confiança ═══
+            for await (const chunk of streamLLM(llmMessages, { temperature: 0.7, maxTokens: 4096 })) {
+              fullContent += chunk;
+              const chunkEvent = JSON.stringify({ type: 'chunk', content: chunk });
+              controller.enqueue(encoder.encode(`data: ${chunkEvent}\n\n`));
+            }
 
-          // Auditoria (fire-and-forget)
-          logAudit({
-            firm_id: firmId,
-            user_id: userId,
-            action: 'AI_CHAT_STREAM',
-            entity_type: 'ai_assistant',
-            entity_id: conversationId,
-            metadata: {
-              query_length: message.length,
-              response_length: fullContent.length,
-              knowledge_articles_used: knowledgeArticles.length,
-              is_new_conversation: isNewConversation,
-              llm_provider: providerInfo.provider,
-              llm_model: providerInfo.model,
-              streaming: true,
-            },
-          });
+            // Evento de conclusão
+            const doneEvent = JSON.stringify({
+              type: 'done',
+              full_content: fullContent,
+              knowledge_ids: knowledgeArticles.map((a) => a.id),
+              governance: {
+                confidence_score: governance.confidence_score,
+                nivel: governance.nivel_governanca_accionado,
+                blocked: false,
+              },
+            });
+            controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
+
+            // Guardar mensagem completa do assistente (fire-and-forget)
+            void db.aIMessage.create({
+              data: {
+                firm_id: firmId,
+                conversation_id: conversationId,
+                role: 'assistant',
+                content: fullContent,
+                sources: JSON.stringify(sources),
+                knowledge_ids: JSON.stringify(knowledgeArticles.map((a) => a.id)),
+                metadata: JSON.stringify({
+                  knowledge_count: knowledgeArticles.length,
+                  has_history: historyMessages.length > 1,
+                  governance_audit: governance.audit_details,
+                }),
+                confidence_score: governance.confidence_score,
+                nivel_governanca_accionado: governance.nivel_governanca_accionado,
+              },
+            });
+
+            // Auditoria (fire-and-forget)
+            logAudit({
+              firm_id: firmId,
+              user_id: userId,
+              action: 'AI_CHAT_STREAM',
+              entity_type: 'ai_assistant',
+              entity_id: conversationId,
+              metadata: {
+                query_length: message.length,
+                response_length: fullContent.length,
+                knowledge_articles_used: knowledgeArticles.length,
+                is_new_conversation: isNewConversation,
+                llm_provider: providerInfo.provider,
+                llm_model: providerInfo.model,
+                streaming: true,
+                confidence_score: governance.confidence_score,
+                nivel_governanca_accionado: governance.nivel_governanca_accionado,
+                has_mozambican_source: governance.has_mozambican_source,
+                has_penalized_source: governance.has_penalized_source,
+                blocked: false,
+              },
+            });
+          }
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
           const errEvent = JSON.stringify({ type: 'error', message: errorMsg });

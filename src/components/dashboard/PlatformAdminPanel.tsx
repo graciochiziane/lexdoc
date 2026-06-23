@@ -10,7 +10,7 @@ import {
   Building2, Users, ShieldCheck, Crown, TrendingUp,
   FileText, Clock, Bot, Search, ChevronDown, ChevronUp,
   Eye, Ban, UserCog, RefreshCw, AlertTriangle, CheckCircle2,
-  Globe, BarChart3, Mail, Calendar,
+  Globe, BarChart3, Mail, Calendar, Scale,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/stores/auth.store';
 import { platformApi } from '@/lib/api-client';
 import type { ApiResponse } from '@/lib/api-client';
+import { GovernanceTab } from '@/components/dashboard/GovernanceTab';
 
 // ─────────────────────────────────────────
 // Helpers
@@ -50,12 +51,13 @@ const PLAN_COLORS: Record<string, string> = {
   ENTERPRISE: 'bg-purple-500/15 text-purple-400',
 };
 
-type SubTab = 'overview' | 'firms' | 'users';
+type SubTab = 'overview' | 'firms' | 'users' | 'governance';
 
 const SUB_TABS: { id: SubTab; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: 'Visão Geral', icon: BarChart3 },
   { id: 'firms', label: 'Escritórios', icon: Building2 },
   { id: 'users', label: 'Utilizadores', icon: Users },
+  { id: 'governance', label: 'Governança IA', icon: Scale },
 ];
 
 // ─────────────────────────────────────────
@@ -612,6 +614,7 @@ export function PlatformAdminPanel() {
               {activeTab === 'overview' && <OverviewTab />}
               {activeTab === 'firms' && <FirmsTab />}
               {activeTab === 'users' && <UsersTab />}
+              {activeTab === 'governance' && <GovernanceTab />}
             </motion.div>
           </AnimatePresence>
         </>

@@ -422,15 +422,17 @@ model AIConversation {
 // MENSAGENS IA
 // ─────────────────────────────────────────
 model AIMessage {
-  id              String          @id @default(uuid()) 
-  firm_id         String          
-  conversation_id String          
+  id              String          @id @default(uuid())
+  firm_id         String
+  conversation_id String
   role            String
-  content         String          
-  sources         String?         
-  knowledge_ids   String?         
-  metadata        String?         
-  created_at      DateTime        @default(now()) 
+  content         String
+  sources         String?
+  knowledge_ids   String?
+  metadata        String?
+  confidence_score Float?
+  nivel_governanca_accionado String?
+  created_at      DateTime        @default(now())
 
   firm           Firm            @relation(fields: [firm_id], references: [id], onDelete: Cascade)
   conversation    AIConversation  @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
@@ -438,6 +440,7 @@ model AIMessage {
   @@index([firm_id])
   @@index([conversation_id])
   @@index([created_at])
+  @@index([confidence_score])
   @@map("ai_messages")
 }
 

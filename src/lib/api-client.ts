@@ -1184,6 +1184,57 @@ interface PlatformUser {
   firm: { id: string; name: string; plan: string };
 }
 
+// ─────────────────────────────────────────
+// API de Governança IA (SUPER_ADMIN)
+// ─────────────────────────────────────────
+export interface GovernanceNivelDist {
+  nivel: string;
+  count: number;
+  percentage: number;
+}
+
+export interface GovernanceDailyTrend {
+  date: string;
+  total: number;
+  safe_silence: number;
+  avg_confidence: number | null;
+}
+
+export interface GovernanceRecentEntry {
+  id: string;
+  conversation_title: string;
+  user_name: string;
+  firm_name: string;
+  confidence_score: number | null;
+  nivel: string | null;
+  content_preview: string;
+  created_at: string;
+}
+
+export interface GovernanceData {
+  period: string;
+  summary: {
+    total_responses: number;
+    with_governance_data: number;
+    governance_coverage: number;
+    safe_silence_count: number;
+    safe_silence_rate: number;
+    avg_confidence_score: number | null;
+    min_confidence_score: number | null;
+    max_confidence_score: number | null;
+  };
+  nivel_distribution: GovernanceNivelDist[];
+  score_distribution: Record<string, number>;
+  source_analysis: {
+    with_mozambican_source: number;
+    with_penalized_source: number;
+    with_no_source: number;
+    sample_size: number;
+  };
+  daily_trend: GovernanceDailyTrend[];
+  recent_governance: GovernanceRecentEntry[];
+}
+
 export const platformApi = {
   bootstrap: () =>
     apiFetch<{ message: string; user: { id: string; email: string; role: string; firm_id: string; full_name: string } }>('/platform/bootstrap', { method: 'POST' }),
@@ -1199,4 +1250,6 @@ export const platformApi = {
     apiFetch<PlatformUser[]>(`/platform/users${params ? `?${params}` : ''}`),
   updateUser: (id: string, data: { role?: string; is_active?: boolean }) =>
     apiFetch<PlatformUser>(`/platform/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  governance: (period?: string) =>
+    apiFetch<GovernanceData>(`/platform/governance${period ? `?period=${period}` : ''}`),
 };
