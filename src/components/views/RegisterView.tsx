@@ -18,30 +18,17 @@ import {
 import { RegisterForm } from '@/components/auth/RegisterForm';
 
 // ─────────────────────────────────────────
-// Logo Component
+// Logo Component — LexDoc image logo
 // ─────────────────────────────────────────
 function LexDocLogo({ className, white = false }: { className?: string; white?: boolean }) {
   return (
     <div className={`flex items-center gap-2.5 ${className ?? ''}`}>
-      <div className="relative w-10 h-10 shield-pulse-glow">
-        <svg viewBox="0 0 40 40" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M20 2L4 10v10c0 9.6 6.8 18.6 16 20 9.2-1.4 16-10.4 16-20V10L20 2z"
-            fill="url(#shield-gradient-reg)"
-            opacity="0.9"
-          />
-          <line x1="15" y1="18" x2="25" y2="18" stroke={white ? '#fff' : '#0f0f1e'} strokeWidth="1.5" strokeLinecap="round" />
-          <line x1="20" y1="12" x2="20" y2="25" stroke={white ? '#fff' : '#0f0f1e'} strokeWidth="1.5" strokeLinecap="round" />
-          <path d="M14 22 L16 18 L14 14" stroke={white ? '#fff' : '#0f0f1e'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          <path d="M26 22 L24 18 L26 14" stroke={white ? '#fff' : '#0f0f1e'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          <defs>
-            <linearGradient id="shield-gradient-reg" x1="4" y1="2" x2="36" y2="32">
-              <stop offset="0%" stopColor="#10b981" />
-              <stop offset="100%" stopColor="#059669" />
-            </linearGradient>
-          </defs>
-        </svg>
-      </div>
+      <img
+        src="/logo.png"
+        alt="LexDoc Logo"
+        className="w-10 h-10 rounded-lg object-contain"
+        draggable={false}
+      />
       <div className="flex items-baseline">
         <span className={`text-xl font-bold tracking-tight ${white ? 'text-white' : 'text-foreground'}`}>
           lex

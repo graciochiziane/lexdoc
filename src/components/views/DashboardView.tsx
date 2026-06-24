@@ -375,9 +375,12 @@ export function DashboardView() {
               className="flex items-center gap-2 hover:opacity-80 transition-all duration-200 cursor-pointer hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]"
               title="Configurações do Escritório"
             >
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                <span className="text-emerald-400 font-bold text-sm">LD</span>
-              </div>
+              <img
+                src="/logo.png"
+                alt="LexDoc"
+                className="w-8 h-8 rounded-lg object-contain"
+                draggable={false}
+              />
               <span className="font-bold text-lg">
                 <span className="text-white text-glow-emerald">lex</span>
                 <span className="text-emerald-400 text-glow-emerald">Doc</span>
