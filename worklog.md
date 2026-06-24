@@ -448,3 +448,41 @@ Para classificar artigos na base de conhecimento por camada, use estas categoria
 - LLM query rewrite para queries complexas (dicionário já cobre 90% dos casos)
 - Dashboard de métricas por camada (quantas respostas por tier)
 - UI que mostra a camada activa ao utilizador (badge OURO/PRATA/BRONZE)
+
+---
+
+### Sessão 9 — ROLLBACK Completo (25 Jun 2026)
+
+**Motivo:** Os commits da Sessão 8/9 causaram falhas de build no Vercel:
+- `57df92f` (RAG v3.1) introduziu nome de função duplicado `llmFallbackSearch` em `web-safe-mode.ts`
+- Múltiplos commits modificaram `route.ts`, `lexassist-orchestrator.ts`, `web-safe-mode.ts` de forma interdependente
+
+**Commits removidos (8 total):**
+1. `c30a58a` — UUID auto-commit (local)
+2. `255329c` — docs: worklog Sessão 9
+3. `57df92f` — fix(ai): RAG pipeline v3.1 — **BROKE BUILD**
+4. `48a39ea` — docs: worklog Sessão 8b
+5. `64f003f` — fix(ai): BRONZE-GERAL fallback
+6. `ea821be` — fix(ai): Gate 0 bypass conversacional
+7. `5855b3b` — UUID auto-commit com +312 linhas não documentadas (removido por risco)
+8. `87693fb` — docs: worklog rollback anterior
+
+**Ponto de restauração final:** `10642c9` — `docs: worklog — Sessão 7 System Orchestrator v3.0`
+
+**Porquê 10642c9 e não 5855b3b?**
+- `5855b3b` era um auto-commit com UUID sem documentação (+312 linhas em route.ts e query-rewriter.ts)
+- `10642c9` é o último commit intencional e documentado
+- Mantém todo o System Orchestrator v3.0 (RAG OURO→PRATA→BRONZE) intacto
+
+**Estado após rollback:**
+- ✅ `git reset --hard 10642c9`
+- ✅ `git push origin main --force` — sucesso
+- ✅ `bun run lint` — 0 erros (1 warning pré-existente)
+- ✅ Working tree limpo, sincronizado com origin/main
+
+**Funcionalidade perdida (a reimplementar futuramente):**
+1. Gate 0 (bypass conversacional) — saudações passam pelo RAG
+2. BRONZE-GERAL (fallback LLM puro) — queries sem resultados bloqueiam
+3. Web search real via z-ai-web-dev-sdk
+
+**Lição aprendida:** Usar feature branches e testar build antes de cada push para main.
