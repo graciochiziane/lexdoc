@@ -156,6 +156,158 @@ const AREA_TAXONOMY: Record<string, string[]> = {
 };
 
 // ─────────────────────────────────────────
+// GATE 0 — Classificação de Intenção
+// Detecta mensagens conversacionais antes do pipeline RAG
+// Saudações, despedidas, agradecimentos, perguntas sobre o assistente
+// ═══════════════════════════════════════════════════
+
+/**
+ * Set de termos jurídicos para protecção contra falsos positivos.
+ * Se a mensagem contém QUALQUER destes termos (matching exacto por palavra),
+ * NÃO é classificada como conversacional — vai para o pipeline RAG.
+ *
+ * IMPORTANTE: Usar Set (O(1) lookup), NÃO substring matching.
+ * "pela" NÃO matcheia "penhora" porque split por espaços.
+ */
+function buildLegalVocabSet(): Set<string> {
+  const terms: string[] = [
+    // Processual
+    'processo', 'acção', 'petição', 'contestação', 'recurso', 'apelação', 'revista',
+    'juiz', 'tribunal', 'advogado', 'sentença', 'acórdão', 'despacho', 'diligência',
+    'citação', 'notificação', 'penhora', 'embargo', 'execução', 'prazo', 'prescrição',
+    // Civil / Contratos
+    'contrato', 'obrigação', 'responsabilidade', 'danos', 'indemnização', 'propriedade',
+    'hipoteca', 'penhor', 'renda', 'arrendamento', 'compra', 'venda', 'doação',
+    'testamento', 'sucessão', 'herança', 'divórcio', 'casamento', 'filiação',
+    // Trabalho
+    'trabalho', 'empregador', 'empregado', 'trabalhador', 'salário', 'remuneração',
+    'férias', 'despedimento', 'segurança', 'social', 'inss', 'disciplinar',
+    'subsídio', 'sindicato', 'greve', 'contratação',
+    // Comercial
+    'sociedade', 'sócio', 'capital', 'empresa', 'fusão', 'quotista', 'acionista',
+    'franchising', 'consórcio', 'comissão', 'comercial', 'registo',
+    // Penal
+    'crime', 'pena', 'prisão', 'multa', 'culpa', 'dolo', 'homicídio', 'roubo',
+    'furto', 'fraude', 'corrupção', 'violência', 'abuso', 'difamação',
+    // Tributário
+    'imposto', 'iva', 'irps', 'irpc', 'tributo', 'factura', 'fatura', 'tributação',
+    // PI
+    'marca', 'patente', 'copyright', 'propriedade', 'intelectual', 'plágio',
+    // Administrativo
+    'administração', 'pública', 'licença', 'alvará', 'funcionário',
+    // Legislação genérica
+    'lei', 'decreto', 'artigo', 'código', 'regulamento', 'constituição', 'diploma',
+    'boletim', 'república', 'direito', 'jurídico', 'legal', 'justiça', 'advocacia',
+    'oam', 'ordem', 'advogados', 'moçambique', 'mozambique',
+  ];
+  return new Set(terms);
+}
+
+const LEGAL_VOCAB = buildLegalVocabSet();
+
+/**
+ * Detecta se uma mensagem é CONVERSACIONAL (não jurídica).
+ *
+ * Lógica:
+ * 1. Mensagens ≤5 palavras sem termos jurídicos → verifica padrões de conversação
+ * 2. Mensagens >5 palavras → SEMPRE verifica termos jurídicos primeiro
+ *    (se contém qualquer termo jurídico, NÃO é conversacional)
+ *
+ * Retorna true se for conversacional (bypass RAG), false se for potencialmente jurídica.
+ */
+export function isConversationalMessage(message: string): boolean {
+  const trimmed = message.trim();
+  if (trimmed.length === 0) return false;
+
+  const words = trimmed.split(/\s+/);
+  const wordCount = words.length;
+
+  // PASSO 1: Verificar se contém termos jurídicos (protecção contra falsos positivos)
+  // Se SIM → não é conversacional, vai para RAG
+  const msgLower = trimmed.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  for (const word of words) {
+    const normalized = word.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    if (normalized.length > 2 && LEGAL_VOCAB.has(normalized)) {
+      return false; // Contém termo jurídico → pipeline RAG
+    }
+  }
+
+  // PASSO 2: Verificar padrões de conversação
+  if (wordCount <= 5) {
+    return isConversationalShort(msgLower);
+  }
+
+  // Mensagens longas sem termos jurídicos → NÃO é conversacional (pode ser query complexa)
+  return false;
+}
+
+/**
+ * Verifica se uma mensagem curta (≤5 palavras) é conversacional.
+ * Usa padrões regex precisos — sem substring matching perigoso.
+ */
+function isConversationalShort(normalized: string): boolean {
+  const patterns: Array<RegExp> = [
+    // Saudações
+    /^oi\b/i,
+    /^ola\b/i,
+    /^olá\b/i,
+    /^hey\b/i,
+    /^(bom dia|boa tarde|boa noite|boa\s*(manha|manhã|tarde|noite))\b/i,
+    /^(tudo bem|estás bem|está bem|como estás|como está)\b/i,
+    /^e ai\b/i,
+    /^e aí\b/i,
+    /^(saludos|saudações)\b/i,
+
+    // Despedidas
+    /^(tchau|adeus|até|até logo|ate logo|bye|goodbye)\b/i,
+    /^até (logo|amanhã|amanha|breve|já|ja)\b/i,
+
+    // Agradecimentos
+    /^(obrigado|obrigada|valeu|thanks|gracias|agradeço)\b/i,
+    /^muito obrigad/i,
+    /^thanks\b/i,
+
+    // Respostas curtas
+    /^(sim|nao|não|ok|certo|entendido|combinado|concordo|claro|exato)\b$/i,
+    /^(talvez|provavelmente|possivelmente)\b$/i,
+
+    // Perguntas sobre o assistente (sem termos jurídicos)
+    /^(quem és tu|quem é você|quem e voce|o que és|o que você faz|o que voce faz)\b/i,
+    /^(como funciona|como usar|ajuda|help|o que podes fazer|o que pode fazer)\b/i,
+    /^(quais (são|sao) as tuas|quais sao tuas)\b/i,
+
+    // Cumprimentos genéricos
+    /^(bem-vindo|bem vindo|benvindo)\b/i,
+    /^hello\b/i,
+    /^hi\b/i,
+  ];
+
+  return patterns.some(pattern => pattern.test(normalized));
+}
+
+/**
+ * Retorna o prompt do sistema para respostas conversacionais.
+ * Resposta directa, curta, simpática, profissional.
+ */
+export function getConversationalPrompt(): string {
+  return `# LexAssistant v3.0 — Assistente Jurídico Inteligente de Moçambique
+
+És o LexAssistant, um assistente jurídico especializado em Moçambique.
+
+REGRAS PARA ESTA RESPOSTA:
+1. A mensagem do utilizador é CONVERSACIONAL (saudação, despedida, etc.).
+2. Responde de forma BREVE (máx 2-3 frases), simpática e profissional.
+3. NÃO entres em detalhes jurídicos.
+4. Se o utilizador perguntar o que podes fazer, menciona brevemente:
+   - Consulta de legislação moçambicana
+   - Análise de questões jurídicas
+   - Geração de documentos jurídicos
+   - Gestão de processos e prazos
+5. Responde SEMPRE em português de Moçambique (pt-MZ).
+6. Se o utilizador quiser ajuda jurídica, sugere que formule a sua questão.`;
+}
+
+// ─────────────────────────────────────────
 // Função principal — Query Rewriter
 // ═══════════════════════════════════════════════════
 

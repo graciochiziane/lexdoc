@@ -311,7 +311,9 @@ export function orchestratePrompt(
   const timestamp = new Date().toISOString();
 
   // NENHUMA camada → bloquear
-  if (tier === 'NENHUMA' || articles.length === 0) {
+  // NOTA: BRONZE-GERAL (articles.length === 0 mas tier === 'BRONZE') NÃO bloqueia.
+  // O BRONZE-GERAL é um fallback LLM puro para quando a base de conhecimento está vazia.
+  if (tier === 'NENHUMA') {
     return {
       systemPrompt: buildNonePrompt(),
       confidence: 'BLOQUEADA',
