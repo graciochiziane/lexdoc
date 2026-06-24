@@ -12,7 +12,8 @@ import { db } from '@/lib/db';
 import { hierarchicalSearch, TIER_LABELS } from '@/lib/rag-hierarchical';
 import { orchestratePrompt } from '@/lib/lexassist-orchestrator';
 import { streamLLM, getProviderInfo } from '@/lib/llm';
-import { llmFallbackSearch } from '@/lib/web-safe-mode';
+// Internet RAG (BRONZE web) — DESACTIVADO
+// import { llmFallbackSearch } from '@/lib/web-safe-mode';
 
 process.env.TZ = 'Africa/Maputo';
 
@@ -115,17 +116,11 @@ export async function POST(request: NextRequest) {
     // Passo 1: Query Rewriter + RAG Hierárquico (OURO → PRATA → BRONZE)
     const searchResult = await hierarchicalSearch(firmId, message);
 
-    // Passo 2: Se NENHUMA camada, tentar Bronze com LLM fallback (Internet Safe Mode)
-    let webResults: Array<{ title: string; snippet: string; url: string }> | undefined;
-    if (searchResult.activeTier === 'NENHUMA') {
-      const webSearch = await llmFallbackSearch(message, searchResult.rewrittenQuery.detectedAreas);
-      if (webSearch.hasResults && webSearch.results.length > 0) {
-        webResults = webSearch.results.map(r => ({ title: r.title, snippet: r.snippet, url: r.url }));
-        // Actualizar searchResult para reflectir Bronze com web
-        searchResult.activeTier = 'BRONZE';
-        searchResult.confidenceScore = 10;
-      }
-    }
+    // Passo 2: Internet RAG — DESACTIVADO
+    // Quando NENHUMA camada, NÃO tenta busca na internet.
+    // O sistema responde com "Informação Insuficiente" (comportamento seguro).
+    // const webResults = ...; — removido
+    const webResults = undefined as undefined;
 
     // Passo 3: Orquestrar prompt baseado na camada activa
     const orchestration = orchestratePrompt(
@@ -139,11 +134,6 @@ export async function POST(request: NextRequest) {
     const sources = searchResult.results
       .filter(a => a.source)
       .map(a => a.source as string);
-    if (sources.length === 0 && webResults) {
-      for (const w of webResults) {
-        if (w.url && !w.url.startsWith('lexdoc://')) sources.push(w.url);
-      }
-    }
     if (sources.length === 0) {
       sources.push('Legislação moçambicana vigente', 'Código de Processo Civil de Moçambique');
     }
